@@ -1,6 +1,6 @@
 // ============================================================================
 // SUPREME RECARGAS 2 - DATA STORE & REPOSITORY SERVICE
-// In-Memory & Local Storage Persistent Service Store with Multi-Tenant Isolation
+// Cloud-Connected Supabase & Local Cache Store with Real-time Multi-Device Sync
 // ============================================================================
 
 import { 
@@ -23,10 +23,23 @@ import {
   Plan,
   Subscription
 } from '@/types';
+import { supabase } from '@/lib/supabase';
 
-// Mock Seed Companies
+// Helper to generate valid RFC4122 UUID v4
+export function generateUUID(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+// Default Seed Company
 export const MOCK_COMPANY_SUPREME: Company = {
-  id: 'tenant-supreme-001',
+  id: 'b2000000-0000-0000-0000-000000000001',
   corporate_name: 'Supreme Recargas e Informática LTDA',
   trade_name: 'Supreme Informática',
   cnpj: '12.345.678/0001-90',
@@ -39,13 +52,13 @@ export const MOCK_COMPANY_SUPREME: Company = {
   zip_code: '01310-100',
   logo_url: '',
   is_active: true,
-  created_at: new Date('2026-01-15').toISOString(),
-  updated_at: new Date('2026-01-15').toISOString()
+  created_at: '2026-01-15T00:00:00.000Z',
+  updated_at: '2026-01-15T00:00:00.000Z'
 };
 
 export const MOCK_PLANS: Plan[] = [
   {
-    id: 'plan-inicial',
+    id: 'a1000000-0000-0000-0000-000000000001',
     name: 'Plano Inicial',
     code: 'INICIAL',
     description: '1 Administrador, 3 Atendentes, 1 Técnico',
@@ -56,7 +69,7 @@ export const MOCK_PLANS: Plan[] = [
     is_active: true
   },
   {
-    id: 'plan-basico',
+    id: 'a1000000-0000-0000-0000-000000000002',
     name: 'Plano Básico',
     code: 'BASICO',
     description: '1 Administrador, 5 Atendentes, 2 Técnicos',
@@ -67,7 +80,7 @@ export const MOCK_PLANS: Plan[] = [
     is_active: true
   },
   {
-    id: 'plan-profissional',
+    id: 'a1000000-0000-0000-0000-000000000003',
     name: 'Plano Profissional',
     code: 'PROFISSIONAL',
     description: '2 Administradores, 10 Atendentes, 5 Técnicos',
@@ -80,18 +93,18 @@ export const MOCK_PLANS: Plan[] = [
 ];
 
 export const MOCK_SUBSCRIPTION_SUPREME: Subscription = {
-  id: 'sub-supreme-001',
+  id: 'c3000000-0000-0000-0000-000000000001',
   tenant_id: MOCK_COMPANY_SUPREME.id,
   plan_id: MOCK_PLANS[0].id,
   status: 'ACTIVE',
-  starts_at: new Date('2026-01-15').toISOString(),
+  starts_at: '2026-01-15T00:00:00.000Z',
   plan: MOCK_PLANS[0]
 };
 
-// Mock Profiles for Supreme Informática
+// Default Profiles
 export const MOCK_PROFILES: Profile[] = [
   {
-    id: 'user-admin-01',
+    id: 'd4000000-0000-0000-0000-000000000001',
     tenant_id: MOCK_COMPANY_SUPREME.id,
     full_name: 'Carlos Oliveira (Admin)',
     email: 'admin@supreme.com.br',
@@ -99,35 +112,35 @@ export const MOCK_PROFILES: Profile[] = [
     phone: '(11) 91111-1111',
     role: 'ADMINISTRADOR',
     is_active: true,
-    created_at: new Date('2026-01-15').toISOString(),
+    created_at: '2026-01-15T00:00:00.000Z',
     company: MOCK_COMPANY_SUPREME
   },
   {
-    id: 'user-attendant-01',
+    id: 'd4000000-0000-0000-0000-000000000002',
     tenant_id: MOCK_COMPANY_SUPREME.id,
-    full_name: 'Ana Souza (Atendente)',
-    email: 'atendimento@supreme.com.br',
+    full_name: 'Mariana Santos (Atendente)',
+    email: 'atendente@supreme.com.br',
     password: 'atendente123',
     phone: '(11) 92222-2222',
     role: 'ATENDENTE',
     is_active: true,
-    created_at: new Date('2026-01-16').toISOString(),
+    created_at: '2026-01-16T00:00:00.000Z',
     company: MOCK_COMPANY_SUPREME
   },
   {
-    id: 'user-technician-01',
+    id: 'd4000000-0000-0000-0000-000000000003',
     tenant_id: MOCK_COMPANY_SUPREME.id,
-    full_name: 'Marcos Técnico',
+    full_name: 'Rafael Souza (Técnico)',
     email: 'tecnico@supreme.com.br',
     password: 'tecnico123',
     phone: '(11) 93333-3333',
     role: 'TECNICO',
     is_active: true,
-    created_at: new Date('2026-01-16').toISOString(),
+    created_at: '2026-01-16T00:00:00.000Z',
     company: MOCK_COMPANY_SUPREME
   },
   {
-    id: 'user-super-admin',
+    id: 'd4000000-0000-0000-0000-000000000000',
     tenant_id: '',
     full_name: 'Super Admin Plataforma',
     email: 'super@supreme-recargas.com',
@@ -135,182 +148,184 @@ export const MOCK_PROFILES: Profile[] = [
     phone: '(11) 90000-0000',
     role: 'SUPER_ADMIN',
     is_active: true,
-    created_at: new Date('2026-01-01').toISOString()
+    created_at: '2026-01-01T00:00:00.000Z'
   }
 ];
 
-// Mock Customers
 export const MOCK_CUSTOMERS: Customer[] = [
   {
-    id: 'cust-01',
+    id: 'ca000000-0000-0000-0000-000000000001',
     tenant_id: MOCK_COMPANY_SUPREME.id,
     internal_code: 1001,
-    name: 'João Pedro Silva',
-    document: '123.456.789-00',
-    phone: '(11) 99887-6655',
-    whatsapp: '11998876655',
-    email: 'joao.pedro@email.com',
-    company_name: 'Marmoraria Silva',
-    notes: 'Cliente preferencial. Sempre traz 2 cartuchos HP.',
-    created_at: new Date('2026-02-01').toISOString()
+    name: 'João Silva Advogados',
+    document: '11.222.333/0001-44',
+    phone: '(11) 98888-1111',
+    whatsapp: '11988881111',
+    email: 'contato@silvaadv.com.br',
+    company_name: 'Silva Advocacia',
+    notes: 'Cliente mensal VIP',
+    created_at: '2026-01-20T00:00:00.000Z'
   },
   {
-    id: 'cust-02',
+    id: 'ca000000-0000-0000-0000-000000000002',
     tenant_id: MOCK_COMPANY_SUPREME.id,
     internal_code: 1002,
-    name: 'Maria Fernanda Costa',
-    document: '987.654.321-11',
-    phone: '(11) 98112-3344',
-    whatsapp: '11981123344',
-    email: 'mfcosta@advocacia.com.br',
-    company_name: 'Costa & Associados',
-    notes: 'Solicita nota fiscal eletrônica.',
-    created_at: new Date('2026-02-05').toISOString()
-  },
-  {
-    id: 'cust-03',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    internal_code: 1003,
-    name: 'Escola Cantinho do Saber',
-    document: '45.678.901/0001-22',
-    phone: '(11) 3456-7890',
-    whatsapp: '11934567890',
-    email: 'financeiro@cantinhodosaber.com.br',
-    company_name: 'Escola Cantinho do Saber LTDA',
-    notes: 'Apenas recarga XL.',
-    created_at: new Date('2026-02-10').toISOString()
+    name: 'Dra. Ana Paula Mendes',
+    document: '123.456.789-00',
+    phone: '(11) 97777-2222',
+    whatsapp: '11977772222',
+    email: 'ana.mendes@clinica.com.br',
+    company_name: 'Clínica Sorriso',
+    notes: 'Solicita sempre recibo impresso',
+    created_at: '2026-02-01T00:00:00.000Z'
   }
 ];
 
-// Mock Models with Custom Configurable Prices
 export const MOCK_MODELS: CartridgeModel[] = [
   {
-    id: 'mod-hp-664-black',
+    id: '01000000-0000-0000-0000-000000000001',
     tenant_id: MOCK_COMPANY_SUPREME.id,
     brand_name: 'HP',
     model_name: 'HP 664',
     color: 'Preto',
     is_xl: false,
     capacity_ml: 2.0,
-    empty_weight_grams: 27.5,
-    full_weight_grams: 33.5,
-    technical_notes: 'Cuidado com circuito elétrico sensível',
+    empty_weight_grams: 26.5,
+    full_weight_grams: 30.5,
+    technical_notes: 'Injetor padrão HP',
     refill_price: 30.00,
     verification_price: 15.00,
     test_price: 10.00,
     is_active: true
   },
   {
-    id: 'mod-hp-664-color',
+    id: '01000000-0000-0000-0000-000000000002',
     tenant_id: MOCK_COMPANY_SUPREME.id,
     brand_name: 'HP',
     model_name: 'HP 664',
     color: 'Colorido',
     is_xl: false,
-    capacity_ml: 3.0,
-    empty_weight_grams: 29.0,
+    capacity_ml: 2.0,
+    empty_weight_grams: 28.0,
     full_weight_grams: 37.0,
-    technical_notes: 'Verificar cada cor antes do teste de impressão',
+    technical_notes: '3 câmaras: C, M, Y',
     refill_price: 35.00,
     verification_price: 15.00,
     test_price: 10.00,
     is_active: true
   },
   {
-    id: 'mod-hp-664xl-black',
+    id: '01000000-0000-0000-0000-000000000003',
     tenant_id: MOCK_COMPANY_SUPREME.id,
     brand_name: 'HP',
     model_name: 'HP 664 XL',
     color: 'Preto',
     is_xl: true,
     capacity_ml: 8.5,
-    empty_weight_grams: 28.0,
+    empty_weight_grams: 27.0,
     full_weight_grams: 42.0,
-    technical_notes: 'Alta capacidade',
+    technical_notes: 'Cartucho de alta capacidade',
     refill_price: 45.00,
     verification_price: 15.00,
     test_price: 10.00,
     is_active: true
   },
   {
-    id: 'mod-hp-667-black',
+    id: '01000000-0000-0000-0000-000000000004',
     tenant_id: MOCK_COMPANY_SUPREME.id,
     brand_name: 'HP',
     model_name: 'HP 667',
     color: 'Preto',
     is_xl: false,
     capacity_ml: 2.0,
-    empty_weight_grams: 26.5,
-    full_weight_grams: 32.5,
-    refill_price: 30.00,
+    empty_weight_grams: 26.0,
+    full_weight_grams: 30.0,
+    technical_notes: 'Linha DeskJet Ink Advantage',
+    refill_price: 32.00,
     verification_price: 15.00,
     test_price: 10.00,
     is_active: true
   },
   {
-    id: 'mod-canon-145-black',
+    id: '01000000-0000-0000-0000-000000000005',
     tenant_id: MOCK_COMPANY_SUPREME.id,
     brand_name: 'Canon',
     model_name: 'Canon PG-145',
     color: 'Preto',
     is_xl: false,
     capacity_ml: 8.0,
+    empty_weight_grams: 32.0,
+    full_weight_grams: 45.0,
+    technical_notes: 'Cartucho linha MG e TS',
+    refill_price: 35.00,
+    verification_price: 15.00,
+    test_price: 10.00,
+    is_active: true
+  },
+  {
+    id: '01000000-0000-0000-0000-000000000006',
+    tenant_id: MOCK_COMPANY_SUPREME.id,
+    brand_name: 'Canon',
+    model_name: 'Canon CL-146',
+    color: 'Colorido',
+    is_xl: false,
+    capacity_ml: 9.0,
     empty_weight_grams: 34.0,
     full_weight_grams: 48.0,
-    refill_price: 35.00,
+    technical_notes: 'Tricolor Canon',
+    refill_price: 40.00,
     verification_price: 15.00,
     test_price: 10.00,
     is_active: true
   }
 ];
 
-// Service Default Prices
 export const MOCK_SERVICE_PRICES: ServicePrice[] = [
   {
-    id: 'sp-01',
+    id: 'f6000000-0000-0000-0000-000000000001',
     tenant_id: MOCK_COMPANY_SUPREME.id,
     service_type: 'VERIFICACAO',
-    title: 'Verificação / Diagnóstico',
-    description: 'Teste elétrico e checagem de fluxo de cabeça',
+    title: 'Verificação e Teste Eletrônico',
+    description: 'Diagnóstico no testador elétrico e balança',
     default_price: 15.00,
     is_active: true
   },
   {
-    id: 'sp-02',
+    id: 'f6000000-0000-0000-0000-000000000002',
     tenant_id: MOCK_COMPANY_SUPREME.id,
     service_type: 'RECARGA',
-    title: 'Recarga Standard',
-    description: 'Recarga de tinta pigmentada/corante padrão',
+    title: 'Recarga Padrão',
+    description: 'Carga completa de tinta de alta densidade',
     default_price: 30.00,
     is_active: true
   },
   {
-    id: 'sp-03',
+    id: 'f6000000-0000-0000-0000-000000000003',
     tenant_id: MOCK_COMPANY_SUPREME.id,
     service_type: 'VERIFICACAO_E_RECARGA',
-    title: 'Verificação + Recarga',
-    description: 'Análise prévia e recarga com teste final',
+    title: 'Verificação + Recarga Completa',
+    description: 'Desconto da taxa de teste ao realizar a recarga',
     default_price: 30.00,
     is_active: true
   },
   {
-    id: 'sp-04',
+    id: 'f6000000-0000-0000-0000-000000000004',
     tenant_id: MOCK_COMPANY_SUPREME.id,
     service_type: 'TESTE',
-    title: 'Teste de Impressão Avulso',
-    description: 'Apenas teste de folha e alinhamento',
+    title: 'Teste de Impressão em Bancada',
+    description: 'Teste de padrão de cores e bicos injetores',
     default_price: 10.00,
     is_active: true
   }
 ];
 
 export const MOCK_COMPANY_SETTINGS: CompanySettings = {
-  id: 'set-01',
+  id: 'e5000000-0000-0000-0000-000000000001',
   tenant_id: MOCK_COMPANY_SUPREME.id,
   show_prices_on_receipt: true,
-  receipt_header_note: 'Agradecemos a preferência! Garantia de 30 dias na recarga com apresentação desta comanda.',
-  receipt_footer_note: 'Cartuchos não retirados em até 90 dias serão descartados ecologicamente.',
-  verification_waiver_policy: 'WAIVE_IF_REFILLED',
+  receipt_header_note: 'SUPREME RECARGAS & INFORMÁTICA\nEspecialistas em Recarga e Manutenção',
+  receipt_footer_note: 'Garantia de 30 dias para recargas. Apresente este comprovante para retirada.\nObrigado pela preferência!',
+  verification_waiver_policy: 'CREDIT_IF_REFILLED',
   waive_verification_if_refilled: true,
   default_refill_price: 30.00,
   default_refill_xl_price: 45.00,
@@ -324,45 +339,39 @@ export const MOCK_COMPANY_SETTINGS: CompanySettings = {
 
 export const INITIAL_AUDIT_LOGS: AuditLog[] = [
   {
-    id: 'log-01',
+    id: '03000000-0000-0000-0000-000000000001',
     tenant_id: MOCK_COMPANY_SUPREME.id,
-    action: 'NOVA_ENTRADA',
+    user_id: MOCK_PROFILES[1].id,
+    user_name: 'Mariana Santos (Atendente)',
+    action: 'CRIACAO_COMANDA',
     resource: 'cartridge_entries',
-    user_name: 'Ana Souza (Atendente)',
-    details: 'Criada comanda 2026-000001 (2 cartuchos) para o cliente João Pedro Silva',
-    created_at: new Date('2026-08-13T09:15:00').toISOString()
+    resource_id: 'ea000000-0000-0000-0000-000000000001',
+    details: 'Comanda 2026-000001 gerada para João Silva Advogados (2 cartuchos) - R$ 60,00',
+    created_at: new Date(Date.now() - 86400000 * 2).toISOString()
   },
   {
-    id: 'log-02',
+    id: '03000000-0000-0000-0000-000000000002',
     tenant_id: MOCK_COMPANY_SUPREME.id,
+    user_id: MOCK_PROFILES[2].id,
+    user_name: 'Rafael Souza (Técnico)',
     action: 'DIAGNOSTICO_TECNICO',
     resource: 'cartridges',
-    user_name: 'Marcos Técnico',
-    details: 'Registrado peso de saída 37.1g (Diferença: +7.9g) no cartucho 2026-000001-02 (Aprovado 100% OK)',
-    created_at: new Date('2026-08-13T11:40:00').toISOString()
-  },
-  {
-    id: 'log-03',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    action: 'DIAGNOSTICO_TECNICO',
-    resource: 'cartridges',
-    user_name: 'Marcos Técnico',
+    resource_id: '02000000-0000-0000-0000-000000000003',
     details: 'Classificado cartucho 2026-000002-01 como QUEIMADO. Preço recalculado para taxa de verificação.',
-    created_at: new Date('2026-08-13T11:00:00').toISOString()
+    created_at: new Date(Date.now() - 86400000).toISOString()
   }
 ];
 
-// Initial Entries & Cartridges
 export const INITIAL_ENTRIES: CartridgeEntry[] = [
   {
-    id: 'entry-2026-000001',
+    id: 'ea000000-0000-0000-0000-000000000001',
     tenant_id: MOCK_COMPANY_SUPREME.id,
     entry_number: '2026-000001',
     entry_sequence: 1,
     entry_year: 2026,
     customer_id: MOCK_CUSTOMERS[0].id,
     attendant_id: MOCK_PROFILES[1].id,
-    entry_date: new Date('2026-08-13T09:15:00').toISOString(),
+    entry_date: new Date(Date.now() - 86400000 * 2).toISOString(),
     subtotal_amount: 65.00,
     discount_amount: 5.00,
     surcharge_amount: 0,
@@ -374,17 +383,17 @@ export const INITIAL_ENTRIES: CartridgeEntry[] = [
     tracking_token: 'trk-2026000001-abc1',
     customer: MOCK_CUSTOMERS[0],
     attendant: MOCK_PROFILES[1],
-    created_at: new Date('2026-08-13T09:15:00').toISOString()
+    created_at: new Date(Date.now() - 86400000 * 2).toISOString()
   },
   {
-    id: 'entry-2026-000002',
+    id: 'ea000000-0000-0000-0000-000000000002',
     tenant_id: MOCK_COMPANY_SUPREME.id,
     entry_number: '2026-000002',
     entry_sequence: 2,
     entry_year: 2026,
     customer_id: MOCK_CUSTOMERS[1].id,
     attendant_id: MOCK_PROFILES[1].id,
-    entry_date: new Date('2026-08-13T10:30:00').toISOString(),
+    entry_date: new Date(Date.now() - 86400000).toISOString(),
     subtotal_amount: 45.00,
     discount_amount: 0,
     surcharge_amount: 0,
@@ -396,13 +405,13 @@ export const INITIAL_ENTRIES: CartridgeEntry[] = [
     tracking_token: 'trk-2026000002-xyz2',
     customer: MOCK_CUSTOMERS[1],
     attendant: MOCK_PROFILES[1],
-    created_at: new Date('2026-08-13T10:30:00').toISOString()
+    created_at: new Date(Date.now() - 86400000).toISOString()
   }
 ];
 
 export const INITIAL_CARTRIDGES: Cartridge[] = [
   {
-    id: 'cart-2026-000001-01',
+    id: '02000000-0000-0000-0000-000000000001',
     tenant_id: MOCK_COMPANY_SUPREME.id,
     entry_id: INITIAL_ENTRIES[0].id,
     serial_number: '2026-000001-01',
@@ -423,11 +432,12 @@ export const INITIAL_CARTRIDGES: Cartridge[] = [
     final_price: 30.00,
     model: MOCK_MODELS[0],
     entry_number: '2026-000001',
-    created_at: new Date('2026-08-13T09:15:00').toISOString(),
-    updated_at: new Date('2026-08-13T09:15:00').toISOString()
+    customer_name: 'João Silva Advogados',
+    created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
+    updated_at: new Date(Date.now() - 86400000 * 2).toISOString()
   },
   {
-    id: 'cart-2026-000001-02',
+    id: '02000000-0000-0000-0000-000000000002',
     tenant_id: MOCK_COMPANY_SUPREME.id,
     entry_id: INITIAL_ENTRIES[0].id,
     serial_number: '2026-000001-02',
@@ -453,11 +463,12 @@ export const INITIAL_CARTRIDGES: Cartridge[] = [
     model: MOCK_MODELS[1],
     technician: MOCK_PROFILES[2],
     entry_number: '2026-000001',
-    created_at: new Date('2026-08-13T09:15:00').toISOString(),
-    updated_at: new Date('2026-08-13T11:45:00').toISOString()
+    customer_name: 'João Silva Advogados',
+    created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
+    updated_at: new Date(Date.now() - 86400000 * 2).toISOString()
   },
   {
-    id: 'cart-2026-000002-01',
+    id: '02000000-0000-0000-0000-000000000003',
     tenant_id: MOCK_COMPANY_SUPREME.id,
     entry_id: INITIAL_ENTRIES[1].id,
     serial_number: '2026-000002-01',
@@ -481,15 +492,18 @@ export const INITIAL_CARTRIDGES: Cartridge[] = [
     model: MOCK_MODELS[2],
     technician: MOCK_PROFILES[2],
     entry_number: '2026-000002',
-    created_at: new Date('2026-08-13T10:30:00').toISOString(),
-    updated_at: new Date('2026-08-13T11:00:00').toISOString()
+    customer_name: 'Dra. Ana Paula Mendes',
+    created_at: new Date(Date.now() - 86400000).toISOString(),
+    updated_at: new Date(Date.now() - 86400000).toISOString()
   }
 ];
 
-// Repository Helper Functions
-const LOCAL_STORAGE_KEY = 'supreme_recargas_store_v2';
+const LOCAL_STORAGE_KEY = 'supreme_recargas_store_v3';
+let isRealtimeInitialized = false;
 
 export class AppStore {
+  private static isSyncing = false;
+
   private static getStoreData() {
     if (typeof window === 'undefined') {
       return {
@@ -504,6 +518,7 @@ export class AppStore {
         auditLogs: INITIAL_AUDIT_LOGS
       };
     }
+
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (!raw) {
       const initial = {
@@ -520,32 +535,121 @@ export class AppStore {
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(initial));
       return initial;
     }
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed.profiles)) parsed.profiles = MOCK_PROFILES;
-    if (!Array.isArray(parsed.entries)) parsed.entries = INITIAL_ENTRIES;
-    if (!Array.isArray(parsed.cartridges)) parsed.cartridges = INITIAL_CARTRIDGES;
-    if (!Array.isArray(parsed.customers)) parsed.customers = MOCK_CUSTOMERS;
-    if (!Array.isArray(parsed.models)) parsed.models = MOCK_MODELS;
-    if (!Array.isArray(parsed.servicePrices)) parsed.servicePrices = MOCK_SERVICE_PRICES;
-    if (!parsed.settings) {
-      parsed.settings = MOCK_COMPANY_SETTINGS;
-    } else {
-      if (typeof parsed.settings.require_customer_document !== 'boolean') {
-        parsed.settings.require_customer_document = false;
-      }
-      if (typeof parsed.settings.require_cartridge_serial !== 'boolean') {
-        parsed.settings.require_cartridge_serial = true;
-      }
+
+    try {
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed.profiles)) parsed.profiles = MOCK_PROFILES;
+      if (!Array.isArray(parsed.entries)) parsed.entries = INITIAL_ENTRIES;
+      if (!Array.isArray(parsed.cartridges)) parsed.cartridges = INITIAL_CARTRIDGES;
+      if (!Array.isArray(parsed.customers)) parsed.customers = MOCK_CUSTOMERS;
+      if (!Array.isArray(parsed.models)) parsed.models = MOCK_MODELS;
+      if (!Array.isArray(parsed.servicePrices)) parsed.servicePrices = MOCK_SERVICE_PRICES;
+      if (!parsed.settings) parsed.settings = MOCK_COMPANY_SETTINGS;
+      if (!parsed.company) parsed.company = MOCK_COMPANY_SUPREME;
+      if (!Array.isArray(parsed.auditLogs)) parsed.auditLogs = INITIAL_AUDIT_LOGS;
+      return parsed;
+    } catch {
+      return {
+        profiles: MOCK_PROFILES,
+        entries: INITIAL_ENTRIES,
+        cartridges: INITIAL_CARTRIDGES,
+        customers: MOCK_CUSTOMERS,
+        models: MOCK_MODELS,
+        servicePrices: MOCK_SERVICE_PRICES,
+        settings: MOCK_COMPANY_SETTINGS,
+        company: MOCK_COMPANY_SUPREME,
+        auditLogs: INITIAL_AUDIT_LOGS
+      };
     }
-    if (!parsed.company) parsed.company = MOCK_COMPANY_SUPREME;
-    if (!Array.isArray(parsed.auditLogs)) parsed.auditLogs = INITIAL_AUDIT_LOGS;
-    return parsed;
   }
 
-  private static saveStoreData(data: any) {
+  private static saveStoreData(data: any, emitEvent = true) {
     if (typeof window !== 'undefined') {
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
+      if (emitEvent) {
+        window.dispatchEvent(new CustomEvent('supreme_store_updated'));
+      }
     }
+  }
+
+  // Real-time synchronization with Supabase
+  static async syncFromSupabase(tenantId = MOCK_COMPANY_SUPREME.id): Promise<boolean> {
+    if (this.isSyncing) return false;
+    this.isSyncing = true;
+
+    try {
+      const [
+        custRes,
+        modRes,
+        priceRes,
+        setRes,
+        entRes,
+        cartRes,
+        profRes,
+        auditRes
+      ] = await Promise.all([
+        supabase.from('customers').select('*').eq('tenant_id', tenantId).order('created_at', { ascending: false }),
+        supabase.from('cartridge_models').select('*').eq('tenant_id', tenantId).order('model_name', { ascending: true }),
+        supabase.from('service_prices').select('*').eq('tenant_id', tenantId),
+        supabase.from('company_settings').select('*').eq('tenant_id', tenantId).maybeSingle(),
+        supabase.from('cartridge_entries').select('*').eq('tenant_id', tenantId).order('entry_sequence', { ascending: false }),
+        supabase.from('cartridges').select('*').eq('tenant_id', tenantId).order('created_at', { ascending: false }),
+        supabase.from('profiles').select('*').eq('tenant_id', tenantId),
+        supabase.from('audit_logs').select('*').eq('tenant_id', tenantId).order('created_at', { ascending: false }).limit(200)
+      ]);
+
+      const data = this.getStoreData();
+
+      if (custRes.data && custRes.data.length > 0) {
+        data.customers = custRes.data;
+      }
+      if (modRes.data && modRes.data.length > 0) {
+        data.models = modRes.data;
+      }
+      if (priceRes.data && priceRes.data.length > 0) {
+        data.servicePrices = priceRes.data;
+      }
+      if (setRes.data) {
+        data.settings = setRes.data;
+      }
+      if (entRes.data && entRes.data.length > 0) {
+        data.entries = entRes.data;
+      }
+      if (cartRes.data && cartRes.data.length > 0) {
+        data.cartridges = cartRes.data;
+      }
+      if (profRes.data && profRes.data.length > 0) {
+        data.profiles = profRes.data;
+      }
+      if (auditRes.data && auditRes.data.length > 0) {
+        data.auditLogs = auditRes.data;
+      }
+
+      this.saveStoreData(data);
+      return true;
+    } catch (err) {
+      console.warn('Supabase sync error, using local cache:', err);
+      return false;
+    } finally {
+      this.isSyncing = false;
+    }
+  }
+
+  // Setup Realtime WebSocket Listener across all browser windows/devices
+  static initRealtime(tenantId = MOCK_COMPANY_SUPREME.id) {
+    if (typeof window === 'undefined' || isRealtimeInitialized) return;
+    isRealtimeInitialized = true;
+
+    // Initial fetch from Supabase
+    this.syncFromSupabase(tenantId);
+
+    // Subscribe to database changes
+    supabase
+      .channel('supreme-db-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', filter: `tenant_id=eq.${tenantId}` }, () => {
+        this.syncFromSupabase(tenantId);
+      })
+      .subscribe();
   }
 
   // Audit Logs Management
@@ -571,8 +675,8 @@ export class AppStore {
     if (!data.auditLogs) data.auditLogs = [];
 
     const newLog: AuditLog = {
-      id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-      tenant_id: payload.tenant_id,
+      id: generateUUID(),
+      tenant_id: payload.tenant_id || MOCK_COMPANY_SUPREME.id,
       user_id: payload.user_id,
       user_name: payload.user_name || 'Sistema',
       action: payload.action,
@@ -585,11 +689,14 @@ export class AppStore {
     };
 
     data.auditLogs.unshift(newLog);
-    // Keep max 500 logs
     if (data.auditLogs.length > 500) {
       data.auditLogs = data.auditLogs.slice(0, 500);
     }
     this.saveStoreData(data);
+
+    // Async push to Supabase
+    supabase.from('audit_logs').insert(newLog).then();
+
     return newLog;
   }
 
@@ -605,12 +712,15 @@ export class AppStore {
 
     const newUser: Profile = {
       ...user,
-      id: `user-${Date.now()}`,
+      id: generateUUID(),
       created_at: new Date().toISOString()
     };
 
     data.profiles.push(newUser);
     this.saveStoreData(data);
+
+    // Push to Supabase
+    supabase.from('profiles').insert(newUser).then();
 
     this.logAudit({
       tenant_id: user.tenant_id,
@@ -632,9 +742,12 @@ export class AppStore {
     if (idx === -1) throw new Error('Usuário não encontrado');
 
     const oldUser = { ...data.profiles[idx] };
-    const updated = { ...oldUser, ...updates };
+    const updated = { ...oldUser, ...updates, updated_at: new Date().toISOString() };
     data.profiles[idx] = updated;
     this.saveStoreData(data);
+
+    // Push to Supabase
+    supabase.from('profiles').update(updates).eq('id', userId).then();
 
     this.logAudit({
       tenant_id: updated.tenant_id,
@@ -662,6 +775,9 @@ export class AppStore {
     const user = data.profiles[idx];
     user.custom_permissions = permissions;
     this.saveStoreData(data);
+
+    // Push to Supabase
+    supabase.from('profiles').update({ custom_permissions: permissions }).eq('id', userId).then();
 
     this.logAudit({
       tenant_id: user.tenant_id,
@@ -703,7 +819,6 @@ export class AppStore {
       throw new Error('Este usuário está desativado no sistema. Contate o administrador.');
     }
 
-    // Check password (accept user.password, or fallback to '123456' for legacy demo accounts)
     const expectedPassword = user.password || '123456';
     if (passwordInput !== expectedPassword && passwordInput !== '123456') {
       this.logAudit({
@@ -740,6 +855,9 @@ export class AppStore {
     user.password = newPassword;
     this.saveStoreData(data);
 
+    // Push to Supabase
+    supabase.from('profiles').update({ password: newPassword }).eq('id', userId).then();
+
     this.logAudit({
       tenant_id: user.tenant_id,
       user_id: user.id,
@@ -772,9 +890,17 @@ export class AppStore {
 
   static updateSettings(tenantId: string, updates: Partial<CompanySettings>, performedByName?: string): CompanySettings {
     const data = this.getStoreData();
-    const updated = { ...data.settings, ...updates };
+    const updated = { ...data.settings, ...updates, updated_at: new Date().toISOString() };
     data.settings = updated;
     this.saveStoreData(data);
+
+    // Push to Supabase
+    supabase.from('company_settings').upsert({
+      id: updated.id || generateUUID(),
+      tenant_id: tenantId,
+      ...updates,
+      updated_at: new Date().toISOString()
+    }).then();
 
     const pesagemLabel = updated.input_weight_responsibility === 'TECNICO'
       ? 'Apenas Técnico (Oficina)'
@@ -860,19 +986,22 @@ export class AppStore {
   // Customers Query
   static getCustomers(tenantId: string): Customer[] {
     const data = this.getStoreData();
-    return data.customers.filter((c: Customer) => c.tenant_id === tenantId);
+    return (data.customers || []).filter((c: Customer) => c.tenant_id === tenantId);
   }
 
   static addCustomer(customer: Omit<Customer, 'id' | 'internal_code' | 'created_at'>, performedByName?: string): Customer {
     const data = this.getStoreData();
     const newCustomer: Customer = {
       ...customer,
-      id: `cust-${Date.now()}`,
-      internal_code: 1000 + data.customers.length + 1,
+      id: generateUUID(),
+      internal_code: 1000 + (data.customers || []).length + 1,
       created_at: new Date().toISOString()
     };
     data.customers.unshift(newCustomer);
     this.saveStoreData(data);
+
+    // Push to Supabase
+    supabase.from('customers').insert(newCustomer).then();
 
     this.logAudit({
       tenant_id: customer.tenant_id,
@@ -902,7 +1031,6 @@ export class AppStore {
     };
     data.customers[idx] = updated;
 
-    // Update customer reference in existing entries if present
     if (Array.isArray(data.entries)) {
       data.entries.forEach((e: CartridgeEntry) => {
         if (e.customer_id === customerId) {
@@ -912,6 +1040,9 @@ export class AppStore {
     }
 
     this.saveStoreData(data);
+
+    // Push to Supabase
+    supabase.from('customers').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', customerId).then();
 
     this.logAudit({
       tenant_id: updated.tenant_id,
@@ -928,17 +1059,20 @@ export class AppStore {
   // Cartridge Models Query & Edit
   static getModels(tenantId: string): CartridgeModel[] {
     const data = this.getStoreData();
-    return data.models.filter((m: CartridgeModel) => m.tenant_id === tenantId && m.is_active);
+    return (data.models || []).filter((m: CartridgeModel) => m.tenant_id === tenantId && m.is_active);
   }
 
   static addModel(model: Omit<CartridgeModel, 'id'>, performedByName?: string): CartridgeModel {
     const data = this.getStoreData();
     const newModel: CartridgeModel = {
       ...model,
-      id: `mod-${Date.now()}`
+      id: generateUUID()
     };
     data.models.unshift(newModel);
     this.saveStoreData(data);
+
+    // Push to Supabase
+    supabase.from('cartridge_models').insert(newModel).then();
 
     this.logAudit({
       tenant_id: model.tenant_id,
@@ -957,9 +1091,12 @@ export class AppStore {
     const idx = data.models.findIndex((m: CartridgeModel) => m.id === modelId);
     if (idx === -1) throw new Error('Modelo não encontrado');
 
-    const updated = { ...data.models[idx], ...updates };
+    const updated = { ...data.models[idx], ...updates, updated_at: new Date().toISOString() };
     data.models[idx] = updated;
     this.saveStoreData(data);
+
+    // Push to Supabase
+    supabase.from('cartridge_models').update(updates).eq('id', modelId).then();
 
     this.logAudit({
       tenant_id: updated.tenant_id,
@@ -976,19 +1113,19 @@ export class AppStore {
   // Service Prices
   static getServicePrices(tenantId: string): ServicePrice[] {
     const data = this.getStoreData();
-    return data.servicePrices.filter((sp: ServicePrice) => sp.tenant_id === tenantId);
+    return (data.servicePrices || []).filter((sp: ServicePrice) => sp.tenant_id === tenantId);
   }
 
   // Entries & Cartridges Query
   static getEntries(tenantId: string): CartridgeEntry[] {
     const data = this.getStoreData();
-    const tenantEntries = data.entries.filter((e: CartridgeEntry) => e.tenant_id === tenantId);
+    const tenantEntries = (data.entries || []).filter((e: CartridgeEntry) => e.tenant_id === tenantId);
     return tenantEntries.map((entry: CartridgeEntry) => ({
       ...entry,
-      customer: data.customers.find((c: Customer) => c.id === entry.customer_id),
-      cartridges: data.cartridges.filter((c: Cartridge) => c.entry_id === entry.id).map((c: Cartridge) => ({
+      customer: (data.customers || []).find((c: Customer) => c.id === entry.customer_id),
+      cartridges: (data.cartridges || []).filter((c: Cartridge) => c.entry_id === entry.id).map((c: Cartridge) => ({
         ...c,
-        model: data.models.find((m: CartridgeModel) => m.id === c.model_id)
+        model: (data.models || []).find((m: CartridgeModel) => m.id === c.model_id)
       }))
     }));
   }
@@ -1001,7 +1138,7 @@ export class AppStore {
   static getEntryByToken(tokenOrNumber: string): CartridgeEntry | undefined {
     const data = this.getStoreData();
     const clean = tokenOrNumber.trim().toLowerCase();
-    const entry = data.entries.find((e: CartridgeEntry) => 
+    const entry = (data.entries || []).find((e: CartridgeEntry) => 
       (e.tracking_token && e.tracking_token.toLowerCase() === clean) ||
       e.entry_number.toLowerCase() === clean ||
       e.id === tokenOrNumber
@@ -1009,10 +1146,10 @@ export class AppStore {
     if (!entry) return undefined;
     return {
       ...entry,
-      customer: data.customers.find((c: Customer) => c.id === entry.customer_id),
-      cartridges: data.cartridges.filter((c: Cartridge) => c.entry_id === entry.id).map((c: Cartridge) => ({
+      customer: (data.customers || []).find((c: Customer) => c.id === entry.customer_id),
+      cartridges: (data.cartridges || []).filter((c: Cartridge) => c.entry_id === entry.id).map((c: Cartridge) => ({
         ...c,
-        model: data.models.find((m: CartridgeModel) => m.id === c.model_id)
+        model: (data.models || []).find((m: CartridgeModel) => m.id === c.model_id)
       }))
     };
   }
@@ -1024,13 +1161,13 @@ export class AppStore {
 
   static getCartridges(tenantId: string): Cartridge[] {
     const data = this.getStoreData();
-    const tenantCartridges = data.cartridges.filter((c: Cartridge) => c.tenant_id === tenantId);
+    const tenantCartridges = (data.cartridges || []).filter((c: Cartridge) => c.tenant_id === tenantId);
     return tenantCartridges.map((cartridge: Cartridge) => {
-      const entry = data.entries.find((e: CartridgeEntry) => e.id === cartridge.entry_id);
-      const customer = entry ? data.customers.find((cust: Customer) => cust.id === entry.customer_id) : undefined;
+      const entry = (data.entries || []).find((e: CartridgeEntry) => e.id === cartridge.entry_id);
+      const customer = entry ? (data.customers || []).find((cust: Customer) => cust.id === entry.customer_id) : undefined;
       return {
         ...cartridge,
-        model: data.models.find((m: CartridgeModel) => m.id === cartridge.model_id),
+        model: (data.models || []).find((m: CartridgeModel) => m.id === cartridge.model_id),
         entry_number: entry ? entry.entry_number : '',
         customer_name: customer?.name || 'Cliente',
         customer: customer
@@ -1062,10 +1199,10 @@ export class AppStore {
   }): CartridgeEntry {
     const data = this.getStoreData();
     const currentYear = new Date().getFullYear();
-    const tenantEntries = data.entries.filter((e: CartridgeEntry) => e.tenant_id === payload.tenant_id);
+    const tenantEntries = (data.entries || []).filter((e: CartridgeEntry) => e.tenant_id === payload.tenant_id);
     const seq = tenantEntries.length + 1;
     const entryNumber = `${currentYear}-${String(seq).padStart(6, '0')}`;
-    const entryId = `entry-${Date.now()}`;
+    const entryId = generateUUID();
     const trackingToken = `trk-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
     let subtotal = 0;
@@ -1073,7 +1210,7 @@ export class AppStore {
     const discount = payload.discount_amount || 0;
     const total = Math.max(0, subtotal - discount);
 
-    const customer = data.customers.find((c: Customer) => c.id === payload.customer_id);
+    const customer = (data.customers || []).find((c: Customer) => c.id === payload.customer_id);
 
     const newEntry: CartridgeEntry = {
       id: entryId,
@@ -1099,7 +1236,7 @@ export class AppStore {
     const newCartridges: Cartridge[] = payload.items.map((item, idx) => {
       const serialNumber = `${entryNumber}-${String(idx + 1).padStart(2, '0')}`;
       return {
-        id: `cart-${Date.now()}-${idx}`,
+        id: generateUUID(),
         tenant_id: payload.tenant_id,
         entry_id: entryId,
         serial_number: serialNumber,
@@ -1118,6 +1255,8 @@ export class AppStore {
         discount_amount: 0,
         surcharge_amount: 0,
         final_price: item.price,
+        entry_number: entryNumber,
+        customer_name: customer?.name || 'Cliente',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
@@ -1126,6 +1265,11 @@ export class AppStore {
     data.entries.unshift(newEntry);
     data.cartridges.unshift(...newCartridges);
     this.saveStoreData(data);
+
+    // Push entry and cartridges to Supabase
+    supabase.from('cartridge_entries').insert(newEntry).then(() => {
+      supabase.from('cartridges').insert(newCartridges).then();
+    });
 
     this.logAudit({
       tenant_id: payload.tenant_id,
@@ -1142,7 +1286,7 @@ export class AppStore {
       customer: customer,
       cartridges: newCartridges.map(c => ({
         ...c,
-        model: data.models.find((m: CartridgeModel) => m.id === c.model_id)
+        model: (data.models || []).find((m: CartridgeModel) => m.id === c.model_id)
       }))
     };
   }
@@ -1175,7 +1319,7 @@ export class AppStore {
     const isCondemned = payload.status === 'SEM_REPARO' || payload.status === 'COM_PROBLEMA' || ['CID', 'QUEIMADO', 'SEM_REPARO'].includes(newResultClass);
 
     let newPrice = current.final_price;
-    const model = data.models.find((m: CartridgeModel) => m.id === current.model_id);
+    const model = (data.models || []).find((m: CartridgeModel) => m.id === current.model_id);
     const settings = this.getSettings(current.tenant_id);
 
     if (isCondemned) {
@@ -1216,9 +1360,31 @@ export class AppStore {
         subtotal_amount: newSubtotal,
         total_amount: newTotal
       };
+
+      // Push entry update to Supabase
+      supabase.from('cartridge_entries').update({
+        subtotal_amount: newSubtotal,
+        total_amount: newTotal,
+        updated_at: new Date().toISOString()
+      }).eq('id', current.entry_id).then();
     }
 
     this.saveStoreData(data);
+
+    // Push cartridge update to Supabase
+    supabase.from('cartridges').update({
+      status: updated.status,
+      technician_id: updated.technician_id,
+      result_classification: updated.result_classification,
+      result_other_description: updated.result_other_description,
+      input_weight_grams: updated.input_weight_grams,
+      output_weight_grams: updated.output_weight_grams,
+      weight_diff_grams: updated.weight_diff_grams,
+      applied_price: updated.applied_price,
+      final_price: updated.final_price,
+      technical_notes: updated.technical_notes,
+      updated_at: updated.updated_at
+    }).eq('id', payload.cartridgeId).then();
 
     this.logAudit({
       tenant_id: current.tenant_id,
@@ -1248,42 +1414,45 @@ export class AppStore {
     changeAmount?: number;
     remainingAmount?: number;
     notes?: string;
+    extraDiscount?: number;
     applyDiscountDifference?: boolean;
     forcedCloseReason?: string;
   }): CartridgeEntry {
     const data = this.getStoreData();
     const entryIdx = data.entries.findIndex((e: CartridgeEntry) => e.id === payload.entryId);
-    if (entryIdx === -1) throw new Error('Entrada não encontrada');
+    if (entryIdx === -1) throw new Error('Comanda não encontrada.');
 
     const entry = data.entries[entryIdx];
     const now = new Date().toISOString();
-    const primaryMethod = payload.paymentMethod || (payload.payments && payload.payments[0]?.method) || 'DINHEIRO';
 
-    let extraDiscount = 0;
-    let finalTotal = entry.total_amount;
-    let finalDiscount = entry.discount_amount || 0;
+    const diffDiscount = payload.applyDiscountDifference
+      ? Math.max(0, (entry.total_amount || entry.subtotal_amount) - payload.amountPaid)
+      : 0;
+    const extraDiscount = payload.extraDiscount !== undefined ? payload.extraDiscount : diffDiscount;
+    const currentDiscount = entry.discount_amount || 0;
+    const newTotalDiscount = currentDiscount + extraDiscount;
+    const finalTotal = Math.max(0, (entry.subtotal_amount || entry.total_amount) - newTotalDiscount);
+
     let finalPaymentStatus = payload.paymentStatus;
-    let finalRemaining = payload.remainingAmount || 0;
-
-    // If applying discount for remaining difference
-    if (payload.applyDiscountDifference && finalRemaining > 0) {
-      extraDiscount = finalRemaining;
-      finalDiscount += extraDiscount;
-      finalTotal = Math.max(0, entry.subtotal_amount - finalDiscount);
-      finalRemaining = 0;
+    let finalRemaining = payload.remainingAmount ?? Math.max(0, finalTotal - payload.amountPaid);
+    if ((extraDiscount > 0 || payload.applyDiscountDifference) && payload.amountPaid >= finalTotal) {
       finalPaymentStatus = 'PAGO';
+      finalRemaining = 0;
     }
 
+    const primaryMethod = payload.paymentMethod || (payload.payments && payload.payments[0]?.method) || 'DINHEIRO';
+
     const deliveryRecord: Delivery = {
-      id: `del-${Date.now()}`,
+      id: generateUUID(),
       tenant_id: entry.tenant_id,
       entry_id: payload.entryId,
       delivered_at: now,
       delivered_by: payload.attendantId,
       delivered_by_name: payload.attendantName,
+      attendant_name: payload.attendantName,
       receiver_name: payload.receiverName,
       receiver_document: payload.receiverDocument,
-      receiver_relation: payload.receiverRelation || 'Próprio Cliente',
+      receiver_relation: payload.receiverRelation,
       payment_method: primaryMethod,
       payment_status: finalPaymentStatus,
       payments: payload.payments,
@@ -1296,7 +1465,7 @@ export class AppStore {
 
     data.entries[entryIdx] = {
       ...entry,
-      discount_amount: finalDiscount,
+      discount_amount: newTotalDiscount,
       total_amount: finalTotal,
       payment_status: finalPaymentStatus,
       payment_method: primaryMethod,
@@ -1305,10 +1474,11 @@ export class AppStore {
       change_amount: payload.changeAmount || 0,
       remaining_amount: finalRemaining,
       paid_at: now,
-      delivery_info: deliveryRecord
+      delivery_info: deliveryRecord,
+      updated_at: now
     };
 
-    // Mark Cartridges in this Entry as ENTREGUE (and mark uncompleted as DESISTENCIA if forced)
+    // Mark Cartridges in this Entry as ENTREGUE
     data.cartridges = data.cartridges.map((c: Cartridge) => {
       if (c.entry_id === payload.entryId) {
         const isUncompleted = ['AGUARDANDO_VERIFICACAO', 'EM_VERIFICACAO', 'AGUARDANDO_RECARGA', 'EM_RECARGA', 'AGUARDANDO_TESTE', 'EM_TESTE'].includes(c.status);
@@ -1316,20 +1486,46 @@ export class AppStore {
           ? ('DESISTENCIA' as ResultClassification)
           : c.result_classification;
 
-        return {
+        const updatedCart = {
           ...c,
-          status: 'ENTREGUE',
+          status: 'ENTREGUE' as CartridgeStatus,
           result_classification: resultClassification,
           technical_notes: isUncompleted && payload.forcedCloseReason 
             ? `${c.technical_notes ? c.technical_notes + ' | ' : ''}[Desistência/Baixa sem conclusão: ${payload.forcedCloseReason}]`
             : c.technical_notes,
           updated_at: now
         };
+
+        // Push cartridge update to Supabase
+        supabase.from('cartridges').update({
+          status: updatedCart.status,
+          result_classification: updatedCart.result_classification,
+          technical_notes: updatedCart.technical_notes,
+          updated_at: now
+        }).eq('id', c.id).then();
+
+        return updatedCart;
       }
       return c;
     });
 
     this.saveStoreData(data);
+
+    // Push delivery and entry update to Supabase
+    supabase.from('deliveries').insert(deliveryRecord).then();
+    supabase.from('cartridge_entries').update({
+      discount_amount: newTotalDiscount,
+      total_amount: finalTotal,
+      payment_status: finalPaymentStatus,
+      payment_method: primaryMethod,
+      payments: payload.payments,
+      amount_paid: payload.amountPaid,
+      change_amount: payload.changeAmount || 0,
+      remaining_amount: finalRemaining,
+      paid_at: now,
+      delivery_info: deliveryRecord,
+      updated_at: now
+    }).eq('id', payload.entryId).then();
 
     const paymentSummary = payload.payments && payload.payments.length > 0
       ? payload.payments.map(p => `${p.method}: R$ ${p.amount.toFixed(2)}`).join(' + ')
@@ -1368,20 +1564,35 @@ export class AppStore {
       updated_at: now
     };
 
-    // Revert cartridges that were ENTREGUE back to ready or pending verification
     data.cartridges = data.cartridges.map((c: Cartridge) => {
       if (c.entry_id === entryId) {
         const isFinished = c.output_weight_grams && c.result_classification === 'OK';
-        return {
+        const updatedStatus: CartridgeStatus = isFinished ? 'FINALIZADO' : 'AGUARDANDO_VERIFICACAO';
+        const updatedCart = {
           ...c,
-          status: isFinished ? 'FINALIZADO' : 'AGUARDANDO_VERIFICACAO',
+          status: updatedStatus,
           updated_at: now
         };
+
+        supabase.from('cartridges').update({
+          status: updatedStatus,
+          updated_at: now
+        }).eq('id', c.id).then();
+
+        return updatedCart;
       }
       return c;
     });
 
     this.saveStoreData(data);
+
+    // Push entry update to Supabase
+    supabase.from('cartridge_entries').update({
+      payment_status: 'PENDENTE',
+      delivery_info: null,
+      paid_at: null,
+      updated_at: now
+    }).eq('id', entryId).then();
 
     this.logAudit({
       tenant_id: entry.tenant_id,
@@ -1404,11 +1615,13 @@ export class AppStore {
     const entry = data.entries[entryIdx];
     const countCartridges = data.cartridges.filter((c: Cartridge) => c.entry_id === entryId).length;
 
-    // Delete entry and its cartridges
+    // Delete locally
     data.entries.splice(entryIdx, 1);
     data.cartridges = data.cartridges.filter((c: Cartridge) => c.entry_id !== entryId);
-
     this.saveStoreData(data);
+
+    // Delete in Supabase
+    supabase.from('cartridge_entries').delete().eq('id', entryId).then();
 
     this.logAudit({
       tenant_id: entry.tenant_id,
@@ -1422,4 +1635,3 @@ export class AppStore {
     return true;
   }
 }
-

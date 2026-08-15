@@ -73,6 +73,9 @@ export default function CartridgeModelsPage() {
 
   useEffect(() => {
     loadData();
+    const handleUpdate = () => loadData();
+    window.addEventListener('supreme_store_updated', handleUpdate);
+    return () => window.removeEventListener('supreme_store_updated', handleUpdate);
   }, [currentCompany.id]);
 
   if (!currentUser) return null;

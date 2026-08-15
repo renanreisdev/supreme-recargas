@@ -48,11 +48,18 @@ export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('NAO_FINALIZADOS');
 
-  useEffect(() => {
+  const loadData = () => {
     const carts = AppStore.getCartridges(currentCompany.id);
     const ents = AppStore.getEntries(currentCompany.id);
     setCartridges(carts);
     setEntries(ents);
+  };
+
+  useEffect(() => {
+    loadData();
+    const handleUpdate = () => loadData();
+    window.addEventListener('supreme_store_updated', handleUpdate);
+    return () => window.removeEventListener('supreme_store_updated', handleUpdate);
   }, [currentCompany.id]);
 
   if (!currentUser) return null;

@@ -89,6 +89,9 @@ function EntriesListContent() {
 
   useEffect(() => {
     loadData();
+    const handleUpdate = () => loadData();
+    window.addEventListener('supreme_store_updated', handleUpdate);
+    return () => window.removeEventListener('supreme_store_updated', handleUpdate);
   }, [currentCompany.id]);
 
   useEffect(() => {

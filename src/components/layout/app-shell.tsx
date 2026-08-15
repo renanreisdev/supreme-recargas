@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
+import { AppStore } from '@/lib/store';
 import { Sidebar } from './sidebar';
 import { Header } from './header';
 import { BottomNav } from './bottom-nav';
@@ -11,7 +12,7 @@ import { Zap } from 'lucide-react';
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, currentCompany } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const isPublicPage = pathname?.startsWith('/acompanhar') || pathname === '/login';
@@ -20,6 +21,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setMobileMenuOpen(false);
   }, [pathname]);
+
+  // Initialize Supabase Cloud Sync & Realtime Channel
+  useEffect(() => {
+    if (typeof window !== 'undefined' && currentCompany?.id) {
+      AppStore.initRealtime(currentCompany.id);
+    }
+  }, [currentCompany?.id]);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated && !isPublicPage) {

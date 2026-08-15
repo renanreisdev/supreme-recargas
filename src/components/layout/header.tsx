@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Search, PlusCircle, ExternalLink, QrCode, LogOut, Menu, Zap } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
+import { AppStore } from '@/lib/store';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { getRoleBadgeConfig } from '@/lib/utils';
@@ -59,6 +60,19 @@ export function Header({ onToggleMobileMenu }: HeaderProps) {
 
       {/* Header Actions */}
       <div className="flex items-center gap-1.5 sm:gap-3">
+        {/* Cloud Sync Status Indicator */}
+        <button
+          type="button"
+          onClick={() => {
+            AppStore.syncFromSupabase(currentCompany.id);
+          }}
+          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 hover:bg-emerald-100 transition-colors shadow-xs"
+          title="Banco de dados em nuvem ativo (Supabase). Clique para sincronizar."
+        >
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <span>Nuvem Ativa</span>
+        </button>
+
         {/* Quick Link to Demo Public Tracking */}
         <Button
           variant="outline"

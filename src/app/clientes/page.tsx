@@ -42,6 +42,9 @@ export default function CustomersPage() {
 
   useEffect(() => {
     loadData();
+    const handleUpdate = () => loadData();
+    window.addEventListener('supreme_store_updated', handleUpdate);
+    return () => window.removeEventListener('supreme_store_updated', handleUpdate);
   }, [currentCompany.id]);
 
   const filteredCustomers = customers.filter(c => 
