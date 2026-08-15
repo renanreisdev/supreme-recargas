@@ -15,7 +15,8 @@
 - [x] Escrever migration `0001_initial_schema.sql` (companies, profiles, customers, entries, cartridges, prices, audit)
 - [x] Escrever migration `0002_rls_policies.sql` (Row Level Security para multi-tenancy)
 - [x] Escrever migration `0003_functions_triggers.sql` (gerador de numeração sequencial atômico por empresa)
-- [x] Criar repositório e store `src/lib/store.ts` com dados de demonstração
+- [x] Provisionar projeto Supabase `supreme-recargas` (`sa-east-1` São Paulo) com 15 tabelas ativas e RLS
+- [x] Conectar cliente Supabase e sincronização bidirecional em tempo real no repositório `src/lib/store.ts`
 
 ### 🎯 Fase 3: Autenticação & Layout Base (Dashboard & RBAC)
 - [x] Criar AuthProvider (`src/lib/auth-context.tsx`) com suporte a troca instantânea de papéis (Admin, Atendente, Técnico, Super Admin)
