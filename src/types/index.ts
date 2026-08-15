@@ -60,8 +60,15 @@ export interface Plan {
   max_administrators: number;
   max_attendants: number;
   max_technicians: number;
+  max_total_users?: number;
   monthly_price: number;
+  extra_attendant_price: number;
+  extra_technician_price: number;
+  extra_admin_price: number;
+  features?: string[];
   is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Company {
@@ -76,6 +83,7 @@ export interface Company {
   city?: string;
   state?: string;
   zip_code?: string;
+  responsible_name?: string;
   logo_url?: string;
   is_active: boolean;
   created_at: string;
@@ -92,6 +100,12 @@ export interface Subscription {
   custom_max_administrators?: number;
   custom_max_attendants?: number;
   custom_max_technicians?: number;
+  extra_attendants?: number;
+  extra_technicians?: number;
+  extra_administrators?: number;
+  custom_price?: number;
+  billing_cycle?: 'MONTHLY' | 'ANNUAL' | 'CUSTOM';
+  notes?: string;
   plan?: Plan;
 }
 

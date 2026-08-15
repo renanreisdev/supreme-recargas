@@ -65,7 +65,8 @@ export default function CompanySettingsPage() {
   const [adminNewPass, setAdminNewPass] = useState('');
   const [resetSuccess, setResetSuccess] = useState(false);
 
-  const currentPlan = MOCK_PLANS[0]; // Initial Plan
+  const limits = AppStore.getEffectiveLimits(currentCompany.id);
+  const currentPlan = limits.plan;
 
   const loadData = () => {
     const data = AppStore.getUsers(currentCompany.id);
@@ -96,43 +97,34 @@ export default function CompanySettingsPage() {
 
   if (!currentUser) return null;
 
-  const countAdmins = users.filter(u => u.role === 'ADMINISTRADOR').length;
-  const countAttendants = users.filter(u => u.role === 'ATENDENTE').length;
-  const countTechs = users.filter(u => u.role === 'TECNICO').length;
+  const countAdmins = limits.usedAdmins;
+  const countAttendants = limits.usedAttendants;
+  const countTechs = limits.usedTechs;
 
   const handleAddUser = (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName || !email) return;
 
-    if (role === 'ADMINISTRADOR' && countAdmins >= currentPlan.max_administrators) {
-      alert(`Limite de administradores atingido para o ${currentPlan.name} (Máx: ${currentPlan.max_administrators}).`);
-      return;
-    }
-    if (role === 'ATENDENTE' && countAttendants >= currentPlan.max_attendants) {
-      alert(`Limite de atendentes atingido para o ${currentPlan.name} (Máx: ${currentPlan.max_attendants}).`);
-      return;
-    }
-    if (role === 'TECNICO' && countTechs >= currentPlan.max_technicians) {
-      alert(`Limite de técnicos atingido para o ${currentPlan.name} (Máx: ${currentPlan.max_technicians}).`);
-      return;
-    }
+    try {
+      AppStore.addUser({
+        tenant_id: currentCompany.id,
+        full_name: fullName,
+        email,
+        phone,
+        password: password || '123456',
+        role,
+        is_active: true
+      }, currentUser.full_name);
 
-    AppStore.addUser({
-      tenant_id: currentCompany.id,
-      full_name: fullName,
-      email,
-      phone,
-      password: password || '123456',
-      role,
-      is_active: true
-    }, currentUser.full_name);
-
-    loadData();
-    setShowAddModal(false);
-    setFullName('');
-    setEmail('');
-    setPhone('');
-    setPassword('123456');
+      loadData();
+      setShowAddModal(false);
+      setFullName('');
+      setEmail('');
+      setPhone('');
+      setPassword('123456');
+    } catch (err: any) {
+      alert(err?.message || 'Erro ao cadastrar usuário.');
+    }
   };
 
   const handleResetPasswordSubmit = (e: React.FormEvent) => {

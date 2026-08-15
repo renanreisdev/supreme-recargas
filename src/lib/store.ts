@@ -37,69 +37,200 @@ export function generateUUID(): string {
   });
 }
 
-// Default Seed Company
-export const MOCK_COMPANY_SUPREME: Company = {
-  id: 'b2000000-0000-0000-0000-000000000001',
-  corporate_name: 'Supreme Recargas e Informática LTDA',
-  trade_name: 'Supreme Informática',
-  cnpj: '12.345.678/0001-90',
-  phone: '(11) 98765-4321',
-  whatsapp: '11987654321',
-  email: 'contato@supremeinformatica.com.br',
-  address: 'Av. Paulista, 1000 - Sala 42',
-  city: 'São Paulo',
-  state: 'SP',
-  zip_code: '01310-100',
-  logo_url: '',
-  is_active: true,
-  created_at: '2026-01-15T00:00:00.000Z',
-  updated_at: '2026-01-15T00:00:00.000Z'
-};
+// Default Seed Companies
+export const MOCK_COMPANIES: Company[] = [
+  {
+    id: 'b2000000-0000-0000-0000-000000000001',
+    corporate_name: 'Supreme Recargas e Informática LTDA',
+    trade_name: 'Supreme Informática',
+    cnpj: '12.345.678/0001-90',
+    phone: '(11) 98765-4321',
+    whatsapp: '11987654321',
+    email: 'contato@supremeinformatica.com.br',
+    responsible_name: 'Carlos Oliveira',
+    address: 'Av. Paulista, 1000 - Sala 42',
+    city: 'São Paulo',
+    state: 'SP',
+    zip_code: '01310-100',
+    logo_url: '',
+    is_active: true,
+    created_at: '2026-01-15T00:00:00.000Z',
+    updated_at: '2026-01-15T00:00:00.000Z'
+  },
+  {
+    id: 'b2000000-0000-0000-0000-000000000002',
+    corporate_name: 'Mega Soluções em Recargas & Impressão EIRELI',
+    trade_name: 'Mega Recargas Centro',
+    cnpj: '98.765.432/0001-11',
+    phone: '(11) 98888-3333',
+    whatsapp: '11988883333',
+    email: 'contato@megarecargas.com.br',
+    responsible_name: 'Eduardo Martins',
+    address: 'Rua Direita, 250 - Centro',
+    city: 'Campinas',
+    state: 'SP',
+    zip_code: '13010-000',
+    logo_url: '',
+    is_active: true,
+    created_at: '2026-01-20T00:00:00.000Z',
+    updated_at: '2026-01-20T00:00:00.000Z'
+  },
+  {
+    id: 'b2000000-0000-0000-0000-000000000003',
+    corporate_name: 'Império do Toner & Cartuchos ME',
+    trade_name: 'Império dos Cartuchos',
+    cnpj: '44.555.666/0001-22',
+    phone: '(19) 97777-4444',
+    whatsapp: '19977774444',
+    email: 'financeiro@imperiocartuchos.com.br',
+    responsible_name: 'Luciana Ferreira',
+    address: 'Av. Brasil, 550',
+    city: 'Ribeirão Preto',
+    state: 'SP',
+    zip_code: '14015-000',
+    logo_url: '',
+    is_active: false,
+    created_at: '2026-02-05T00:00:00.000Z',
+    updated_at: '2026-02-05T00:00:00.000Z'
+  }
+];
+
+export const MOCK_COMPANY_SUPREME: Company = MOCK_COMPANIES[0];
 
 export const MOCK_PLANS: Plan[] = [
   {
     id: 'a1000000-0000-0000-0000-000000000001',
-    name: 'Plano Inicial',
+    name: 'Plano Inicial (Free)',
     code: 'INICIAL',
-    description: '1 Administrador, 3 Atendentes, 1 Técnico',
+    description: '1 Administrador, 2 Atendentes e 1 Técnico incluídos.',
     max_administrators: 1,
-    max_attendants: 3,
+    max_attendants: 2,
     max_technicians: 1,
+    max_total_users: 4,
     monthly_price: 0,
-    is_active: true
+    extra_attendant_price: 15.00,
+    extra_technician_price: 20.00,
+    extra_admin_price: 30.00,
+    features: [
+      'Até 4 usuários incluídos',
+      'Entradas e Comandas com QR Code',
+      'Bancada Técnica (Kanban)',
+      'Impressão Térmica e A4',
+      'WhatsApp nativo via link (wa.me)'
+    ],
+    is_active: true,
+    created_at: '2026-01-01T00:00:00.000Z'
   },
   {
     id: 'a1000000-0000-0000-0000-000000000002',
     name: 'Plano Básico',
     code: 'BASICO',
-    description: '1 Administrador, 5 Atendentes, 2 Técnicos',
+    description: 'Para assistências de 10 a 20 cartuchos/dia. 1 Admin, 4 Atendentes e 2 Técnicos.',
     max_administrators: 1,
-    max_attendants: 5,
+    max_attendants: 4,
     max_technicians: 2,
-    monthly_price: 79.90,
-    is_active: true
+    max_total_users: 7,
+    monthly_price: 69.90,
+    extra_attendant_price: 15.00,
+    extra_technician_price: 20.00,
+    extra_admin_price: 25.00,
+    features: [
+      'Até 7 usuários incluídos',
+      'Relatórios e Indicadores Financeiros',
+      'Rastreio online para clientes',
+      'Registro de Auditoria de Ações',
+      'Suporte prioritário via WhatsApp'
+    ],
+    is_active: true,
+    created_at: '2026-01-01T00:00:00.000Z'
   },
   {
     id: 'a1000000-0000-0000-0000-000000000003',
     name: 'Plano Profissional',
     code: 'PROFISSIONAL',
-    description: '2 Administradores, 10 Atendentes, 5 Técnicos',
+    description: 'Para operações em expansão. 2 Admins, 8 Atendentes e 4 Técnicos.',
     max_administrators: 2,
-    max_attendants: 10,
-    max_technicians: 5,
-    monthly_price: 149.90,
-    is_active: true
+    max_attendants: 8,
+    max_technicians: 4,
+    max_total_users: 14,
+    monthly_price: 139.90,
+    extra_attendant_price: 12.00,
+    extra_technician_price: 18.00,
+    extra_admin_price: 25.00,
+    features: [
+      'Até 14 usuários incluídos',
+      'Gestão avançada de perdas e garantias',
+      'Múltiplos terminais simultâneos',
+      'Exportação de dados e relatórios em tempo real',
+      'Controle customizado de pesagem'
+    ],
+    is_active: true,
+    created_at: '2026-01-01T00:00:00.000Z'
+  },
+  {
+    id: 'a1000000-0000-0000-0000-000000000004',
+    name: 'Plano Enterprise / Ilimitado',
+    code: 'ENTERPRISE',
+    description: 'Para redes e franquias. 5 Admins, 20 Atendentes e 10 Técnicos.',
+    max_administrators: 5,
+    max_attendants: 20,
+    max_technicians: 10,
+    max_total_users: 35,
+    monthly_price: 249.90,
+    extra_attendant_price: 10.00,
+    extra_technician_price: 15.00,
+    extra_admin_price: 20.00,
+    features: [
+      'Até 35 usuários incluídos',
+      'Limites customizáveis sob demanda',
+      'Painel consolidado multi-unidades',
+      'Onboarding e treinamento personalizado'
+    ],
+    is_active: true,
+    created_at: '2026-01-01T00:00:00.000Z'
   }
 ];
 
-export const MOCK_SUBSCRIPTION_SUPREME: Subscription = {
-  id: 'c3000000-0000-0000-0000-000000000001',
-  tenant_id: MOCK_COMPANY_SUPREME.id,
-  plan_id: MOCK_PLANS[0].id,
-  status: 'ACTIVE',
-  starts_at: '2026-01-15T00:00:00.000Z',
-  plan: MOCK_PLANS[0]
-};
+export const MOCK_SUBSCRIPTIONS: Subscription[] = [
+  {
+    id: 'c3000000-0000-0000-0000-000000000001',
+    tenant_id: MOCK_COMPANIES[0].id,
+    plan_id: MOCK_PLANS[0].id,
+    status: 'ACTIVE',
+    starts_at: '2026-01-15T00:00:00.000Z',
+    extra_attendants: 0,
+    extra_technicians: 0,
+    extra_administrators: 0,
+    billing_cycle: 'MONTHLY',
+    plan: MOCK_PLANS[0]
+  },
+  {
+    id: 'c3000000-0000-0000-0000-000000000002',
+    tenant_id: MOCK_COMPANIES[1].id,
+    plan_id: MOCK_PLANS[2].id,
+    status: 'ACTIVE',
+    starts_at: '2026-01-20T00:00:00.000Z',
+    extra_attendants: 1,
+    extra_technicians: 2,
+    extra_administrators: 0,
+    billing_cycle: 'MONTHLY',
+    plan: MOCK_PLANS[2]
+  },
+  {
+    id: 'c3000000-0000-0000-0000-000000000003',
+    tenant_id: MOCK_COMPANIES[2].id,
+    plan_id: MOCK_PLANS[1].id,
+    status: 'PAUSED',
+    starts_at: '2026-02-05T00:00:00.000Z',
+    extra_attendants: 0,
+    extra_technicians: 0,
+    extra_administrators: 0,
+    billing_cycle: 'MONTHLY',
+    plan: MOCK_PLANS[1]
+  }
+];
+
+export const MOCK_SUBSCRIPTION_SUPREME: Subscription = MOCK_SUBSCRIPTIONS[0];
 
 // Default Profiles
 export const MOCK_PROFILES: Profile[] = [
@@ -498,7 +629,7 @@ export const INITIAL_CARTRIDGES: Cartridge[] = [
   }
 ];
 
-const LOCAL_STORAGE_KEY = 'supreme_recargas_store_v3';
+const LOCAL_STORAGE_KEY = 'supreme_recargas_store_v4';
 let isRealtimeInitialized = false;
 
 export class AppStore {
@@ -515,6 +646,9 @@ export class AppStore {
         servicePrices: MOCK_SERVICE_PRICES,
         settings: MOCK_COMPANY_SETTINGS,
         company: MOCK_COMPANY_SUPREME,
+        companies: MOCK_COMPANIES,
+        plans: MOCK_PLANS,
+        subscriptions: MOCK_SUBSCRIPTIONS,
         auditLogs: INITIAL_AUDIT_LOGS
       };
     }
@@ -530,6 +664,9 @@ export class AppStore {
         servicePrices: MOCK_SERVICE_PRICES,
         settings: MOCK_COMPANY_SETTINGS,
         company: MOCK_COMPANY_SUPREME,
+        companies: MOCK_COMPANIES,
+        plans: MOCK_PLANS,
+        subscriptions: MOCK_SUBSCRIPTIONS,
         auditLogs: INITIAL_AUDIT_LOGS
       };
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(initial));
@@ -546,6 +683,9 @@ export class AppStore {
       if (!Array.isArray(parsed.servicePrices)) parsed.servicePrices = MOCK_SERVICE_PRICES;
       if (!parsed.settings) parsed.settings = MOCK_COMPANY_SETTINGS;
       if (!parsed.company) parsed.company = MOCK_COMPANY_SUPREME;
+      if (!Array.isArray(parsed.companies) || parsed.companies.length === 0) parsed.companies = MOCK_COMPANIES;
+      if (!Array.isArray(parsed.plans) || parsed.plans.length === 0) parsed.plans = MOCK_PLANS;
+      if (!Array.isArray(parsed.subscriptions) || parsed.subscriptions.length === 0) parsed.subscriptions = MOCK_SUBSCRIPTIONS;
       if (!Array.isArray(parsed.auditLogs)) parsed.auditLogs = INITIAL_AUDIT_LOGS;
       return parsed;
     } catch {
@@ -558,6 +698,9 @@ export class AppStore {
         servicePrices: MOCK_SERVICE_PRICES,
         settings: MOCK_COMPANY_SETTINGS,
         company: MOCK_COMPANY_SUPREME,
+        companies: MOCK_COMPANIES,
+        plans: MOCK_PLANS,
+        subscriptions: MOCK_SUBSCRIPTIONS,
         auditLogs: INITIAL_AUDIT_LOGS
       };
     }
@@ -652,6 +795,547 @@ export class AppStore {
       .subscribe();
   }
 
+  // ==========================================================================
+  // SUPER ADMIN & SAAS MULTI-TENANT MANAGEMENT
+  // ==========================================================================
+
+  // Companies Management
+  static getCompanies(): Company[] {
+    const data = this.getStoreData();
+    return data.companies || MOCK_COMPANIES;
+  }
+
+  static getCompany(tenantId?: string): Company {
+    const data = this.getStoreData();
+    const companies: Company[] = data.companies || MOCK_COMPANIES;
+    if (tenantId) {
+      const found = companies.find(c => c.id === tenantId);
+      if (found) return found;
+    }
+    return data.company || companies[0] || MOCK_COMPANY_SUPREME;
+  }
+
+  static addCompany(
+    companyData: Omit<Company, 'id' | 'created_at' | 'updated_at'>,
+    initialAdmin?: { fullName: string; email: string; password?: string; phone?: string },
+    planId?: string,
+    performedByName?: string
+  ): { company: Company; admin?: Profile; subscription: Subscription } {
+    const data = this.getStoreData();
+    if (!Array.isArray(data.companies)) data.companies = MOCK_COMPANIES;
+    if (!Array.isArray(data.subscriptions)) data.subscriptions = MOCK_SUBSCRIPTIONS;
+    if (!Array.isArray(data.plans)) data.plans = MOCK_PLANS;
+    if (!Array.isArray(data.profiles)) data.profiles = MOCK_PROFILES;
+
+    const companyId = generateUUID();
+    const now = new Date().toISOString();
+
+    const newCompany: Company = {
+      ...companyData,
+      id: companyId,
+      created_at: now,
+      updated_at: now
+    };
+
+    data.companies.unshift(newCompany);
+
+    // Create Subscription
+    const selectedPlanId = planId || data.plans[0]?.id || MOCK_PLANS[0].id;
+    const selectedPlan = data.plans.find((p: Plan) => p.id === selectedPlanId) || data.plans[0];
+
+    const newSubscription: Subscription = {
+      id: generateUUID(),
+      tenant_id: companyId,
+      plan_id: selectedPlanId,
+      status: 'ACTIVE',
+      starts_at: now,
+      extra_attendants: 0,
+      extra_technicians: 0,
+      extra_administrators: 0,
+      billing_cycle: 'MONTHLY',
+      plan: selectedPlan
+    };
+
+    data.subscriptions.unshift(newSubscription);
+
+    // Create Initial Admin User if provided
+    let newAdmin: Profile | undefined;
+    if (initialAdmin) {
+      newAdmin = {
+        id: generateUUID(),
+        tenant_id: companyId,
+        full_name: initialAdmin.fullName,
+        email: initialAdmin.email,
+        password: initialAdmin.password || '123456',
+        phone: initialAdmin.phone,
+        role: 'ADMINISTRADOR',
+        is_active: true,
+        created_at: now,
+        company: newCompany
+      };
+      data.profiles.push(newAdmin);
+    }
+
+    this.saveStoreData(data);
+
+    // Push to Supabase
+    supabase.from('companies').insert(newCompany).then();
+    supabase.from('subscriptions').insert(newSubscription).then();
+    if (newAdmin) {
+      supabase.from('profiles').insert(newAdmin).then();
+    }
+
+    this.logAudit({
+      tenant_id: companyId,
+      user_name: performedByName || 'Super Administrador',
+      action: 'CRIACAO_EMPRESA_SAAS',
+      resource: 'companies',
+      resource_id: companyId,
+      details: `Cadastrada nova empresa ${newCompany.trade_name} (CNPJ: ${newCompany.cnpj || 'Não informado'}) no ${selectedPlan.name}.`
+    });
+
+    return { company: newCompany, admin: newAdmin, subscription: newSubscription };
+  }
+
+  static updateCompany(companyId: string, updates: Partial<Company>, performedByName?: string): Company {
+    const data = this.getStoreData();
+    if (!Array.isArray(data.companies)) data.companies = MOCK_COMPANIES;
+
+    const idx = data.companies.findIndex((c: Company) => c.id === companyId);
+    if (idx === -1) throw new Error('Empresa não encontrada.');
+
+    const updated = { ...data.companies[idx], ...updates, updated_at: new Date().toISOString() };
+    data.companies[idx] = updated;
+
+    if (data.company && data.company.id === companyId) {
+      data.company = updated;
+    }
+
+    this.saveStoreData(data);
+
+    supabase.from('companies').update(updates).eq('id', companyId).then();
+
+    this.logAudit({
+      tenant_id: companyId,
+      user_name: performedByName || 'Super Administrador',
+      action: 'EDICAO_EMPRESA_SAAS',
+      resource: 'companies',
+      resource_id: companyId,
+      details: `Atualizados dados cadastrais da empresa ${updated.trade_name}.`
+    });
+
+    return updated;
+  }
+
+  static toggleCompanyStatus(companyId: string, performedByName?: string): Company {
+    const data = this.getStoreData();
+    if (!Array.isArray(data.companies)) data.companies = MOCK_COMPANIES;
+
+    const idx = data.companies.findIndex((c: Company) => c.id === companyId);
+    if (idx === -1) throw new Error('Empresa não encontrada.');
+
+    const currentStatus = data.companies[idx].is_active;
+    const newStatus = !currentStatus;
+    const updated = { ...data.companies[idx], is_active: newStatus, updated_at: new Date().toISOString() };
+    data.companies[idx] = updated;
+
+    if (data.company && data.company.id === companyId) {
+      data.company = updated;
+    }
+
+    // Also toggle subscription status if paused
+    if (Array.isArray(data.subscriptions)) {
+      const subIdx = data.subscriptions.findIndex((s: Subscription) => s.tenant_id === companyId);
+      if (subIdx !== -1) {
+        data.subscriptions[subIdx].status = newStatus ? 'ACTIVE' : 'PAUSED';
+      }
+    }
+
+    this.saveStoreData(data);
+
+    supabase.from('companies').update({ is_active: newStatus }).eq('id', companyId).then();
+
+    this.logAudit({
+      tenant_id: companyId,
+      user_name: performedByName || 'Super Administrador',
+      action: newStatus ? 'ATIVACAO_EMPRESA_SAAS' : 'BLOQUEIO_EMPRESA_SAAS',
+      resource: 'companies',
+      resource_id: companyId,
+      details: `Empresa ${updated.trade_name} ${newStatus ? 'REATIVADA / DESBLOQUEADA' : 'SUSPENSA / BLOQUEADA'}.`
+    });
+
+    return updated;
+  }
+
+  static deleteCompany(companyId: string, performedByName?: string): boolean {
+    const data = this.getStoreData();
+    if (!Array.isArray(data.companies)) data.companies = MOCK_COMPANIES;
+
+    const idx = data.companies.findIndex((c: Company) => c.id === companyId);
+    if (idx === -1) throw new Error('Empresa não encontrada.');
+
+    const name = data.companies[idx].trade_name;
+    data.companies.splice(idx, 1);
+    data.subscriptions = (data.subscriptions || []).filter((s: Subscription) => s.tenant_id !== companyId);
+
+    this.saveStoreData(data);
+
+    supabase.from('companies').delete().eq('id', companyId).then();
+
+    this.logAudit({
+      user_name: performedByName || 'Super Administrador',
+      action: 'EXCLUSAO_EMPRESA_SAAS',
+      resource: 'companies',
+      resource_id: companyId,
+      details: `Empresa ${name} excluída da plataforma SaaS.`
+    });
+
+    return true;
+  }
+
+  // Plans Management
+  static getPlans(): Plan[] {
+    const data = this.getStoreData();
+    return data.plans || MOCK_PLANS;
+  }
+
+  static getPlan(planId: string): Plan | undefined {
+    const plans = this.getPlans();
+    return plans.find(p => p.id === planId);
+  }
+
+  static addPlan(plan: Omit<Plan, 'id' | 'created_at' | 'updated_at'>, performedByName?: string): Plan {
+    const data = this.getStoreData();
+    if (!Array.isArray(data.plans)) data.plans = MOCK_PLANS;
+
+    const newPlan: Plan = {
+      ...plan,
+      id: generateUUID(),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    data.plans.push(newPlan);
+    this.saveStoreData(data);
+
+    supabase.from('plans').insert(newPlan).then();
+
+    this.logAudit({
+      user_name: performedByName || 'Super Administrador',
+      action: 'CRIACAO_PLANO_SAAS',
+      resource: 'plans',
+      resource_id: newPlan.id,
+      details: `Criado novo plano SaaS: ${newPlan.name} (Mensalidade: R$ ${newPlan.monthly_price.toFixed(2)} | Limite Admins: ${newPlan.max_administrators}, Atendentes: ${newPlan.max_attendants}, Técnicos: ${newPlan.max_technicians})`
+    });
+
+    return newPlan;
+  }
+
+  static updatePlan(planId: string, updates: Partial<Plan>, performedByName?: string): Plan {
+    const data = this.getStoreData();
+    if (!Array.isArray(data.plans)) data.plans = MOCK_PLANS;
+
+    const idx = data.plans.findIndex((p: Plan) => p.id === planId);
+    if (idx === -1) throw new Error('Plano não encontrado.');
+
+    const updated: Plan = {
+      ...data.plans[idx],
+      ...updates,
+      updated_at: new Date().toISOString()
+    };
+
+    data.plans[idx] = updated;
+    this.saveStoreData(data);
+
+    supabase.from('plans').update(updates).eq('id', planId).then();
+
+    this.logAudit({
+      user_name: performedByName || 'Super Administrador',
+      action: 'EDICAO_PLANO_SAAS',
+      resource: 'plans',
+      resource_id: planId,
+      details: `Atualizado plano SaaS ${updated.name}: Mensalidade R$ ${updated.monthly_price.toFixed(2)}, Atendente Extra +R$ ${updated.extra_attendant_price?.toFixed(2)}, Técnico Extra +R$ ${updated.extra_technician_price?.toFixed(2)}`
+    });
+
+    return updated;
+  }
+
+  static deletePlan(planId: string, performedByName?: string): boolean {
+    const data = this.getStoreData();
+    if (!Array.isArray(data.plans)) data.plans = MOCK_PLANS;
+
+    const idx = data.plans.findIndex((p: Plan) => p.id === planId);
+    if (idx === -1) throw new Error('Plano não encontrado.');
+
+    const name = data.plans[idx].name;
+    data.plans.splice(idx, 1);
+    this.saveStoreData(data);
+
+    supabase.from('plans').delete().eq('id', planId).then();
+
+    this.logAudit({
+      user_name: performedByName || 'Super Administrador',
+      action: 'EXCLUSAO_PLANO_SAAS',
+      resource: 'plans',
+      resource_id: planId,
+      details: `Plano SaaS ${name} excluído.`
+    });
+
+    return true;
+  }
+
+  // Subscriptions Management
+  static getSubscriptions(): Subscription[] {
+    const data = this.getStoreData();
+    const subs: Subscription[] = data.subscriptions || MOCK_SUBSCRIPTIONS;
+    const plans: Plan[] = data.plans || MOCK_PLANS;
+
+    return subs.map(s => ({
+      ...s,
+      plan: plans.find(p => p.id === s.plan_id) || plans[0]
+    }));
+  }
+
+  static getSubscription(tenantId: string): Subscription | undefined {
+    const subs = this.getSubscriptions();
+    return subs.find(s => s.tenant_id === tenantId);
+  }
+
+  static updateSubscription(subscriptionId: string, updates: Partial<Subscription>, performedByName?: string): Subscription {
+    const data = this.getStoreData();
+    if (!Array.isArray(data.subscriptions)) data.subscriptions = MOCK_SUBSCRIPTIONS;
+
+    const idx = data.subscriptions.findIndex((s: Subscription) => s.id === subscriptionId);
+    if (idx === -1) throw new Error('Assinatura não encontrada.');
+
+    const updated: Subscription = {
+      ...data.subscriptions[idx],
+      ...updates
+    };
+
+    data.subscriptions[idx] = updated;
+    this.saveStoreData(data);
+
+    supabase.from('subscriptions').update(updates).eq('id', subscriptionId).then();
+
+    this.logAudit({
+      tenant_id: updated.tenant_id,
+      user_name: performedByName || 'Super Administrador',
+      action: 'EDICAO_ASSINATURA_SAAS',
+      resource: 'subscriptions',
+      resource_id: subscriptionId,
+      details: `Atualizada assinatura da empresa (Extras: +${updated.extra_attendants || 0} Atendentes, +${updated.extra_technicians || 0} Técnicos, +${updated.extra_administrators || 0} Admins)`
+    });
+
+    return updated;
+  }
+
+  static assignPlanToCompany(
+    tenantId: string,
+    planId: string,
+    extras?: {
+      extra_attendants?: number;
+      extra_technicians?: number;
+      extra_administrators?: number;
+      custom_max_administrators?: number;
+      custom_max_attendants?: number;
+      custom_max_technicians?: number;
+      custom_price?: number;
+      status?: any;
+    },
+    performedByName?: string
+  ): Subscription {
+    const data = this.getStoreData();
+    if (!Array.isArray(data.subscriptions)) data.subscriptions = MOCK_SUBSCRIPTIONS;
+
+    const plans = data.plans || MOCK_PLANS;
+    const plan = plans.find((p: Plan) => p.id === planId) || plans[0];
+
+    const idx = data.subscriptions.findIndex((s: Subscription) => s.tenant_id === tenantId);
+    let sub: Subscription;
+
+    if (idx !== -1) {
+      sub = {
+        ...data.subscriptions[idx],
+        plan_id: planId,
+        plan,
+        extra_attendants: extras?.extra_attendants !== undefined ? extras.extra_attendants : data.subscriptions[idx].extra_attendants || 0,
+        extra_technicians: extras?.extra_technicians !== undefined ? extras.extra_technicians : data.subscriptions[idx].extra_technicians || 0,
+        extra_administrators: extras?.extra_administrators !== undefined ? extras.extra_administrators : data.subscriptions[idx].extra_administrators || 0,
+        custom_max_administrators: extras?.custom_max_administrators,
+        custom_max_attendants: extras?.custom_max_attendants,
+        custom_max_technicians: extras?.custom_max_technicians,
+        custom_price: extras?.custom_price,
+        status: extras?.status || data.subscriptions[idx].status || 'ACTIVE'
+      };
+      data.subscriptions[idx] = sub;
+    } else {
+      sub = {
+        id: generateUUID(),
+        tenant_id: tenantId,
+        plan_id: planId,
+        plan,
+        status: extras?.status || 'ACTIVE',
+        starts_at: new Date().toISOString(),
+        extra_attendants: extras?.extra_attendants || 0,
+        extra_technicians: extras?.extra_technicians || 0,
+        extra_administrators: extras?.extra_administrators || 0,
+        custom_max_administrators: extras?.custom_max_administrators,
+        custom_max_attendants: extras?.custom_max_attendants,
+        custom_max_technicians: extras?.custom_max_technicians,
+        custom_price: extras?.custom_price,
+        billing_cycle: 'MONTHLY'
+      };
+      data.subscriptions.unshift(sub);
+    }
+
+    this.saveStoreData(data);
+
+    supabase.from('subscriptions').upsert(sub).then();
+
+    this.logAudit({
+      tenant_id: tenantId,
+      user_name: performedByName || 'Super Administrador',
+      action: 'ATRIBUICAO_PLANO_SAAS',
+      resource: 'subscriptions',
+      resource_id: sub.id,
+      details: `Atribuído plano ${plan.name} para a empresa. Extras configurados: Atendentes: ${sub.extra_attendants}, Técnicos: ${sub.extra_technicians}, Admins: ${sub.extra_administrators}`
+    });
+
+    return sub;
+  }
+
+  // Calculate Effective User Limits and Pricing for any Company
+  static getEffectiveLimits(tenantId: string) {
+    const data = this.getStoreData();
+    const plans: Plan[] = data.plans || MOCK_PLANS;
+    const subscriptions: Subscription[] = data.subscriptions || MOCK_SUBSCRIPTIONS;
+    const profiles: Profile[] = data.profiles || MOCK_PROFILES;
+    
+    const sub = subscriptions.find(s => s.tenant_id === tenantId) || {
+      id: 'default',
+      tenant_id: tenantId,
+      plan_id: plans[0]?.id || 'default',
+      status: 'ACTIVE' as const,
+      starts_at: new Date().toISOString(),
+      extra_attendants: 0,
+      extra_technicians: 0,
+      extra_administrators: 0
+    };
+
+    const plan = plans.find(p => p.id === sub.plan_id) || plans[0] || MOCK_PLANS[0];
+
+    const maxAdmins = sub.custom_max_administrators !== undefined
+      ? sub.custom_max_administrators
+      : (plan.max_administrators || 1) + (sub.extra_administrators || 0);
+
+    const maxAttendants = sub.custom_max_attendants !== undefined
+      ? sub.custom_max_attendants
+      : (plan.max_attendants || 2) + (sub.extra_attendants || 0);
+
+    const maxTechs = sub.custom_max_technicians !== undefined
+      ? sub.custom_max_technicians
+      : (plan.max_technicians || 1) + (sub.extra_technicians || 0);
+
+    const maxTotal = maxAdmins + maxAttendants + maxTechs;
+
+    const tenantProfiles = profiles.filter(p => p.tenant_id === tenantId && p.is_active !== false);
+    const usedAdmins = tenantProfiles.filter(p => p.role === 'ADMINISTRADOR').length;
+    const usedAttendants = tenantProfiles.filter(p => p.role === 'ATENDENTE').length;
+    const usedTechs = tenantProfiles.filter(p => p.role === 'TECNICO').length;
+    const usedTotal = usedAdmins + usedAttendants + usedTechs;
+
+    // Monthly pricing calculation
+    const basePrice = plan.monthly_price || 0;
+    const extraAttPrice = (sub.extra_attendants || 0) * (plan.extra_attendant_price || 15);
+    const extraTechPrice = (sub.extra_technicians || 0) * (plan.extra_technician_price || 20);
+    const extraAdmPrice = (sub.extra_administrators || 0) * (plan.extra_admin_price || 25);
+    const calculatedPrice = basePrice + extraAttPrice + extraTechPrice + extraAdmPrice;
+    const finalMonthlyPrice = sub.custom_price !== undefined ? sub.custom_price : calculatedPrice;
+
+    return {
+      subscription: sub,
+      plan,
+      maxAdmins,
+      maxAttendants,
+      maxTechs,
+      maxTotal,
+      usedAdmins,
+      usedAttendants,
+      usedTechs,
+      usedTotal,
+      canAddAdmin: usedAdmins < maxAdmins,
+      canAddAttendant: usedAttendants < maxAttendants,
+      canAddTech: usedTechs < maxTechs,
+      basePrice,
+      extraAttPrice,
+      extraTechPrice,
+      extraAdmPrice,
+      finalMonthlyPrice
+    };
+  }
+
+  // Tenant Comprehensive Statistics
+  static getTenantStats(tenantId: string) {
+    const data = this.getStoreData();
+    const entries = (data.entries || []).filter((e: CartridgeEntry) => e.tenant_id === tenantId);
+    const cartridges = (data.cartridges || []).filter((c: Cartridge) => c.tenant_id === tenantId);
+    const customers = (data.customers || []).filter((c: Customer) => c.tenant_id === tenantId);
+    const limits = this.getEffectiveLimits(tenantId);
+
+    const totalRevenue = entries.reduce((acc: number, e: CartridgeEntry) => acc + (e.total_amount || 0), 0);
+
+    return {
+      totalEntries: entries.length,
+      totalCartridges: cartridges.length,
+      totalCustomers: customers.length,
+      totalRevenue,
+      limits
+    };
+  }
+
+  // Global Platform Overview for Super Admin
+  static getPlatformOverview() {
+    const companies = this.getCompanies();
+    const plans = this.getPlans();
+    const subscriptions = this.getSubscriptions();
+    const profiles = this.getAllProfiles();
+    const data = this.getStoreData();
+    const entries = data.entries || [];
+    const cartridges = data.cartridges || [];
+
+    const activeCompanies = companies.filter(c => c.is_active !== false).length;
+    const pausedCompanies = companies.filter(c => c.is_active === false).length;
+
+    let totalMRR = 0;
+    companies.forEach(c => {
+      if (c.is_active !== false) {
+        const limits = this.getEffectiveLimits(c.id);
+        totalMRR += limits.finalMonthlyPrice;
+      }
+    });
+
+    const activeUsers = profiles.filter(p => p.role !== 'SUPER_ADMIN' && p.is_active !== false).length;
+    const adminsCount = profiles.filter(p => p.role === 'ADMINISTRADOR' && p.is_active !== false).length;
+    const attendantsCount = profiles.filter(p => p.role === 'ATENDENTE' && p.is_active !== false).length;
+    const techsCount = profiles.filter(p => p.role === 'TECNICO' && p.is_active !== false).length;
+
+    return {
+      totalCompanies: companies.length,
+      activeCompanies,
+      pausedCompanies,
+      totalMRR,
+      totalUsers: activeUsers,
+      adminsCount,
+      attendantsCount,
+      techsCount,
+      totalCartridges: cartridges.length,
+      totalEntries: entries.length,
+      plansCount: plans.length,
+      subscriptionsCount: subscriptions.length
+    };
+  }
+
   // Audit Logs Management
   static getAuditLogs(tenantId?: string): AuditLog[] {
     const data = this.getStoreData();
@@ -700,7 +1384,18 @@ export class AppStore {
     return newLog;
   }
 
-  // User & Permission Management (Admin)
+  // User & Permission Management (Admin & Super Admin)
+  static getAllProfiles(): Profile[] {
+    const data = this.getStoreData();
+    const profiles: Profile[] = data.profiles || MOCK_PROFILES;
+    const companies: Company[] = data.companies || MOCK_COMPANIES;
+
+    return profiles.map(p => ({
+      ...p,
+      company: companies.find(c => c.id === p.tenant_id) || data.company
+    }));
+  }
+
   static getUsers(tenantId: string): Profile[] {
     const data = this.getStoreData();
     return (data.profiles || MOCK_PROFILES).filter((p: Profile) => p.tenant_id === tenantId);
@@ -709,6 +1404,20 @@ export class AppStore {
   static addUser(user: Omit<Profile, 'id' | 'created_at'>, performedByName?: string): Profile {
     const data = this.getStoreData();
     if (!data.profiles) data.profiles = MOCK_PROFILES;
+
+    // Validate limits
+    if (user.tenant_id) {
+      const limits = this.getEffectiveLimits(user.tenant_id);
+      if (user.role === 'ADMINISTRADOR' && !limits.canAddAdmin) {
+        throw new Error(`Limite de Administradores atingido para esta empresa (Máximo: ${limits.maxAdmins}). Contate o Administrador Central.`);
+      }
+      if (user.role === 'ATENDENTE' && !limits.canAddAttendant) {
+        throw new Error(`Limite de Atendentes atingido para esta empresa (Máximo: ${limits.maxAttendants}). Contate o Administrador Central.`);
+      }
+      if (user.role === 'TECNICO' && !limits.canAddTech) {
+        throw new Error(`Limite de Técnicos atingido para esta empresa (Máximo: ${limits.maxTechs}). Contate o Administrador Central.`);
+      }
+    }
 
     const newUser: Profile = {
       ...user,
@@ -817,6 +1526,21 @@ export class AppStore {
         details: `Tentativa de login bloqueada: Usuário ${user.full_name} (${user.email}) está inativo.`
       });
       throw new Error('Este usuário está desativado no sistema. Contate o administrador.');
+    }
+
+    if (user.role !== 'SUPER_ADMIN' && user.tenant_id) {
+      const companies = data.companies || MOCK_COMPANIES;
+      const company = companies.find((c: Company) => c.id === user.tenant_id);
+      if (company && company.is_active === false) {
+        this.logAudit({
+          tenant_id: user.tenant_id,
+          user_name: user.full_name,
+          action: 'FALHA_LOGIN_EMPRESA_BLOQUEADA',
+          resource: 'auth',
+          details: `Tentativa de login bloqueada: A empresa "${company.trade_name}" está suspensa ou bloqueada pelo Super Admin.`
+        });
+        throw new Error('A conta desta empresa está suspensa ou bloqueada. Entre em contato com o suporte central.');
+      }
     }
 
     const expectedPassword = user.password || '123456';
@@ -1152,11 +1876,6 @@ export class AppStore {
         model: (data.models || []).find((m: CartridgeModel) => m.id === c.model_id)
       }))
     };
-  }
-
-  static getCompany(tenantId?: string): Company {
-    const data = this.getStoreData();
-    return data.company || MOCK_COMPANY_SUPREME;
   }
 
   static getCartridges(tenantId: string): Cartridge[] {
