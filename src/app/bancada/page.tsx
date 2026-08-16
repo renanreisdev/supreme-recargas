@@ -99,8 +99,10 @@ export default function TechnicianWorkbenchPage() {
   const [items, setItems] = useState<ServiceOrderItem[]>([]);
   const [workflowStates, setWorkflowStates] = useState<WorkflowState[]>([]);
   const [categories, setCategories] = useState<ItemCategory[]>([]);
+  const [technicians, setTechnicians] = useState<any[]>([]);
   const [settings, setSettings] = useState<CompanySettings>(AppStore.getSettings(currentCompany.id));
   const [searchFilter, setSearchFilter] = useState('');
+  const [technicianFilter, setTechnicianFilter] = useState<string>('ALL');
   const [selectedItem, setSelectedItem] = useState<ServiceOrderItem | null>(null);
 
   // Technical Edit Modal State
@@ -110,6 +112,7 @@ export default function TechnicianWorkbenchPage() {
   const [resultDesc, setResultDesc] = useState('');
   const [techNotes, setTechNotes] = useState('');
   const [targetStatus, setTargetStatus] = useState<string>('EM_RECARGA');
+  const [modalAssignedTechId, setModalAssignedTechId] = useState<string>('');
   const [checklistState, setChecklistState] = useState<Array<{ item: string; checked: boolean }>>([]);
 
   // Workflow / Columns Customization Modal State
@@ -132,17 +135,20 @@ export default function TechnicianWorkbenchPage() {
 
   const canEditTech = hasPermission('update_tech_status') || hasPermission('technical_update') || currentUser?.role === 'ADMINISTRADOR';
   const canManageKanban = hasPermission('customize_kanban') || currentUser?.role === 'ADMINISTRADOR';
+  const canChangeTechnician = hasPermission('change_assigned_technician') || currentUser?.role === 'ADMINISTRADOR';
 
   const loadData = () => {
     const allItems = AppStore.getCartridges(currentCompany.id);
     const states = AppStore.getWorkflowStates(currentCompany.id);
     const cats = AppStore.getCategories(currentCompany.id);
     const stt = AppStore.getSettings(currentCompany.id);
+    const usrs = AppStore.getUsers(currentCompany.id);
 
     setItems(allItems);
     setWorkflowStates(states);
     setCategories(cats);
     setSettings(stt);
+    setTechnicians(usrs.filter(u => u.is_active));
   };
 
   useEffect(() => {
@@ -192,6 +198,7 @@ export default function TechnicianWorkbenchPage() {
     setResultDesc(item.result_description || '');
     setTechNotes(item.technical_notes || '');
     setTargetStatus(item.status);
+    setModalAssignedTechId(item.assigned_technician_id || '');
     setChecklistState(item.checklist || []);
   };
 
@@ -199,19 +206,83 @@ export default function TechnicianWorkbenchPage() {
     setChecklistState(prev => prev.map((c, i) => i === idx ? { ...c, checked: !c.checked } : c));
   };
 
+  const handleClaimItem = (item: ServiceOrderItem, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+
+    // Se já tem técnico atribuído e não é o usuário logado
+    if (item.assigned_technician_id && item.assigned_technician_id !== currentUser.id) {
+      if (!canChangeTechnician) {
+        setDialogModal({
+          isOpen: true,
+          type: 'warning',
+          title: 'Item Já Atribuído',
+          subtitle: `Responsável: ${item.assigned_technician_name || 'Outro Técnico'}`,
+          message: `Este item já está sob responsabilidade de "${item.assigned_technician_name || 'outro técnico'}". Você não possui a permissão "Alterar Técnico Responsável da Comanda" para reatribuí-lo.`,
+          isAlertOnly: true,
+          confirmLabel: 'Entendido',
+          onConfirm: () => setDialogModal(null)
+        });
+        return;
+      }
+
+      setDialogModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Transferir Responsabilidade do Item?',
+        subtitle: `Atualmente com: ${item.assigned_technician_name || 'Outro Técnico'}`,
+        message: `Deseja transferir a responsabilidade deste item (${item.model?.name || 'Item'} - S/N: ${item.internal_identifier}) para você (${currentUser.full_name})?`,
+        confirmLabel: 'Sim, Transferir para Mim',
+        cancelLabel: 'Cancelar',
+        onCancel: () => setDialogModal(null),
+        onConfirm: () => {
+          setDialogModal(null);
+          AppStore.assignOrderItemTechnician(item.id, currentUser.id, currentUser.full_name, currentUser.full_name);
+          loadData();
+        }
+      });
+      return;
+    }
+
+    // Se não tem técnico: assume diretamente
+    AppStore.assignOrderItemTechnician(item.id, currentUser.id, currentUser.full_name, currentUser.full_name);
+    loadData();
+  };
+
   const handleSaveTechUpdate = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedItem || !canEditTech) return;
 
+    // Verificar se o técnico foi alterado e se tem permissão
+    if (
+      selectedItem.assigned_technician_id &&
+      modalAssignedTechId &&
+      modalAssignedTechId !== selectedItem.assigned_technician_id &&
+      !canChangeTechnician
+    ) {
+      setDialogModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Permissão Insuficiente',
+        subtitle: 'Alteração de técnico não autorizada',
+        message: 'Seu perfil de usuário não possui a permissão "Alterar Técnico Responsável da Comanda" para transferir este item.',
+        isAlertOnly: true,
+        confirmLabel: 'Entendido',
+        onConfirm: () => setDialogModal(null)
+      });
+      return;
+    }
+
     const inNum = inputWeight ? parseFloat(inputWeight) : undefined;
     const outNum = outputWeight ? parseFloat(outputWeight) : undefined;
+    const assignedTechProfile = technicians.find(t => t.id === modalAssignedTechId);
 
     AppStore.updateOrderItemStatus(selectedItem.id, {
       status: targetStatus,
       result_code: resultCode,
       result_description: resultDesc,
       technical_notes: techNotes,
-      assigned_technician_id: currentUser.id,
+      assigned_technician_id: modalAssignedTechId || selectedItem.assigned_technician_id || currentUser.id,
+      assigned_technician_name: assignedTechProfile ? assignedTechProfile.full_name : (modalAssignedTechId ? undefined : (selectedItem.assigned_technician_name || currentUser.full_name)),
       custom_field_values: {
         ...(selectedItem.custom_field_values || {}),
         input_weight_grams: inNum,
@@ -240,7 +311,8 @@ export default function TechnicianWorkbenchPage() {
       status: 'FINALIZADO',
       result_code: successVerdict,
       technical_notes: techNotes || 'Testado, aprovado e finalizado na bancada técnica.',
-      assigned_technician_id: currentUser.id,
+      assigned_technician_id: selectedItem.assigned_technician_id || currentUser.id,
+      assigned_technician_name: selectedItem.assigned_technician_name || currentUser.full_name,
       custom_field_values: {
         ...(selectedItem.custom_field_values || {}),
         output_weight_grams: outNum
@@ -304,7 +376,8 @@ export default function TechnicianWorkbenchPage() {
         {
           status: targetStateCode,
           current_state_id: targetState.id,
-          assigned_technician_id: currentUser?.id,
+          assigned_technician_id: item.assigned_technician_id || currentUser?.id,
+          assigned_technician_name: item.assigned_technician_name || (item.assigned_technician_id ? undefined : currentUser?.full_name),
           technical_notes: item.technical_notes || `Movido para ${targetState.name} no Kanban`
         },
         currentUser?.full_name || 'Técnico'
@@ -417,18 +490,28 @@ export default function TechnicianWorkbenchPage() {
     loadData();
   };
 
-  // Filter items based on search
+  // Filter items based on search and technician filter
   const filteredItems = items.filter(it => {
-    if (!searchFilter.trim()) return true;
-    const query = searchFilter.toLowerCase().trim();
-    const modelName = it.model?.name || '';
-    const serial = it.internal_identifier || '';
-    const cust = it.customer_name || '';
-    const osNum = it.order_number || '';
-    return modelName.toLowerCase().includes(query) ||
-      serial.toLowerCase().includes(query) ||
-      cust.toLowerCase().includes(query) ||
-      osNum.toLowerCase().includes(query);
+    if (searchFilter.trim()) {
+      const query = searchFilter.toLowerCase().trim();
+      const modelName = it.model?.name || '';
+      const serial = it.internal_identifier || '';
+      const cust = it.customer_name || '';
+      const osNum = it.order_number || '';
+      const tech = it.assigned_technician_name || '';
+      const matches = modelName.toLowerCase().includes(query) ||
+        serial.toLowerCase().includes(query) ||
+        cust.toLowerCase().includes(query) ||
+        osNum.toLowerCase().includes(query) ||
+        tech.toLowerCase().includes(query);
+      if (!matches) return false;
+    }
+
+    // Technician filter (default: 'ALL')
+    if (technicianFilter === 'ALL') return true;
+    if (technicianFilter === 'UNASSIGNED') return !it.assigned_technician_id;
+    if (technicianFilter === 'MINE') return it.assigned_technician_id === currentUser.id;
+    return it.assigned_technician_id === technicianFilter;
   });
 
   const getItemsForState = (statusCode: string) => {
@@ -454,9 +537,9 @@ export default function TechnicianWorkbenchPage() {
           </p>
         </div>
 
-        {/* Search & Customization Buttons */}
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <div className="relative flex-1 sm:w-64">
+        {/* Search, Technician Filter & Customization Buttons */}
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          <div className="relative flex-1 sm:w-60">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <Input
               placeholder="Buscar por OS, serial ou cliente..."
@@ -464,6 +547,24 @@ export default function TechnicianWorkbenchPage() {
               onChange={e => setSearchFilter(e.target.value)}
               className="pl-9 h-9 text-xs rounded-xl"
             />
+          </div>
+
+          <div className="w-full sm:w-56">
+            <Select
+              value={technicianFilter}
+              onChange={e => setTechnicianFilter(e.target.value)}
+              className="h-9 text-xs rounded-xl font-medium border-slate-300 dark:border-slate-700"
+              title="Filtrar itens por técnico responsável"
+            >
+              <option value="ALL">👤 Todos os Técnicos (Padrão)</option>
+              <option value="UNASSIGNED">⚡ Sem Técnico (Disponíveis)</option>
+              <option value="MINE">⭐ Meus Itens ({currentUser.full_name})</option>
+              {technicians.map(tech => (
+                <option key={tech.id} value={tech.id}>
+                  👤 {tech.full_name} ({tech.role === 'TECNICO' ? 'Técnico' : tech.role === 'ADMINISTRADOR' ? 'Admin' : 'Equipe'})
+                </option>
+              ))}
+            </Select>
           </div>
 
           {canManageKanban && (
@@ -600,6 +701,34 @@ export default function TechnicianWorkbenchPage() {
                             )}
                           </div>
                         )}
+
+                        {/* Technician Info / Claim Button */}
+                        <div className="pt-2 border-t border-slate-100 dark:border-slate-800/60 flex items-center justify-between gap-1 text-[10px]">
+                          {item.assigned_technician_name ? (
+                            <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300 font-medium truncate" title={`Técnico Responsável: ${item.assigned_technician_name}`}>
+                              <span className="w-4 h-4 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 flex items-center justify-center text-[9px] font-bold shrink-0">
+                                {item.assigned_technician_name.charAt(0).toUpperCase()}
+                              </span>
+                              <span className="truncate">{item.assigned_technician_name}</span>
+                            </div>
+                          ) : (
+                            <div className="text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1">
+                              <AlertCircle className="w-3 h-3 shrink-0" />
+                              <span>Sem Técnico</span>
+                            </div>
+                          )}
+
+                          {(!item.assigned_technician_id || item.assigned_technician_id !== currentUser.id) && (
+                            <button
+                              type="button"
+                              onClick={(e) => handleClaimItem(item, e)}
+                              className="px-2 py-0.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 font-bold border border-emerald-200 dark:border-emerald-800 transition-colors shrink-0"
+                              title={!item.assigned_technician_id ? "Assumir este item para mim" : "Transferir responsabilidade para mim"}
+                            >
+                              {!item.assigned_technician_id ? '+ Pegar p/ Mim' : 'Transferir'}
+                            </button>
+                          )}
+                        </div>
                       </div>
                     );
                   })
@@ -654,22 +783,50 @@ export default function TechnicianWorkbenchPage() {
               </div>
 
               <form onSubmit={handleSaveTechUpdate} className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
-                {/* Target Status Select */}
-                <div>
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                    Mover para Situação / Etapa:
-                  </label>
-                  <Select
-                    value={targetStatus}
-                    onChange={e => setTargetStatus(e.target.value)}
-                    className="text-xs font-bold"
-                  >
-                    {workflowStates.map(st => (
-                      <option key={st.code} value={st.code}>
-                        {st.name} ({st.code})
-                      </option>
-                    ))}
-                  </Select>
+                {/* Target Status & Responsible Technician Selects */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                      Mover para Situação / Etapa:
+                    </label>
+                    <Select
+                      value={targetStatus}
+                      onChange={e => setTargetStatus(e.target.value)}
+                      className="text-xs font-bold"
+                    >
+                      {workflowStates.map(st => (
+                        <option key={st.code} value={st.code}>
+                          {st.name} ({st.code})
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                        Técnico Responsável:
+                      </label>
+                      {!canChangeTechnician && Boolean(selectedItem.assigned_technician_id) && (
+                        <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 text-[9px]">
+                          Fixo
+                        </Badge>
+                      )}
+                    </div>
+                    <Select
+                      value={modalAssignedTechId}
+                      onChange={e => setModalAssignedTechId(e.target.value)}
+                      disabled={!canChangeTechnician && Boolean(selectedItem.assigned_technician_id)}
+                      className="text-xs font-bold"
+                    >
+                      <option value="">-- Sem Técnico Atribuído --</option>
+                      {technicians.map(t => (
+                        <option key={t.id} value={t.id}>
+                          {t.full_name} ({t.role === 'TECNICO' ? 'Técnico' : t.role === 'ADMINISTRADOR' ? 'Admin' : 'Equipe'})
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
                 </div>
 
                 {/* Weight Scale Inputs ONLY IF INSPECTION TYPE IS SCALE */}

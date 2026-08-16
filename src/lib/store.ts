@@ -510,6 +510,7 @@ export const DEFAULT_PERMISSION_GROUPS: PermissionGroup[] = [
       customize_kanban: true,
       reopen_entry: true,
       delete_entry: true,
+      change_assigned_technician: true,
       manage_models: true,
       manage_services: true,
       view_financial_reports: true,
@@ -924,6 +925,7 @@ export const MOCK_COMPANY_SETTINGS: CompanySettings = {
   thermal_paper_width_mm: 80,
   require_customer_document: false,
   require_item_serial: true,
+  require_technician_on_entry: false,
   item_description_display_mode: 'BASIC'
 };
 
@@ -1747,6 +1749,8 @@ export class AppStore {
       customer_id: string;
       opened_by: string;
       opened_by_name?: string;
+      assigned_technician_id?: string;
+      assigned_technician_name?: string;
       expected_at?: string;
       notes?: string;
       internal_notes?: string;
@@ -1764,6 +1768,8 @@ export class AppStore {
         accessories?: string;
         checklist?: Array<{ item: string; checked: boolean }>;
         custom_field_values?: Record<string, any>;
+        assigned_technician_id?: string;
+        assigned_technician_name?: string;
         services: Array<{
           service_id: string;
           quantity?: number;
@@ -1813,6 +1819,9 @@ export class AppStore {
       subtotal += itemSubtotal;
       const modelObj = (data.models || INITIAL_MODELS).find((m: ItemModel) => m.id === itInput.model_id);
 
+      const assignedTechId = itInput.assigned_technician_id || orderData.assigned_technician_id;
+      const assignedTechName = itInput.assigned_technician_name || orderData.assigned_technician_name;
+
       return {
         id: itemId,
         tenant_id: orderData.tenant_id,
@@ -1828,6 +1837,8 @@ export class AppStore {
         custom_field_values: itInput.custom_field_values || {},
         current_state_id: 'st-rec-recebido',
         status: 'RECEBIDO',
+        assigned_technician_id: assignedTechId,
+        assigned_technician_name: assignedTechName,
         subtotal_amount: itemSubtotal,
         discount_amount: 0,
         total_amount: itemSubtotal,
@@ -1857,6 +1868,8 @@ export class AppStore {
       customer_id: orderData.customer_id,
       opened_by: orderData.opened_by,
       opened_by_name: orderData.opened_by_name || performedByName || 'Atendente',
+      assigned_technician_id: orderData.assigned_technician_id,
+      assigned_technician_name: orderData.assigned_technician_name,
       opened_at: new Date().toISOString(),
       expected_at: orderData.expected_at,
       status: 'ABERTA',
@@ -1918,6 +1931,7 @@ export class AppStore {
       result_description?: string;
       technical_notes?: string;
       assigned_technician_id?: string;
+      assigned_technician_name?: string;
       custom_field_values?: Record<string, any>;
       checklist?: Array<{ item: string; checked: boolean }>;
       services_field_data?: Record<string, any>;
@@ -1928,6 +1942,12 @@ export class AppStore {
     let targetItem: ServiceOrderItem | null = null;
     let parentOrder: ServiceOrder | null = null;
 
+    let techName = updates.assigned_technician_name;
+    if (updates.assigned_technician_id && !techName) {
+      const techProfile = (data.profiles || []).find((p: Profile) => p.id === updates.assigned_technician_id);
+      techName = techProfile?.full_name;
+    }
+
     for (const order of (data.serviceOrders || [])) {
       const itIdx = (order.items || []).findIndex((it: ServiceOrderItem) => it.id === itemId);
       if (itIdx !== -1) {
@@ -1936,11 +1956,19 @@ export class AppStore {
         const updatedItem = {
           ...currentItem,
           ...updates,
+          assigned_technician_name: techName !== undefined ? techName : currentItem.assigned_technician_name,
           custom_field_values: { ...currentItem.custom_field_values, ...(updates.custom_field_values || {}) },
           updated_at: new Date().toISOString()
         };
         order.items[itIdx] = updatedItem;
         targetItem = updatedItem;
+
+        // Se a ordem não tiver técnico, atribui este
+        if (updates.assigned_technician_id && !order.assigned_technician_id) {
+          order.assigned_technician_id = updates.assigned_technician_id;
+          order.assigned_technician_name = techName || currentItem.assigned_technician_name;
+        }
+
         break;
       }
     }
@@ -1957,6 +1985,37 @@ export class AppStore {
 
     this.saveStoreData(data);
     return targetItem;
+  }
+
+  static assignOrderItemTechnician(
+    itemId: string,
+    technicianId: string,
+    technicianName?: string,
+    performedByName?: string
+  ): ServiceOrderItem {
+    const data = this.getStoreData();
+    const techUser = (data.profiles || []).find((p: Profile) => p.id === technicianId);
+    const finalTechName = technicianName || techUser?.full_name || 'Técnico';
+
+    const updated = this.updateOrderItemStatus(
+      itemId,
+      {
+        assigned_technician_id: technicianId,
+        assigned_technician_name: finalTechName
+      },
+      performedByName || finalTechName
+    );
+
+    this.logAudit({
+      tenant_id: updated.tenant_id,
+      user_name: performedByName || finalTechName,
+      action: 'ATRIBUICAO_TECNICO',
+      resource: 'service_order_items',
+      resource_id: itemId,
+      details: `Item atribuído ao técnico ${finalTechName}`
+    });
+
+    return updated;
   }
 
   static deliverServiceOrder(

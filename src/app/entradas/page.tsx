@@ -556,6 +556,12 @@ function EntriesListContent() {
                           <Phone className="w-3 h-3 text-emerald-600" />
                           <span>{order.customer?.phone}</span>
                         </div>
+                        {order.assigned_technician_name && (
+                          <div className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5">
+                            <span className="font-semibold text-emerald-600 dark:text-emerald-400">Téc:</span>
+                            <span className="truncate">{order.assigned_technician_name}</span>
+                          </div>
+                        )}
                       </td>
 
                       {/* Items Summary */}

@@ -486,6 +486,7 @@ export interface ServiceOrderItem {
   result_code?: string;
   result_description?: string;
   assigned_technician_id?: string;
+  assigned_technician_name?: string;
   
   // Financial sub-totals for this item
   subtotal_amount: number;
@@ -551,6 +552,8 @@ export interface ServiceOrder {
   customer_id: string;
   opened_by: string; // Profile ID
   opened_by_name?: string;
+  assigned_technician_id?: string;
+  assigned_technician_name?: string;
   opened_at: string;
   expected_at?: string;
   closed_at?: string;
@@ -577,6 +580,7 @@ export interface ServiceOrder {
   delivery_info?: Delivery;
   customer?: Customer;
   attendant?: Profile;
+  technician?: Profile;
   created_at: string;
   updated_at?: string;
 }
@@ -585,11 +589,10 @@ export interface OrderStatusHistory {
   id: string;
   tenant_id: string;
   service_order_id: string;
-  item_id?: string;
-  previous_status?: string;
-  new_status: string;
-  changed_by: string;
-  changed_by_name?: string;
+  service_order_item_id?: string;
+  from_status?: string;
+  to_status: string;
+  performed_by: string;
   notes?: string;
   created_at: string;
 }
@@ -643,6 +646,7 @@ export interface CompanySettings {
   require_customer_document: boolean;
   require_item_serial: boolean;
   require_cartridge_serial?: boolean;
+  require_technician_on_entry?: boolean; // Se o técnico responsável é obrigatório na criação da comanda
   custom_checklist_items?: string[];
   allow_partial_delivery?: boolean;
   default_refill_price?: number;

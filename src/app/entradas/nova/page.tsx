@@ -39,7 +39,8 @@ import {
   ServiceOrder, 
   Service,
   PaymentMethod, 
-  CompanySettings
+  CompanySettings,
+  Profile
 } from '@/types';
 import { formatCurrency, cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -83,10 +84,12 @@ export default function NovaEntradaPage() {
   const [categories, setCategories] = useState<ItemCategory[]>([]);
   const [models, setModels] = useState<ItemModel[]>([]);
   const [allServices, setAllServices] = useState<Service[]>([]);
+  const [technicians, setTechnicians] = useState<Profile[]>([]);
   const [settings, setSettings] = useState<CompanySettings>(AppStore.getSettings(currentCompany.id));
 
   // Form State
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
+  const [assignedTechnicianId, setAssignedTechnicianId] = useState<string>('');
   const [generalNotes, setGeneralNotes] = useState('');
   const [generalDiscount, setGeneralDiscount] = useState<number>(0);
   const [hasInitialPayment, setHasInitialPayment] = useState(false);
@@ -116,12 +119,14 @@ export default function NovaEntradaPage() {
     const mods = AppStore.getModels(currentCompany.id);
     const srvs = AppStore.getServices(currentCompany.id);
     const stts = AppStore.getSettings(currentCompany.id);
+    const usrs = AppStore.getUsers(currentCompany.id);
 
     setCustomers(custs);
     setCategories(cats);
     setModels(mods);
     setAllServices(srvs);
     setSettings(stts);
+    setTechnicians(usrs.filter(u => u.is_active));
 
     if (items.length === 0 && cats.length > 0) {
       const defaultCat = cats[0];
@@ -349,6 +354,20 @@ export default function NovaEntradaPage() {
       return;
     }
 
+    if (settings.require_technician_on_entry && !assignedTechnicianId) {
+      setDialogModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Técnico Responsável Obrigatório',
+        subtitle: 'Configuração da Empresa',
+        message: 'Pela política configurada na empresa, é obrigatório selecionar o Técnico Responsável para abrir a comanda.',
+        isAlertOnly: true,
+        confirmLabel: 'Entendido',
+        onConfirm: () => setDialogModal(null)
+      });
+      return;
+    }
+
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       if (!item.model_id) {
@@ -392,11 +411,15 @@ export default function NovaEntradaPage() {
       }
     }
 
+    const assignedTech = technicians.find(t => t.id === assignedTechnicianId);
+
     const orderPayload = {
       tenant_id: currentCompany.id,
       customer_id: selectedCustomerId,
       opened_by: currentUser.id,
       opened_by_name: currentUser.full_name,
+      assigned_technician_id: assignedTechnicianId || undefined,
+      assigned_technician_name: assignedTech ? assignedTech.full_name : undefined,
       notes: generalNotes,
       discount_amount: generalDiscount,
       initial_payment: hasInitialPayment && initialPaymentAmount > 0 ? {
@@ -411,6 +434,8 @@ export default function NovaEntradaPage() {
         reception_notes: it.reception_notes,
         accessories: it.accessories,
         checklist: it.checklist,
+        assigned_technician_id: assignedTechnicianId || undefined,
+        assigned_technician_name: assignedTech ? assignedTech.full_name : undefined,
         custom_field_values: {
           ...it.custom_field_values,
           input_weight_grams: it.input_weight_grams
@@ -505,14 +530,44 @@ export default function NovaEntradaPage() {
           </CardHeader>
 
           <CardContent className="p-4 md:p-5">
-            <CustomerCombobox
-              customers={customers}
-              selectedCustomerId={selectedCustomerId}
-              onSelect={setSelectedCustomerId}
-              onQuickRegister={() => setShowQuickCustomerModal(true)}
-              placeholder="Digite o nome, telefone ou CPF do cliente..."
-              required
-            />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="md:col-span-2 space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                  Cliente Solicitante <span className="text-rose-500">*</span>
+                </label>
+                <CustomerCombobox
+                  customers={customers}
+                  selectedCustomerId={selectedCustomerId}
+                  onSelect={setSelectedCustomerId}
+                  onQuickRegister={() => setShowQuickCustomerModal(true)}
+                  placeholder="Digite o nome, telefone ou CPF do cliente..."
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                    Técnico Responsável
+                  </label>
+                  <Badge className={settings.require_technician_on_entry ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 text-[10px]' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 text-[10px]'}>
+                    {settings.require_technician_on_entry ? 'Obrigatório *' : 'Opcional'}
+                  </Badge>
+                </div>
+                <Select
+                  value={assignedTechnicianId}
+                  onChange={e => setAssignedTechnicianId(e.target.value)}
+                  className="text-xs rounded-xl h-10"
+                >
+                  <option value="">{settings.require_technician_on_entry ? '-- Selecione o Técnico * --' : 'Nenhum / Atribuir na Oficina'}</option>
+                  {technicians.map(tech => (
+                    <option key={tech.id} value={tech.id}>
+                      {tech.full_name} ({tech.role === 'TECNICO' ? 'Técnico' : tech.role === 'ADMINISTRADOR' ? 'Admin' : 'Equipe'})
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            </div>
 
             {selectedCustomer && (
               <div className="mt-3 p-3 bg-emerald-50/60 dark:bg-emerald-950/30 rounded-xl border border-emerald-200/60 dark:border-emerald-900/40 flex flex-wrap items-center justify-between gap-2 text-xs">

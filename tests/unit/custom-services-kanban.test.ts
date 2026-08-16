@@ -552,5 +552,74 @@ describe('Custom Services, Kanban & Financial Report Suite', () => {
       AppStore.deletePermissionGroup(customGroup.id);
     });
   });
+
+  describe('18. Responsible Technician Assignment on Service Order Entry', () => {
+    it('creates service order with assigned technician and propagates to items', () => {
+      const order = AppStore.addServiceOrder({
+        tenant_id: tenantId,
+        customer_id: 'cust-001',
+        opened_by: 'usr-attendant',
+        opened_by_name: 'Mariana Santos',
+        assigned_technician_id: 'usr-tech-01',
+        assigned_technician_name: 'Rafael Técnico',
+        items: [
+          {
+            model_id: 'mod-hp664-black',
+            internal_identifier: 'HP-TECH-01',
+            services: [
+              {
+                service_id: 'srv-refill',
+                quantity: 1,
+                unit_price: 35.0
+              }
+            ]
+          }
+        ]
+      });
+
+      expect(order.assigned_technician_id).toBe('usr-tech-01');
+      expect(order.assigned_technician_name).toBe('Rafael Técnico');
+      expect(order.items?.[0].assigned_technician_id).toBe('usr-tech-01');
+      expect(order.items?.[0].assigned_technician_name).toBe('Rafael Técnico');
+    });
+  });
+
+  describe('19. Technician Claiming and Reassigning Kanban Items', () => {
+    it('allows claiming unassigned item and reassigning to another technician', () => {
+      // 1. Create order without technician
+      const order = AppStore.addServiceOrder({
+        tenant_id: tenantId,
+        customer_id: 'cust-001',
+        opened_by: 'usr-attendant',
+        opened_by_name: 'Mariana Santos',
+        items: [
+          {
+            model_id: 'mod-hp664-black',
+            internal_identifier: 'HP-CLAIM-01',
+            services: [
+              {
+                service_id: 'srv-refill',
+                quantity: 1,
+                unit_price: 35.0
+              }
+            ]
+          }
+        ]
+      });
+
+      const itemId = order.items![0].id;
+      expect(order.items![0].assigned_technician_id).toBeUndefined();
+
+      // 2. Technician claims the item
+      const claimed = AppStore.assignOrderItemTechnician(itemId, 'usr-tech-rafael', 'Rafael Souza', 'Rafael Souza');
+      expect(claimed.assigned_technician_id).toBe('usr-tech-rafael');
+      expect(claimed.assigned_technician_name).toBe('Rafael Souza');
+
+      // 3. Manager reassigns the item to another technician
+      const reassigned = AppStore.assignOrderItemTechnician(itemId, 'usr-tech-lucas', 'Lucas Lima', 'Admin');
+      expect(reassigned.assigned_technician_id).toBe('usr-tech-lucas');
+      expect(reassigned.assigned_technician_name).toBe('Lucas Lima');
+    });
+  });
 });
 

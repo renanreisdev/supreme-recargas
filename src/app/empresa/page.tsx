@@ -53,6 +53,7 @@ const AVAILABLE_PERMISSIONS: PermissionOption[] = [
   { key: 'customize_kanban', label: 'Personalizar Colunas do Kanban', description: 'Permite editar nomes, cores e etapas das colunas da bancada', category: 'Oficina' },
   { key: 'reopen_entry', label: 'Reabrir Comandas Finalizadas/Entregues', description: 'Permite reverter o status de comandas entregues ou pagas para novo processamento', category: 'Gestão' },
   { key: 'delete_entry', label: 'Excluir Comandas', description: 'Permite excluir permanentemente comandas e seus itens do sistema', category: 'Gestão' },
+  { key: 'change_assigned_technician', label: 'Alterar Técnico Responsável da Comanda', description: 'Permite reatribuir ou alterar o técnico responsável de uma comanda já vinculada a outro profissional', category: 'Gestão' },
   { key: 'manage_models', label: 'Gerenciar Catálogo & Preços', description: 'Permite cadastrar modelos e alterar preços padrão', category: 'Gestão' },
   { key: 'manage_services', label: 'Gerenciar Serviços & Procedimentos', description: 'Permite criar, editar e precificar serviços solicitados da oficina', category: 'Gestão' },
   { key: 'view_financial_reports', label: 'Relatórios Financeiros', description: 'Permite visualizar faturamento e formas de pagamento', category: 'Gestão' },
@@ -110,6 +111,7 @@ export default function CompanySettingsPage() {
   const [settings, setSettings] = useState<CompanySettings>(AppStore.getSettings(currentCompany.id));
   const [requireCustomerDocument, setRequireCustomerDocument] = useState<boolean>(settings.require_customer_document ?? false);
   const [requireCartridgeSerial, setRequireCartridgeSerial] = useState<boolean>(settings.require_cartridge_serial ?? true);
+  const [requireTechnicianOnEntry, setRequireTechnicianOnEntry] = useState<boolean>(settings.require_technician_on_entry ?? false);
   const [printerPaperWidth, setPrinterPaperWidth] = useState<'58mm' | '80mm'>(settings.printer_paper_width || '80mm');
   const [receiptHeader, setReceiptHeader] = useState(settings.receipt_header || '');
   const [receiptFooter, setReceiptFooter] = useState(settings.receipt_footer || '');
@@ -147,6 +149,7 @@ export default function CompanySettingsPage() {
     setSettings(sets);
     setRequireCustomerDocument(sets.require_customer_document ?? false);
     setRequireCartridgeSerial(sets.require_cartridge_serial ?? true);
+    setRequireTechnicianOnEntry(sets.require_technician_on_entry ?? false);
     setPrinterPaperWidth(sets.printer_paper_width || '80mm');
     setReceiptHeader(sets.receipt_header || '');
     setReceiptFooter(sets.receipt_footer || '');
@@ -181,6 +184,7 @@ export default function CompanySettingsPage() {
     const updated = AppStore.updateSettings(currentCompany.id, {
       require_customer_document: requireCustomerDocument,
       require_cartridge_serial: requireCartridgeSerial,
+      require_technician_on_entry: requireTechnicianOnEntry,
       printer_paper_width: printerPaperWidth,
       receipt_header: receiptHeader,
       receipt_footer: receiptFooter,
@@ -987,6 +991,38 @@ export default function CompanySettingsPage() {
                       {requireCartridgeSerial 
                         ? 'Cada item recebido na comanda exige o preenchimento do código de série para identificação física.' 
                         : 'O serial é opcional no balcão. Se deixado em branco, o sistema atribui "S/N" automaticamente.'}
+                    </p>
+                  </label>
+                </div>
+              </div>
+
+              {/* Require Technician on Entry Policy */}
+              <div className={`p-4 rounded-2xl border transition-all ${
+                requireTechnicianOnEntry 
+                  ? 'bg-emerald-50/40 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-800' 
+                  : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800'
+              }`}>
+                <div className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    id="require_technician_toggle"
+                    checked={requireTechnicianOnEntry}
+                    onChange={(e) => setRequireTechnicianOnEntry(e.target.checked)}
+                    className="mt-1 w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 cursor-pointer"
+                  />
+                  <label htmlFor="require_technician_toggle" className="cursor-pointer space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-xs text-slate-900 dark:text-slate-100">
+                        Exigir Técnico Responsável na Abertura da Comanda
+                      </span>
+                      <Badge className={requireTechnicianOnEntry ? 'bg-emerald-600 text-white text-[10px]' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px]'}>
+                        {requireTechnicianOnEntry ? 'Obrigatório' : 'Opcional (Atribuir Depois)'}
+                      </Badge>
+                    </div>
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      {requireTechnicianOnEntry 
+                        ? 'O atendente deve obrigatoriamente selecionar o técnico responsável no momento da entrada.' 
+                        : 'A comanda pode ser aberta sem técnico. Os técnicos da bancada poderão selecionar para si as comandas disponíveis no Kanban.'}
                     </p>
                   </label>
                 </div>
