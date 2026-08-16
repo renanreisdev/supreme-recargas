@@ -22,7 +22,7 @@ import {
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { AppStore } from '@/lib/store';
-import { Customer, CartridgeModel, RequestedService, CartridgeEntry, PaymentMethod, PaymentStatus, CompanySettings } from '@/types';
+import { Customer, CartridgeModel, RequestedService, CartridgeEntry, PaymentMethod, PaymentStatus, CompanySettings, SegmentCustomization } from '@/types';
 import { formatCurrency, getPaymentMethodLabel } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -38,6 +38,8 @@ interface CartridgeItemInput {
   is_xl: boolean;
   final_serie: string;
   input_weight_grams?: number;
+  accessories?: string;
+  checklist?: Array<{ item: string; checked: boolean; notes?: string }>;
   reception_notes?: string;
   price: number;
   isVerificationWaived?: boolean;
@@ -52,6 +54,7 @@ export default function NewEntryPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [models, setModels] = useState<CartridgeModel[]>([]);
   const [settings, setSettings] = useState<CompanySettings>(AppStore.getSettings(currentCompany.id));
+  const [segmentConfig, setSegmentConfig] = useState<SegmentCustomization>(AppStore.getSegmentConfig(currentCompany.id));
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [customerSearch, setCustomerSearch] = useState<string>('');
   
@@ -73,9 +76,16 @@ export default function NewEntryPage() {
     const custs = AppStore.getCustomers(currentCompany.id);
     const mods = AppStore.getModels(currentCompany.id);
     const stt = AppStore.getSettings(currentCompany.id);
+    const seg = AppStore.getSegmentConfig(currentCompany.id);
     setCustomers(custs);
     setModels(mods);
     setSettings(stt);
+    setSegmentConfig(seg);
+
+    const initialChecklist = (stt.custom_checklist_items || seg.defaultChecklistItems || []).map(item => ({
+      item,
+      checked: false
+    }));
 
     if (mods.length > 0) {
       const defaultMod = mods[0];
@@ -89,6 +99,8 @@ export default function NewEntryPage() {
           color: defaultMod.color,
           is_xl: defaultMod.is_xl,
           final_serie: '',
+          accessories: '',
+          checklist: initialChecklist,
           price: calc.finalPrice,
           isVerificationWaived: calc.isVerificationWaived,
           priceExplanation: calc.explanation
@@ -108,7 +120,7 @@ export default function NewEntryPage() {
         </div>
         <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Acesso Restrito ao Balcão</h2>
         <p className="text-sm text-slate-600 dark:text-slate-400">
-          O perfil de <strong>Técnico</strong> opera exclusivamente na bancada de testes e diagnósticos. Apenas <strong>Atendentes</strong> e <strong>Administradores</strong> podem realizar novas entradas de cartuchos.
+          O perfil de <strong>Técnico</strong> opera exclusivamente na bancada de testes e diagnósticos. Apenas <strong>Atendentes</strong> e <strong>Administradores</strong> podem realizar novas entradas de {segmentConfig.itemLabelPlural.toLowerCase()}.
         </p>
         <div className="pt-2">
           <Link href="/bancada">
@@ -137,6 +149,11 @@ export default function NewEntryPage() {
       ? AppStore.calculateItemPrice(currentCompany.id, defaultModel.id, 'VERIFICACAO_E_RECARGA')
       : { finalPrice: 30.00, isVerificationWaived: true, explanation: 'Preço padrão' };
 
+    const initialChecklist = (settings.custom_checklist_items || segmentConfig.defaultChecklistItems || []).map(item => ({
+      item,
+      checked: false
+    }));
+
     setItems(prev => [
       ...prev,
       {
@@ -146,6 +163,8 @@ export default function NewEntryPage() {
         color: defaultModel ? defaultModel.color : 'Preto',
         is_xl: defaultModel ? defaultModel.is_xl : false,
         final_serie: '',
+        accessories: '',
+        checklist: initialChecklist,
         price: calc.finalPrice,
         isVerificationWaived: calc.isVerificationWaived,
         priceExplanation: calc.explanation
@@ -157,6 +176,17 @@ export default function NewEntryPage() {
   const handleRemoveItem = (id: string) => {
     if (items.length <= 1) return;
     setItems(prev => prev.filter(i => i.id !== id));
+  };
+
+  // Toggle Checklist Item
+  const handleToggleChecklist = (itemId: string, checkIndex: number) => {
+    setItems(prev => prev.map(item => {
+      if (item.id !== itemId || !item.checklist) return item;
+      const updatedChecklist = item.checklist.map((c, i) => 
+        i === checkIndex ? { ...c, checked: !c.checked } : c
+      );
+      return { ...item, checklist: updatedChecklist };
+    }));
   };
 
   // Update Item Line
@@ -261,6 +291,8 @@ export default function NewEntryPage() {
         is_xl: i.is_xl,
         final_serie: (i.final_serie.trim() || 'S/N').toUpperCase(),
         reception_notes: i.reception_notes,
+        accessories: i.accessories,
+        checklist: i.checklist,
         input_weight_grams: i.input_weight_grams ? Number(i.input_weight_grams) : undefined,
         price: Number(i.price) || 0
       }))
@@ -298,11 +330,11 @@ export default function NewEntryPage() {
             </div>
             
             <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
-              <p className="font-bold text-slate-700 dark:text-slate-300 mb-1">Cartuchos Registrados ({createdEntry.cartridges?.length}):</p>
+              <p className="font-bold text-slate-700 dark:text-slate-300 mb-1">{segmentConfig.itemLabelPlural} Registrados ({createdEntry.cartridges?.length}):</p>
               <ul className="space-y-1 pl-2">
                 {createdEntry.cartridges?.map(c => (
                   <li key={c.id} className="text-slate-600 dark:text-slate-300 font-mono">
-                    • <strong>{c.serial_number}</strong> — {c.model?.model_name} ({c.color}) | Série: <strong className="text-emerald-700 dark:text-emerald-400">{c.final_serie}</strong>
+                    • <strong>{c.serial_number}</strong> — {c.model?.model_name} {c.color ? `(${c.color})` : ''} | {segmentConfig.identifierLabel}: <strong className="text-emerald-700 dark:text-emerald-400">{c.final_serie}</strong>
                   </li>
                 ))}
               </ul>
@@ -353,9 +385,11 @@ export default function NewEntryPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
             <span>Balcão de Atendimento — Nova Entrada</span>
-            <Badge className="bg-emerald-700 text-white text-[11px]">Recepção Ágil</Badge>
+            <Badge className="bg-emerald-700 text-white text-[11px]">{segmentConfig.segmentName}</Badge>
           </h1>
-          <p className="text-xs text-slate-500 mt-0.5">Identifique o cliente, lance os cartuchos e confira os valores automáticos</p>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Identifique o cliente, cadastre os {segmentConfig.itemLabelPlural.toLowerCase()} recebidos e emita o comprovante
+          </p>
         </div>
       </div>
 
@@ -434,8 +468,12 @@ export default function NewEntryPage() {
       <Card className="shadow-sm border-slate-200 dark:border-slate-800">
         <CardHeader className="pb-3 flex flex-row items-center justify-between">
           <div>
-            <CardTitle className="text-sm font-bold text-slate-800 dark:text-slate-200">2. Cartuchos Recebidos</CardTitle>
-            <CardDescription className="text-xs">Valores e isenção de verificação calculados automaticamente pelas regras do administrador</CardDescription>
+            <CardTitle className="text-sm font-bold text-slate-800 dark:text-slate-200">
+              2. {segmentConfig.itemLabelPlural} Recebidos ({items.length})
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Valores e parâmetros calculados de acordo com o segmento {segmentConfig.segmentName}
+            </CardDescription>
           </div>
           <Button
             type="button"
@@ -444,23 +482,23 @@ export default function NewEntryPage() {
             className="gap-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs h-8"
           >
             <PlusCircle className="w-3.5 h-3.5" />
-            <span>Adicionar Mais 1 Cartucho</span>
+            <span>Adicionar Mais 1 {segmentConfig.itemLabelSingular}</span>
           </Button>
         </CardHeader>
         <CardContent className="space-y-4">
           {items.map((item, index) => (
             <div 
               key={item.id}
-              className="p-4 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-800 relative space-y-3"
+              className="p-4 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-800 relative space-y-3.5"
             >
               <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
-                    Cartucho #{index + 1}
+                    {segmentConfig.itemLabelSingular} #{index + 1}
                   </span>
                   {item.isVerificationWaived && (
                     <span className="text-[10px] bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 px-2 py-0.5 rounded-full font-bold border border-emerald-300">
-                      ✓ Verificação Gratuita na Recarga
+                      ✓ Taxa de Verificação Isenta
                     </span>
                   )}
                 </div>
@@ -479,7 +517,7 @@ export default function NewEntryPage() {
                 {/* Model */}
                 <div className="md:col-span-2">
                   <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 block">
-                    Modelo do Cartucho *
+                    Modelo / Item *
                   </label>
                   <Select
                     value={item.model_id}
@@ -489,7 +527,7 @@ export default function NewEntryPage() {
                   >
                     {models.map(m => (
                       <option key={m.id} value={m.id}>
-                        {m.brand_name} {m.model_name} ({m.color}) {m.is_xl ? '[XL]' : ''} — Recarga: {formatCurrency(m.refill_price || 30)}
+                        {m.brand_name} {m.model_name} {m.color ? `(${m.color})` : ''} {m.is_xl ? '[XL]' : ''} — R$ {Number(m.refill_price || 30).toFixed(2)}
                       </option>
                     ))}
                   </Select>
@@ -498,7 +536,7 @@ export default function NewEntryPage() {
                 {/* Service Requested */}
                 <div>
                   <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 block">
-                    Serviço Solicitado *
+                    {segmentConfig.serviceLabel} *
                   </label>
                   <Select
                     value={item.service_requested}
@@ -506,20 +544,20 @@ export default function NewEntryPage() {
                     required
                     className="text-xs font-medium"
                   >
-                    <option value="VERIFICACAO_E_RECARGA">Verificação + Recarga</option>
-                    <option value="RECARGA">Somente Recarga</option>
-                    <option value="VERIFICACAO">Somente Verificação</option>
-                    <option value="TESTE">Teste de Impressão</option>
+                    <option value="VERIFICACAO_E_RECARGA">Diagnóstico + Serviço</option>
+                    <option value="RECARGA">Serviço Padrão</option>
+                    <option value="VERIFICACAO">Somente Diagnóstico / Orçamento</option>
+                    <option value="TESTE">Teste & Inspeção</option>
                   </Select>
                 </div>
 
-                {/* Final da Série */}
+                {/* Identifier Label (IMEI / Serial / Final de Série) */}
                 <div>
                   <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 block">
-                    Final da Série {settings.require_cartridge_serial !== false ? <span className="text-rose-600 font-bold">* (Etiqueta)</span> : <span className="text-slate-400 font-normal">(Opcional)</span>}
+                    {segmentConfig.identifierLabel} {settings.require_cartridge_serial !== false ? <span className="text-rose-600 font-bold">*</span> : <span className="text-slate-400 font-normal">(Opcional)</span>}
                   </label>
                   <Input
-                    placeholder={settings.require_cartridge_serial !== false ? "Ex: 94A1, XL-02..." : "Ex: 94A1 (Opcional)"}
+                    placeholder={settings.require_cartridge_serial !== false ? `Ex: 94A1, IMEI...` : "Opcional (S/N)"}
                     value={item.final_serie}
                     onChange={(e) => handleUpdateItem(item.id, 'final_serie', e.target.value)}
                     required={settings.require_cartridge_serial !== false}
@@ -527,46 +565,46 @@ export default function NewEntryPage() {
                   />
                 </div>
 
-                {/* Weight Input based on Company Responsibility Policy */}
+                {/* Weight Input (If Segment uses Scale/Weights) or Accessory Input */}
                 <div>
-                  {settings.input_weight_responsibility === 'TECNICO' ? (
-                    <div>
-                      <label className="text-xs font-semibold text-slate-500 mb-1 block">
-                        Pesagem de Entrada
-                      </label>
-                      <div 
-                        className="h-9 px-2 bg-amber-50/80 dark:bg-amber-950/30 border border-dashed border-amber-300 dark:border-amber-800/60 rounded-md flex items-center justify-center text-[10px] font-bold text-amber-800 dark:text-amber-300 text-center leading-tight cursor-not-allowed"
-                        title="Configurado pela empresa: A pesagem de entrada é realizada exclusivamente pelo Técnico na Bancada"
-                      >
-                        ⚖️ Feita na Bancada (Técnico)
+                  {segmentConfig.hasWeightInspection ? (
+                    settings.input_weight_responsibility === 'TECNICO' ? (
+                      <div>
+                        <label className="text-xs font-semibold text-slate-500 mb-1 block">
+                          Pesagem de Entrada
+                        </label>
+                        <div 
+                          className="h-9 px-2 bg-amber-50/80 dark:bg-amber-950/30 border border-dashed border-amber-300 dark:border-amber-800/60 rounded-md flex items-center justify-center text-[10px] font-bold text-amber-800 dark:text-amber-300 text-center leading-tight cursor-not-allowed"
+                          title="Configurado pela empresa: A pesagem de entrada é realizada exclusivamente pelo Técnico na Bancada"
+                        >
+                          ⚖️ Feita na Bancada (Técnico)
+                        </div>
                       </div>
-                    </div>
-                  ) : settings.input_weight_responsibility === 'ATENDENTE' ? (
-                    <div>
-                      <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 block">
-                        Peso Entrada (g) * <span className="text-[10px] text-emerald-600 font-bold">(Balcão)</span>
-                      </label>
-                      <Input
-                        type="number"
-                        step="0.1"
-                        placeholder="Ex: 28.5"
-                        required
-                        value={item.input_weight_grams || ''}
-                        onChange={(e) => handleUpdateItem(item.id, 'input_weight_grams', e.target.value)}
-                        className="text-xs font-bold border-emerald-300 dark:border-emerald-700 focus:ring-emerald-500"
-                      />
-                    </div>
+                    ) : (
+                      <div>
+                        <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 block">
+                          Peso Entrada (g) {settings.input_weight_responsibility === 'ATENDENTE' ? <span className="text-rose-600 font-bold">*</span> : <span className="text-slate-400 font-normal">(Opcional)</span>}
+                        </label>
+                        <Input
+                          type="number"
+                          step="0.1"
+                          placeholder="Ex: 28.5"
+                          required={settings.input_weight_responsibility === 'ATENDENTE'}
+                          value={item.input_weight_grams || ''}
+                          onChange={(e) => handleUpdateItem(item.id, 'input_weight_grams', e.target.value)}
+                          className="text-xs font-bold border-emerald-300 dark:border-emerald-700 focus:ring-emerald-500"
+                        />
+                      </div>
+                    )
                   ) : (
                     <div>
                       <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 block">
-                        Peso Entrada (g) <span className="text-[10px] text-slate-400 font-normal">(Opcional)</span>
+                        Acessórios / Cabos
                       </label>
                       <Input
-                        type="number"
-                        step="0.1"
-                        placeholder="Ex: 28.5"
-                        value={item.input_weight_grams || ''}
-                        onChange={(e) => handleUpdateItem(item.id, 'input_weight_grams', e.target.value)}
+                        placeholder="Ex: Fonte, Capinha, Chip..."
+                        value={item.accessories || ''}
+                        onChange={(e) => handleUpdateItem(item.id, 'accessories', e.target.value)}
                         className="text-xs"
                       />
                     </div>
@@ -574,11 +612,41 @@ export default function NewEntryPage() {
                 </div>
               </div>
 
+              {/* Dynamic Checklist Inspection (For Device / Tool / General Workshops) */}
+              {segmentConfig.hasChecklist && item.checklist && item.checklist.length > 0 && (
+                <div className="p-3 bg-white dark:bg-slate-950 rounded-lg border border-slate-200 dark:border-slate-800 space-y-2">
+                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Checklist de Recebimento & Estado Físico:</span>
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                    {item.checklist.map((chk, cIdx) => (
+                      <label 
+                        key={cIdx} 
+                        className={`flex items-center gap-2 p-1.5 rounded-md border text-xs cursor-pointer transition-colors ${
+                          chk.checked 
+                            ? 'bg-emerald-50/60 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 font-semibold' 
+                            : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={chk.checked}
+                          onChange={() => handleToggleChecklist(item.id, cIdx)}
+                          className="w-3.5 h-3.5 rounded text-emerald-600 border-slate-300"
+                        />
+                        <span className="truncate">{chk.item}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Price & Reception Notes */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
                 <div className="md:col-span-2">
                   <Input
-                    placeholder="Observações da recepção (ex: riscado na etiqueta, sem tampa protetora...)"
+                    placeholder="Observações da recepção (ex: riscado na carcaça, cliente informa que não liga...)"
                     value={item.reception_notes || ''}
                     onChange={(e) => handleUpdateItem(item.id, 'reception_notes', e.target.value)}
                     className="text-xs"

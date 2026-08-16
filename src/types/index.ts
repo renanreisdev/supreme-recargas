@@ -52,6 +52,26 @@ export type PaymentStatus =
   | 'PENDENTE' 
   | 'ISENTO';
 
+export type BusinessSegment = 
+  | 'RECARGA_CARTUCHOS' 
+  | 'ASSISTENCIA_CELULARES_INFORMATICA' 
+  | 'FERRAMENTAS_MOTORES' 
+  | 'OFICINA_GERAL';
+
+export interface SegmentCustomization {
+  segment: BusinessSegment;
+  segmentName: string;
+  itemLabelSingular: string; // "Cartucho", "Aparelho", "Equipamento", "Item"
+  itemLabelPlural: string;   // "Cartuchos", "Aparelhos", "Equipamentos", "Itens"
+  identifierLabel: string;   // "Final de Série", "IMEI / Serial", "Nº de Série", "Código"
+  serviceLabel: string;      // "Serviço Solicitado", "Tipo de Manutenção"
+  hasWeightInspection: boolean; // Balança / Pesagem em gramas
+  hasChecklist: boolean;     // Checklist de Inspeção
+  defaultChecklistItems: string[];
+  defaultCategories: string[];
+  iconName?: string;
+}
+
 export interface Plan {
   id: string;
   name: string;
@@ -85,6 +105,7 @@ export interface Company {
   zip_code?: string;
   responsible_name?: string;
   logo_url?: string;
+  business_segment?: BusinessSegment;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -157,6 +178,7 @@ export interface CartridgeModel {
   brand_id?: string;
   brand_name?: string;
   model_name: string;
+  category?: string; // e.g., 'Smartphones', 'Notebooks', 'Cartuchos', 'Ferramentas'
   color: string;
   is_xl: boolean;
   capacity_ml?: number;
@@ -259,6 +281,9 @@ export interface Cartridge {
   weight_diff_grams?: number;
   reception_notes?: string;
   technical_notes?: string;
+  accessories?: string; // e.g., 'Cabo carregador + capinha' or 'Maleta + 2 brocas'
+  checklist?: Array<{ item: string; checked: boolean; notes?: string }>;
+  custom_fields?: Record<string, any>;
   
   original_price: number;
   applied_price: number;
@@ -307,6 +332,8 @@ export interface AuditLog {
 export interface CompanySettings {
   id: string;
   tenant_id: string;
+  business_segment?: BusinessSegment;
+  segment_config?: SegmentCustomization;
   show_prices_on_receipt: boolean;
   receipt_header_note?: string;
   receipt_footer_note?: string;
@@ -320,5 +347,6 @@ export interface CompanySettings {
   thermal_paper_width_mm: number;
   require_customer_document: boolean; // Define se CPF/CNPJ é obrigatório no cadastro de clientes
   require_cartridge_serial: boolean;  // Define se o número/final de série do cartucho é obrigatório na entrada
+  custom_checklist_items?: string[];
 }
 

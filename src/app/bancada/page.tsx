@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { AppStore } from '@/lib/store';
-import { Cartridge, CartridgeStatus, ResultClassification, CompanySettings } from '@/types';
+import { Cartridge, CartridgeStatus, ResultClassification, CompanySettings, SegmentCustomization } from '@/types';
 import { formatCurrency, formatWeight, getStatusBadgeConfig, getResultBadgeConfig } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -36,6 +36,7 @@ export default function TechnicianWorkbenchPage() {
   const { currentCompany, currentUser, hasPermission } = useAuth();
   const [cartridges, setCartridges] = useState<Cartridge[]>([]);
   const [settings, setSettings] = useState<CompanySettings>(AppStore.getSettings(currentCompany.id));
+  const [segmentConfig, setSegmentConfig] = useState<SegmentCustomization>(AppStore.getSegmentConfig(currentCompany.id));
   const [searchFilter, setSearchFilter] = useState('');
   const [mobileStageTab, setMobileStageTab] = useState<'ALL' | 'WAITING' | 'REFILL' | 'TESTING' | 'DONE'>('ALL');
   const [selectedCartridge, setSelectedCartridge] = useState<Cartridge | null>(null);
@@ -47,14 +48,17 @@ export default function TechnicianWorkbenchPage() {
   const [resultOtherDesc, setResultOtherDesc] = useState('');
   const [techNotes, setTechNotes] = useState('');
   const [targetStatus, setTargetStatus] = useState<CartridgeStatus>('EM_RECARGA');
+  const [checklistState, setChecklistState] = useState<Array<{ item: string; checked: boolean; notes?: string }>>([]);
 
   const canEditTech = hasPermission('update_tech_status');
 
   const loadData = () => {
     const carts = AppStore.getCartridges(currentCompany.id);
     const stt = AppStore.getSettings(currentCompany.id);
+    const seg = AppStore.getSegmentConfig(currentCompany.id);
     setCartridges(carts);
     setSettings(stt);
+    setSegmentConfig(seg);
   };
 
   useEffect(() => {
@@ -90,6 +94,15 @@ export default function TechnicianWorkbenchPage() {
     setResultOtherDesc(cart.result_other_description || '');
     setTechNotes(cart.technical_notes || '');
     setTargetStatus(cart.status);
+    setChecklistState(
+      cart.checklist || 
+      (settings.custom_checklist_items || segmentConfig.defaultChecklistItems || []).map(item => ({ item, checked: false }))
+    );
+  };
+
+  // Toggle checklist item in technician modal
+  const handleToggleTechChecklist = (idx: number) => {
+    setChecklistState(prev => prev.map((c, i) => i === idx ? { ...c, checked: !c.checked } : c));
   };
 
   // Save Technical Update
@@ -105,7 +118,8 @@ export default function TechnicianWorkbenchPage() {
       resultOtherDescription: resultOtherDesc,
       inputWeightGrams: inputWeight ? Number(inputWeight) : undefined,
       outputWeightGrams: outputWeight ? Number(outputWeight) : undefined,
-      technicalNotes: techNotes
+      technicalNotes: techNotes,
+      checklist: checklistState
     });
 
     loadData();
@@ -124,7 +138,8 @@ export default function TechnicianWorkbenchPage() {
       resultClassification: 'OK',
       inputWeightGrams: inputWeight ? Number(inputWeight) : selectedCartridge.input_weight_grams,
       outputWeightGrams: finalOutWeight,
-      technicalNotes: techNotes || 'Recarga e teste elétrico 100% aprovados na bancada.'
+      technicalNotes: techNotes || `Diagnóstico e serviço de ${segmentConfig.itemLabelSingular.toLowerCase()} 100% aprovados e finalizados na bancada.`,
+      checklist: checklistState.map(c => ({ ...c, checked: true }))
     });
 
     loadData();
@@ -371,65 +386,109 @@ export default function TechnicianWorkbenchPage() {
                 </div>
               )}
 
-              {/* Reception notes */}
-              {selectedCartridge.reception_notes && (
-                <div className="p-2.5 bg-amber-50 dark:bg-amber-950/20 rounded-lg text-xs border border-amber-200 dark:border-amber-800/40 text-slate-700 dark:text-slate-300">
-                  <strong>Obs. Balcão / Recepção:</strong> {selectedCartridge.reception_notes}
+              {/* Reception notes & Accessories */}
+              {(selectedCartridge.reception_notes || selectedCartridge.accessories) && (
+                <div className="p-3 bg-amber-50 dark:bg-amber-950/20 rounded-xl text-xs border border-amber-200 dark:border-amber-800/40 text-slate-700 dark:text-slate-300 space-y-1">
+                  {selectedCartridge.reception_notes && (
+                    <p><strong>Obs. Balcão:</strong> {selectedCartridge.reception_notes}</p>
+                  )}
+                  {selectedCartridge.accessories && (
+                    <p><strong>Acessórios / Cabos Deixados:</strong> <span className="font-semibold text-amber-900 dark:text-amber-200">{selectedCartridge.accessories}</span></p>
+                  )}
                 </div>
               )}
 
-              {/* Weight Section (Input & Output Weight + Auto Calculated Diff) */}
-              <div className="p-4 bg-emerald-50/60 dark:bg-emerald-950/20 rounded-xl border border-emerald-200 dark:border-emerald-800/60 space-y-3">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
-                  <Scale className="w-4 h-4" />
-                  <span>Pesagem na Bancada (Gramagem Injetada)</span>
-                </h4>
-
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
-                      <span>Peso Entrada (g)</span>
-                      {settings.input_weight_responsibility === 'TECNICO' && (
-                        <span className="text-[9px] text-amber-700 font-bold bg-amber-100 dark:bg-amber-950 px-1 rounded">Bancada</span>
-                      )}
-                      {settings.input_weight_responsibility === 'ATENDENTE' && (
-                        <span className="text-[9px] text-emerald-700 font-bold bg-emerald-100 dark:bg-emerald-950 px-1 rounded">Balcão</span>
-                      )}
-                    </label>
-                    <Input
-                      type="number"
-                      step="0.1"
-                      placeholder="Ex: 27.5"
-                      value={inputWeight}
-                      disabled={!canEditTech || (settings.input_weight_responsibility === 'ATENDENTE' && currentUser.role !== 'ADMINISTRADOR' && Boolean(selectedCartridge.input_weight_grams))}
-                      onChange={(e) => setInputWeight(e.target.value)}
-                      className={`text-xs ${settings.input_weight_responsibility === 'TECNICO' ? 'border-amber-400 font-bold' : ''}`}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 block">
-                      Peso Saída / Cheio (g)
-                    </label>
-                    <Input
-                      type="number"
-                      step="0.1"
-                      placeholder="Ex: 35.5"
-                      value={outputWeight}
-                      disabled={!canEditTech}
-                      onChange={(e) => setOutputWeight(e.target.value)}
-                      className="text-xs font-bold"
-                    />
-                  </div>
-
-                  <div className="bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 flex flex-col justify-center text-center">
-                    <span className="text-[10px] text-slate-400 font-semibold uppercase">Tinta Injetada</span>
-                    <span className={`text-base font-extrabold ${liveDiff && Number(liveDiff) > 0 ? 'text-emerald-600' : 'text-slate-700'}`}>
-                      {liveDiff ? `+ ${liveDiff} g` : '-'}
+              {/* Dynamic Checklist for Technical Inspection (Device / Tool / General Workshops) */}
+              {segmentConfig.hasChecklist && checklistState.length > 0 && (
+                <div className="p-4 bg-slate-50 dark:bg-slate-850 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                      <CheckCircle className="w-4 h-4 text-emerald-600" />
+                      <span>Checklist de Inspeção & Testes na Bancada</span>
+                    </h4>
+                    <span className="text-[11px] text-slate-500 font-semibold">
+                      {checklistState.filter(c => c.checked).length} de {checklistState.length} verificados
                     </span>
                   </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {checklistState.map((chk, idx) => (
+                      <label
+                        key={idx}
+                        className={`flex items-center gap-2 p-2 rounded-lg border text-xs cursor-pointer transition-all ${
+                          chk.checked
+                            ? 'bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 font-semibold'
+                            : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={chk.checked}
+                          disabled={!canEditTech}
+                          onChange={() => handleToggleTechChecklist(idx)}
+                          className="w-4 h-4 rounded text-emerald-600 border-slate-300"
+                        />
+                        <span className="truncate">{chk.item}</span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {/* Weight Section (Input & Output Weight + Auto Calculated Diff for Cartridge Refills) */}
+              {segmentConfig.hasWeightInspection && (
+                <div className="p-4 bg-emerald-50/60 dark:bg-emerald-950/20 rounded-xl border border-emerald-200 dark:border-emerald-800/60 space-y-3">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                    <Scale className="w-4 h-4" />
+                    <span>Pesagem na Bancada (Gramagem Injetada)</span>
+                  </h4>
+
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+                        <span>Peso Entrada (g)</span>
+                        {settings.input_weight_responsibility === 'TECNICO' && (
+                          <span className="text-[9px] text-amber-700 font-bold bg-amber-100 dark:bg-amber-950 px-1 rounded">Bancada</span>
+                        )}
+                        {settings.input_weight_responsibility === 'ATENDENTE' && (
+                          <span className="text-[9px] text-emerald-700 font-bold bg-emerald-100 dark:bg-emerald-950 px-1 rounded">Balcão</span>
+                        )}
+                      </label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        placeholder="Ex: 27.5"
+                        value={inputWeight}
+                        disabled={!canEditTech || (settings.input_weight_responsibility === 'ATENDENTE' && currentUser.role !== 'ADMINISTRADOR' && Boolean(selectedCartridge.input_weight_grams))}
+                        onChange={(e) => setInputWeight(e.target.value)}
+                        className={`text-xs ${settings.input_weight_responsibility === 'TECNICO' ? 'border-amber-400 font-bold' : ''}`}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 block">
+                        Peso Saída / Cheio (g)
+                      </label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        placeholder="Ex: 35.5"
+                        value={outputWeight}
+                        disabled={!canEditTech}
+                        onChange={(e) => setOutputWeight(e.target.value)}
+                        className="text-xs font-bold"
+                      />
+                    </div>
+
+                    <div className="bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 flex flex-col justify-center text-center">
+                      <span className="text-[10px] text-slate-400 font-semibold uppercase">Tinta Injetada</span>
+                      <span className={`text-base font-extrabold ${liveDiff && Number(liveDiff) > 0 ? 'text-emerald-600' : 'text-slate-700'}`}>
+                        {liveDiff ? `+ ${liveDiff} g` : '-'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Technical Result Classification & Status */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -444,12 +503,12 @@ export default function TechnicianWorkbenchPage() {
                     className="text-xs font-semibold"
                   >
                     <option value="PENDENTE">⏳ Análise Pendente</option>
-                    <option value="OK">✅ 100% OK (Aprovado no Teste)</option>
-                    <option value="CID">⚠️ CID (Circuito Impresso Queimado/Danificado)</option>
-                    <option value="QUEIMADO">🔥 QUEIMADO (Sem Reconhecimento na Máquina)</option>
-                    <option value="FALHA_IMPRESSAO">❌ Falha de Impressão / Cabeça Riscando</option>
-                    <option value="ENTUPIDO">💧 Injetor Entupido / Ressecado</option>
-                    <option value="SEM_REPARO">🛑 Sem Reparo Possível</option>
+                    <option value="OK">✅ 100% OK (Aprovado / Reparado)</option>
+                    <option value="CID">⚠️ CID / Falha Eletrônica</option>
+                    <option value="QUEIMADO">🔥 QUEIMADO / Curto-Circuito</option>
+                    <option value="FALHA_IMPRESSAO">❌ Avaria Mecânica / Peça Danificada</option>
+                    <option value="ENTUPIDO">💧 Obstruído / Ressecado</option>
+                    <option value="SEM_REPARO">🛑 Sem Reparo Possível / Condenado</option>
                     <option value="OUTRO">❓ Outro Diagnóstico</option>
                   </Select>
                 </div>
@@ -464,12 +523,12 @@ export default function TechnicianWorkbenchPage() {
                     onChange={(e) => setTargetStatus(e.target.value as CartridgeStatus)}
                     className="text-xs font-semibold"
                   >
-                    <option value="EM_VERIFICACAO">EM_VERIFICACAO</option>
-                    <option value="EM_RECARGA">EM_RECARGA</option>
-                    <option value="EM_TESTE">EM_TESTE</option>
+                    <option value="EM_VERIFICACAO">EM_VERIFICACAO (Diagnóstico / Triagem)</option>
+                    <option value="EM_RECARGA">EM_RECARGA (Em Manutenção / Reparo)</option>
+                    <option value="EM_TESTE">EM_TESTE (Validação & Teste Final)</option>
                     <option value="FINALIZADO">FINALIZADO (Pronto p/ Entrega)</option>
-                    <option value="COM_PROBLEMA">COM_PROBLEMA</option>
-                    <option value="SEM_REPARO">SEM_REPARO</option>
+                    <option value="COM_PROBLEMA">COM_PROBLEMA (Aguardando Aprovação / Peça)</option>
+                    <option value="SEM_REPARO">SEM_REPARO (Desistência / Sem Solução)</option>
                   </Select>
                 </div>
               </div>
@@ -496,27 +555,13 @@ export default function TechnicianWorkbenchPage() {
                       size="sm"
                       variant="outline"
                       onClick={() => {
-                        setResultClass('CID');
-                        setTargetStatus('COM_PROBLEMA');
-                        setTechNotes('Circuito elétrico CID com falha na leitura da impressora.');
-                      }}
-                      className="border-amber-400 text-amber-800 dark:text-amber-300 hover:bg-amber-50 text-xs h-8 font-semibold"
-                    >
-                      Marcar CID
-                    </Button>
-
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setResultClass('QUEIMADO');
-                        setTargetStatus('COM_PROBLEMA');
-                        setTechNotes('Resistência térmica do bico queimada.');
+                        setResultClass('SEM_REPARO');
+                        setTargetStatus('SEM_REPARO');
+                        setTechNotes('Inviabilidade técnica de conserto constatada na bancada.');
                       }}
                       className="border-rose-400 text-rose-700 dark:text-rose-300 hover:bg-rose-50 text-xs h-8 font-semibold"
                     >
-                      Marcar QUEIMADO
+                      Marcar SEM REPARO
                     </Button>
 
                     <Button
@@ -524,13 +569,13 @@ export default function TechnicianWorkbenchPage() {
                       size="sm"
                       variant="outline"
                       onClick={() => {
-                        setResultClass('ENTUPIDO');
-                        setTargetStatus('EM_RECARGA');
-                        setTechNotes('Necessário banho químico e ultrassom para desobstrução.');
+                        setResultClass('OUTRO');
+                        setTargetStatus('COM_PROBLEMA');
+                        setTechNotes('Aguardando chegada de componente / autorização do cliente.');
                       }}
-                      className="border-blue-400 text-blue-700 dark:text-blue-300 hover:bg-blue-50 text-xs h-8 font-semibold"
+                      className="border-amber-400 text-amber-800 dark:text-amber-300 hover:bg-amber-50 text-xs h-8 font-semibold"
                     >
-                      Marcar ENTUPIDO
+                      Aguardando Peça
                     </Button>
                   </div>
                 </div>

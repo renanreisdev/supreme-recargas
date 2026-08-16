@@ -3,14 +3,15 @@
 import React, { useState, useEffect } from 'react';
 import { Building2, Users, Crown, Shield, PlusCircle, CheckCircle2, Sliders, Edit, KeyRound, Check, X, ShieldAlert, Lock } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
-import { AppStore, MOCK_PLANS } from '@/lib/store';
+import { AppStore, MOCK_PLANS, SEGMENT_PRESETS } from '@/lib/store';
 import { formatCurrency, getRoleBadgeConfig } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Profile, UserRole, CompanySettings } from '@/types';
+import { Profile, UserRole, CompanySettings, BusinessSegment, SegmentCustomization } from '@/types';
+import { Smartphone, Wrench, Printer, Layers } from 'lucide-react';
 
 interface PermissionOption {
   key: string;
@@ -56,9 +57,13 @@ export default function CompanySettingsPage() {
 
   // Company Settings & Validation Policies State
   const [settings, setSettings] = useState<CompanySettings>(AppStore.getSettings(currentCompany.id));
+  const [segmentConfig, setSegmentConfig] = useState<SegmentCustomization>(AppStore.getSegmentConfig(currentCompany.id));
   const [requireCustomerDocument, setRequireCustomerDocument] = useState<boolean>(settings.require_customer_document ?? false);
   const [requireCartridgeSerial, setRequireCartridgeSerial] = useState<boolean>(settings.require_cartridge_serial ?? true);
+  const [customChecklist, setCustomChecklist] = useState<string[]>(settings.custom_checklist_items || segmentConfig.defaultChecklistItems || []);
+  const [newChecklistInput, setNewChecklistInput] = useState('');
   const [policySaveSuccess, setPolicySaveSuccess] = useState(false);
+  const [segmentSaveSuccess, setSegmentSaveSuccess] = useState(false);
 
   // Reset Password Modal State
   const [userToResetPass, setUserToResetPass] = useState<Profile | null>(null);
@@ -71,10 +76,13 @@ export default function CompanySettingsPage() {
   const loadData = () => {
     const data = AppStore.getUsers(currentCompany.id);
     const sets = AppStore.getSettings(currentCompany.id);
+    const seg = AppStore.getSegmentConfig(currentCompany.id);
     setUsers(data);
     setSettings(sets);
+    setSegmentConfig(seg);
     setRequireCustomerDocument(sets.require_customer_document ?? false);
     setRequireCartridgeSerial(sets.require_cartridge_serial ?? true);
+    setCustomChecklist(sets.custom_checklist_items || seg.defaultChecklistItems || []);
   };
 
   useEffect(() => {
@@ -84,11 +92,35 @@ export default function CompanySettingsPage() {
     return () => window.removeEventListener('supreme_store_updated', handleUpdate);
   }, [currentCompany.id]);
 
+  const handleSegmentSwitch = (newSegment: BusinessSegment) => {
+    const updated = AppStore.setCompanySegment(currentCompany.id, newSegment, undefined, currentUser?.full_name || 'Administrador');
+    setSettings(updated);
+    setSegmentConfig(AppStore.getSegmentConfig(currentCompany.id));
+    setCustomChecklist(updated.custom_checklist_items || []);
+    setSegmentSaveSuccess(true);
+    setTimeout(() => setSegmentSaveSuccess(false), 3500);
+  };
+
+  const handleAddChecklistItem = () => {
+    if (!newChecklistInput.trim()) return;
+    const updatedList = [...customChecklist, newChecklistInput.trim()];
+    setCustomChecklist(updatedList);
+    setNewChecklistInput('');
+    AppStore.updateSettings(currentCompany.id, { custom_checklist_items: updatedList }, currentUser?.full_name);
+  };
+
+  const handleRemoveChecklistItem = (idx: number) => {
+    const updatedList = customChecklist.filter((_, i) => i !== idx);
+    setCustomChecklist(updatedList);
+    AppStore.updateSettings(currentCompany.id, { custom_checklist_items: updatedList }, currentUser?.full_name);
+  };
+
   const handleSavePolicies = (e: React.FormEvent) => {
     e.preventDefault();
     const updated = AppStore.updateSettings(currentCompany.id, {
       require_customer_document: requireCustomerDocument,
-      require_cartridge_serial: requireCartridgeSerial
+      require_cartridge_serial: requireCartridgeSerial,
+      custom_checklist_items: customChecklist
     }, currentUser?.full_name || 'Administrador');
     setSettings(updated);
     setPolicySaveSuccess(true);
@@ -230,6 +262,148 @@ export default function CompanySettingsPage() {
           </div>
         </Card>
       </div>
+
+      {/* Business Segment Selector & Operational Workflow Preset (Admin Only) */}
+      {hasPermission('manage_company') && (
+        <Card className="shadow-sm border-slate-200 dark:border-slate-800">
+          <CardHeader className="pb-3 border-b border-slate-200 dark:border-slate-800">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <CardTitle className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-emerald-600" />
+                  <span>Ramo de Atuação & Customização de Segmento</span>
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Selecione o segmento do seu negócio para adaptar as nomenclaturas, regras de bancada e checklists
+                </CardDescription>
+              </div>
+
+              <Badge className="bg-emerald-600 text-white font-bold text-xs shrink-0 self-start sm:self-auto">
+                Segmento Ativo: {segmentConfig.segmentName}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-5 space-y-6">
+            {segmentSaveSuccess && (
+              <div className="p-3 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 rounded-xl flex items-center gap-2 text-emerald-800 dark:text-emerald-200 text-xs font-semibold animate-in fade-in">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Segmento do negócio atualizado com sucesso! Toda a interface foi reconfigurada.</span>
+              </div>
+            )}
+
+            {/* 4 Segment Presets Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+              {Object.values(SEGMENT_PRESETS).map((seg) => {
+                const isCurrent = segmentConfig.segment === seg.segment;
+                return (
+                  <div
+                    key={seg.segment}
+                    onClick={() => handleSegmentSwitch(seg.segment)}
+                    className={`p-4 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between space-y-3 ${
+                      isCurrent
+                        ? 'border-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/30 shadow-md ring-1 ring-emerald-500'
+                        : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850 hover:border-slate-300 dark:hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
+                          isCurrent ? 'bg-emerald-600 text-white' : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                        }`}>
+                          {seg.segment === 'RECARGA_CARTUCHOS' && <Printer className="w-4 h-4" />}
+                          {seg.segment === 'ASSISTENCIA_CELULARES_INFORMATICA' && <Smartphone className="w-4 h-4" />}
+                          {seg.segment === 'FERRAMENTAS_MOTORES' && <Wrench className="w-4 h-4" />}
+                          {seg.segment === 'OFICINA_GERAL' && <Layers className="w-4 h-4" />}
+                        </div>
+
+                        {isCurrent ? (
+                          <Badge className="bg-emerald-600 text-white text-[10px] font-bold">Ativo</Badge>
+                        ) : (
+                          <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2 text-slate-500 hover:text-emerald-600">
+                            Selecionar
+                          </Button>
+                        )}
+                      </div>
+
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">{seg.segmentName}</h4>
+                        <p className="text-[11px] text-slate-500 mt-1 line-clamp-2">
+                          Item: <strong>{seg.itemLabelSingular}</strong> | ID: <strong>{seg.identifierLabel}</strong>
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800 text-[10px] text-slate-500 flex items-center justify-between">
+                      <span>{seg.hasWeightInspection ? '⚖️ Com Balança' : '📋 Com Checklist'}</span>
+                      <span className="font-semibold text-slate-700 dark:text-slate-300">{seg.defaultCategories.length} categorias</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Checklist Customizer if Active Segment has Checklist */}
+            {segmentConfig.hasChecklist && (
+              <div className="p-4 bg-slate-50 dark:bg-slate-850 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      <span>Checklist de Recepção & Inspeção de Entrada</span>
+                    </h4>
+                    <p className="text-[11px] text-slate-500">
+                      Itens verificados pelo atendente no momento em que o cliente entrega o {segmentConfig.itemLabelSingular.toLowerCase()}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Add new checklist item input */}
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Ex: Cabo de força, Risco na tampa traseira, etc."
+                    value={newChecklistInput}
+                    onChange={(e) => setNewChecklistInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddChecklistItem(); } }}
+                    className="text-xs h-9 bg-white dark:bg-slate-900"
+                  />
+                  <Button
+                    type="button"
+                    onClick={handleAddChecklistItem}
+                    size="sm"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-9 px-3 gap-1 shrink-0"
+                  >
+                    <PlusCircle className="w-3.5 h-3.5" />
+                    <span>Adicionar</span>
+                  </Button>
+                </div>
+
+                {/* Checklist Badges List */}
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {customChecklist.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-800 dark:text-slate-200 shadow-2xs"
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      <span>{item}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveChecklistItem(idx)}
+                        className="text-slate-400 hover:text-rose-500 transition-colors ml-1"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                  {customChecklist.length === 0 && (
+                    <span className="text-xs text-slate-400 italic">Nenhum item no checklist. Adicione itens acima.</span>
+                  )}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Validation Policies & Operational Rules (Admin Only) */}
       {hasPermission('manage_company') && (

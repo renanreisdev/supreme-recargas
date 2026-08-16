@@ -36,14 +36,14 @@ import {
   Wrench
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
-import { AppStore, DemoSandboxConfig } from '@/lib/store';
+import { AppStore, DemoSandboxConfig, SEGMENT_PRESETS } from '@/lib/store';
 import { formatCurrency, formatDate, getRoleBadgeConfig, cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Company, Plan, Subscription, Profile, UserRole } from '@/types';
+import { Company, Plan, Subscription, Profile, UserRole, BusinessSegment } from '@/types';
 
 export default function SuperAdminPage() {
   const { currentUser } = useAuth();
@@ -88,6 +88,7 @@ export default function SuperAdminPage() {
   const [newCity, setNewCity] = useState('');
   const [newState, setNewState] = useState('SP');
   const [newResponsible, setNewResponsible] = useState('');
+  const [newBusinessSegment, setNewBusinessSegment] = useState<BusinessSegment>('RECARGA_CARTUCHOS');
   const [newPlanId, setNewPlanId] = useState('');
   const [newAdminEmail, setNewAdminEmail] = useState('');
   const [newAdminPass, setNewAdminPass] = useState('123456');
@@ -256,6 +257,7 @@ Olá! Conforme solicitado, aqui estão os dados para você testar nosso sistema 
           city: newCity || 'São Paulo',
           state: newState || 'SP',
           responsible_name: newResponsible || 'Responsável',
+          business_segment: newBusinessSegment,
           is_active: true
         },
         newAdminEmail ? {
@@ -265,12 +267,13 @@ Olá! Conforme solicitado, aqui estão os dados para você testar nosso sistema 
           phone: newPhone || newWhatsapp
         } : undefined,
         newPlanId,
-        currentUser.full_name
+        currentUser.full_name,
+        newBusinessSegment
       );
 
       loadPlatformData();
       setShowAddTenantModal(false);
-      showToast(`Empresa "${newTradeName}" cadastrada com sucesso!`);
+      showToast(`Empresa "${newTradeName}" cadastrada com sucesso no segmento ${SEGMENT_PRESETS[newBusinessSegment]?.segmentName}!`);
 
       // Reset form
       setNewCorpName('');
@@ -281,6 +284,7 @@ Olá! Conforme solicitado, aqui estão os dados para você testar nosso sistema 
       setNewEmail('');
       setNewCity('');
       setNewResponsible('');
+      setNewBusinessSegment('RECARGA_CARTUCHOS');
       setNewAdminEmail('');
       setNewAdminPass('123456');
     } catch (err: any) {
@@ -1704,19 +1708,36 @@ Incluso: Emissão com QR Code, Bancada Técnica, Rastreio e Impressão Térmica.
                 </div>
               </div>
 
-              <div>
-                <label className="font-bold text-slate-700 dark:text-slate-300 mb-1 block">Plano de Assinatura Inicial *</label>
-                <Select
-                  value={newPlanId}
-                  onChange={e => setNewPlanId(e.target.value)}
-                  className="text-xs font-semibold"
-                >
-                  {plans.map(p => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} — {p.monthly_price === 0 ? 'Gratuito' : formatCurrency(p.monthly_price)}/mês
-                    </option>
-                  ))}
-                </Select>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700 dark:text-slate-300 mb-1 block">Ramo de Atuação / Segmento *</label>
+                  <Select
+                    value={newBusinessSegment}
+                    onChange={e => setNewBusinessSegment(e.target.value as BusinessSegment)}
+                    className="text-xs font-semibold"
+                  >
+                    {Object.values(SEGMENT_PRESETS).map(seg => (
+                      <option key={seg.segment} value={seg.segment}>
+                        {seg.segmentName} ({seg.itemLabelPlural})
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 dark:text-slate-300 mb-1 block">Plano de Assinatura Inicial *</label>
+                  <Select
+                    value={newPlanId}
+                    onChange={e => setNewPlanId(e.target.value)}
+                    className="text-xs font-semibold"
+                  >
+                    {plans.map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} — {p.monthly_price === 0 ? 'Gratuito' : formatCurrency(p.monthly_price)}/mês
+                      </option>
+                    ))}
+                  </Select>
+                </div>
               </div>
 
               {/* Initial Admin Credentials */}

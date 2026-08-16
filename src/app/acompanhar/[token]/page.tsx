@@ -124,6 +124,7 @@ export default function PublicTrackingPage() {
   const allDelivered = entry.cartridges?.every(c => c.status === 'ENTREGUE');
   const allFinished = entry.cartridges?.every(c => c.status === 'FINALIZADO' || c.status === 'ENTREGUE');
   const paymentBadge = getPaymentStatusBadge(entry.payment_status);
+  const segmentConfig = AppStore.getSegmentConfig(entry.tenant_id);
 
   // WhatsApp formatted link
   const cleanPhone = (company.whatsapp || company.phone || '').replace(/\D/g, '');
@@ -166,7 +167,7 @@ export default function PublicTrackingPage() {
           <CardHeader className="border-b border-slate-800/80 pb-4 bg-slate-850/60">
             <div className="flex items-center justify-between">
               <div>
-                <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">Comanda de Serviço</span>
+                <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">Ordem de Serviço</span>
                 <h2 className="text-2xl font-black text-emerald-400 font-mono">{entry.entry_number}</h2>
               </div>
 
@@ -200,7 +201,7 @@ export default function PublicTrackingPage() {
               <div className="flex items-center justify-between text-xs">
                 <span className="font-bold uppercase tracking-wider text-slate-300">Etapa Atual</span>
                 <span className="text-[11px] text-emerald-400 font-bold">
-                  {allDelivered ? 'Concluído & Entregue' : allFinished ? 'Testado & Pronto para Retirada' : 'Em Análise / Recarga'}
+                  {allDelivered ? 'Concluído & Entregue' : allFinished ? 'Pronto para Retirada' : 'Em Diagnóstico / Reparo'}
                 </span>
               </div>
 
@@ -214,17 +215,17 @@ export default function PublicTrackingPage() {
 
               <div className="flex justify-between text-[10px] text-slate-400 font-medium">
                 <span className="text-slate-300">1. Recebido</span>
-                <span className={!allDelivered && !allFinished ? 'text-amber-400 font-bold' : ''}>2. Oficina</span>
+                <span className={!allDelivered && !allFinished ? 'text-amber-400 font-bold' : ''}>2. Bancada</span>
                 <span className={allFinished && !allDelivered ? 'text-emerald-400 font-bold' : ''}>3. Pronto</span>
                 <span className={allDelivered ? 'text-teal-400 font-bold' : ''}>4. Entregue</span>
               </div>
             </div>
 
-            {/* Cartridges List */}
+            {/* Items List */}
             <div className="space-y-3 pt-3 border-t border-slate-800">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-bold uppercase tracking-wider text-slate-300">
-                  Cartuchos em Serviço ({entry.cartridges?.length || 0})
+                  {segmentConfig.itemLabelPlural} em Atendimento ({entry.cartridges?.length || 0})
                 </p>
               </div>
 
@@ -232,21 +233,49 @@ export default function PublicTrackingPage() {
                 {entry.cartridges?.map((cart) => {
                   const statusInfo = getStatusBadgeConfig(cart.status);
                   return (
-                    <div key={cart.id} className="p-3.5 bg-slate-800/70 rounded-xl border border-slate-700/60 flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-bold text-white flex items-center gap-1.5">
-                          <span>{cart.model?.model_name || 'Cartucho'}</span>
-                          <span className="text-slate-400 font-normal">({cart.color})</span>
-                          {cart.is_xl && <span className="text-[10px] bg-indigo-900/60 text-indigo-300 border border-indigo-700/50 px-1.5 py-0.2 rounded font-bold">XL</span>}
-                        </p>
-                        <p className="text-[11px] text-slate-400 font-mono mt-0.5">
-                          Final de Série: <strong className="text-slate-200">{cart.final_serie || 'S/N'}</strong>
-                        </p>
+                    <div key={cart.id} className="p-3.5 bg-slate-800/70 rounded-xl border border-slate-700/60 space-y-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-bold text-white flex items-center gap-1.5">
+                            <span>{cart.model?.model_name || segmentConfig.itemLabelSingular}</span>
+                            {cart.color ? <span className="text-slate-400 font-normal">({cart.color})</span> : null}
+                            {cart.is_xl && <span className="text-[10px] bg-indigo-900/60 text-indigo-300 border border-indigo-700/50 px-1.5 py-0.2 rounded font-bold">XL</span>}
+                          </p>
+                          <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+                            {segmentConfig.identifierLabel}: <strong className="text-slate-200">{cart.final_serie || 'S/N'}</strong>
+                          </p>
+                        </div>
+
+                        <Badge className={`${statusInfo.className} shrink-0 text-[10px]`}>
+                          {statusInfo.label}
+                        </Badge>
                       </div>
 
-                      <Badge className={`${statusInfo.className} shrink-0 text-[10px]`}>
-                        {statusInfo.label}
-                      </Badge>
+                      {/* Accessories if present */}
+                      {cart.accessories && (
+                        <div className="text-[11px] text-slate-300 bg-slate-900/60 p-2 rounded border border-slate-800">
+                          <span className="text-slate-400">Acessórios deixados:</span> <strong>{cart.accessories}</strong>
+                        </div>
+                      )}
+
+                      {/* Checklist badges if present */}
+                      {cart.checklist && cart.checklist.length > 0 && (
+                        <div className="pt-1 flex flex-wrap gap-1.5">
+                          {cart.checklist.map((chk, idx) => (
+                            <span
+                              key={idx}
+                              className={`text-[10px] px-2 py-0.5 rounded-md border flex items-center gap-1 ${
+                                chk.checked
+                                  ? 'bg-emerald-950/60 text-emerald-300 border-emerald-800'
+                                  : 'bg-slate-900 text-slate-400 border-slate-800'
+                              }`}
+                            >
+                              <span>{chk.checked ? '✓' : '•'}</span>
+                              <span>{chk.item}</span>
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   );
                 })}

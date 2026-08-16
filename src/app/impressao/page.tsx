@@ -34,6 +34,7 @@ function ThermalPrintContent() {
   }, [currentCompany.id, selectedEntryNumber]);
 
   const currentEntry = entries.find(e => e.entry_number === selectedEntryNumber) || entries[0];
+  const segmentConfig = AppStore.getSegmentConfig(currentCompany.id);
 
   // Generate Real Scannable QR Code Data URL
   useEffect(() => {
@@ -80,13 +81,6 @@ function ThermalPrintContent() {
   };
 
   const [copiedLink, setCopiedLink] = useState(false);
-  const [isLocalhost, setIsLocalhost] = useState(false);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setIsLocalhost(window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-    }
-  }, []);
 
   const handleCopyLink = () => {
     if (typeof window !== 'undefined' && currentEntry) {
@@ -98,57 +92,32 @@ function ThermalPrintContent() {
     }
   };
 
-  const trackingLink = currentEntry ? `/acompanhar/${currentEntry.tracking_token || currentEntry.entry_number}` : '/acompanhar';
-
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
-      {/* Header Controls */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm print:hidden">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-            <Printer className="w-6 h-6 text-emerald-600" />
-            <span>Impressão Térmica de Comandas & Etiquetas</span>
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Visualização de impressão não fiscal com QR Code dinâmico escaneável para celulares
-          </p>
-        </div>
+    <div className="space-y-6 max-w-4xl mx-auto">
+      {/* Screen-Only Control Toolbar */}
+      <Card className="no-print shadow-sm border-slate-200 dark:border-slate-800">
+        <CardHeader className="pb-3 border-b border-slate-200 dark:border-slate-800">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <CardTitle className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <Printer className="w-5 h-5 text-emerald-600" />
+                <span>Impressão de Comandas & Etiquetas Térmicas (58mm / 80mm)</span>
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Visualize e imprima o comprovante de serviço com QR Code de rastreio em tempo real
+              </CardDescription>
+            </div>
 
-        <div className="flex items-center gap-2.5 flex-wrap">
-          {currentEntry && (
-            <>
-              <Button
-                onClick={handleCopyLink}
-                variant="outline"
-                size="sm"
-                className="gap-1.5 text-xs font-semibold h-9 text-slate-700 dark:text-slate-300"
-              >
-                {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copiedLink ? 'Link Copiado!' : 'Copiar Link de Rastreio'}</span>
-              </Button>
-
-              <Link href={trackingLink} target="_blank">
-                <Button variant="outline" size="sm" className="gap-1.5 text-xs font-semibold h-9 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700">
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  <span>Testar Portal do Cliente</span>
-                </Button>
-              </Link>
-            </>
-          )}
-
-          <Button
-            onClick={handleTriggerPrint}
-            className="bg-emerald-600 hover:bg-emerald-700 font-bold gap-2 text-xs shadow-md h-9 text-white"
-          >
-            <Printer className="w-4 h-4" />
-            <span>Imprimir Agora (Ctrl+P)</span>
-          </Button>
-        </div>
-      </div>
-
-      {/* Print Configuration Bar */}
-      <Card className="shadow-sm border-slate-200 dark:border-slate-800 print:hidden">
-        <CardContent className="pt-6">
+            <Button
+              onClick={handleTriggerPrint}
+              className="bg-emerald-600 hover:bg-emerald-700 font-bold text-white text-xs gap-2 shadow-md h-9"
+            >
+              <Printer className="w-4 h-4" />
+              <span>Imprimir Agora (Ctrl+P)</span>
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
             <div>
               <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 block">
@@ -157,10 +126,11 @@ function ThermalPrintContent() {
               <Select
                 value={selectedEntryNumber}
                 onChange={(e) => setSelectedEntryNumber(e.target.value)}
+                className="text-xs font-mono font-bold"
               >
                 {entries.map(e => (
                   <option key={e.id} value={e.entry_number}>
-                    {e.entry_number} — {e.customer?.name} ({formatDateTime(e.entry_date)})
+                    {e.entry_number} — {e.customer?.name} ({e.cartridges?.length || 0} itens)
                   </option>
                 ))}
               </Select>
@@ -174,8 +144,8 @@ function ThermalPrintContent() {
                 value={paperWidth}
                 onChange={(e) => setPaperWidth(Number(e.target.value))}
               >
-                <option value={80}>80 mm (Padrão Térmica Grande)</option>
-                <option value={58}>58 mm (Térmica Pequena / Bluetooth)</option>
+                <option value={80}>80 mm (Padrão Comercial / Balcão)</option>
+                <option value={58}>58 mm (Mini Impressora Portátil)</option>
               </Select>
             </div>
 
@@ -188,7 +158,7 @@ function ThermalPrintContent() {
                 onChange={(e) => setPrintMode(e.target.value as any)}
               >
                 <option value="receipt">Comanda Completa do Cliente</option>
-                <option value="label">Etiqueta Mini p/ Cartucho</option>
+                <option value="label">Etiqueta Mini p/ Item</option>
               </Select>
             </div>
 
@@ -200,7 +170,7 @@ function ThermalPrintContent() {
                 value={showPrices ? 'yes' : 'no'}
                 onChange={(e) => setShowPrices(e.target.value === 'yes')}
               >
-                <option value="yes">SIM — Mostrar Preços na Comanda</option>
+                <option value="yes">SIM — Mostrar Preços</option>
                 <option value="no">NÃO — Esconder Preços</option>
               </Select>
             </div>
@@ -226,13 +196,13 @@ function ThermalPrintContent() {
                   <p className="text-[10px]">{currentCompany.corporate_name}</p>
                   <p className="text-[10px]">CNPJ: {currentCompany.cnpj}</p>
                   <p className="text-[10px]">Tel: {currentCompany.phone} | WhatsApp: {currentCompany.whatsapp}</p>
-                  <p className="text-[10px] uppercase font-bold mt-1">=== COMANDA DE SERVIÇO ===</p>
+                  <p className="text-[10px] uppercase font-bold mt-1">=== COMPROVANTE DE ENTRADA ===</p>
                 </div>
 
                 {/* Entry & Customer Metadata */}
                 <div className="space-y-1 text-[11px] pb-2 border-b border-black border-dashed">
                   <div className="flex justify-between font-bold text-xs">
-                    <span>ENTRADA N°:</span>
+                    <span>ORDEM N°:</span>
                     <span>{currentEntry.entry_number}</span>
                   </div>
                   <div className="flex justify-between">
@@ -253,21 +223,28 @@ function ThermalPrintContent() {
                   </div>
                 </div>
 
-                {/* Cartridge Line Items */}
+                {/* Line Items */}
                 <div className="space-y-2 pb-3 border-b border-black border-dashed">
-                  <p className="font-bold uppercase text-[11px]">CARTUCHOS RECEBIDOS:</p>
+                  <p className="font-bold uppercase text-[11px]">{segmentConfig.itemLabelPlural.toUpperCase()} RECEBIDOS:</p>
                   {currentEntry.cartridges?.map((cart) => (
                     <div key={cart.id} className="p-1.5 bg-slate-50 border border-black/30 rounded text-[11px] space-y-0.5">
                       <div className="flex justify-between font-bold">
-                        <span>#{cart.item_index} - {cart.model?.model_name} ({cart.color})</span>
+                        <span>#{cart.item_index} - {cart.model?.model_name} {cart.color ? `(${cart.color})` : ''}</span>
                         {showPrices && <span>{formatCurrency(cart.final_price)}</span>}
                       </div>
                       <div className="flex justify-between text-[10px]">
-                        <span>SÉRIE FINAL: <strong>{cart.final_serie}</strong></span>
-                        <span>PESO: {cart.input_weight_grams ? `${cart.input_weight_grams}g` : 'N/I'}</span>
+                        <span>{segmentConfig.identifierLabel.toUpperCase()}: <strong>{cart.final_serie}</strong></span>
+                        {segmentConfig.hasWeightInspection && cart.input_weight_grams ? (
+                          <span>PESO: {cart.input_weight_grams}g</span>
+                        ) : null}
                       </div>
+                      {cart.accessories && (
+                        <div className="text-[10px] text-slate-700">
+                          ACESSÓRIOS: <strong>{cart.accessories}</strong>
+                        </div>
+                      )}
                       <div className="text-[10px] text-slate-700">
-                        SERVIÇO: {cart.service_requested.replace('_E_', ' + ')}
+                        {segmentConfig.serviceLabel.toUpperCase()}: {cart.service_requested.replace(/_/g, ' ')}
                       </div>
                     </div>
                   ))}

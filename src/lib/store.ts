@@ -21,7 +21,9 @@ import {
   PaymentMethod,
   PaymentStatus,
   Plan,
-  Subscription
+  Subscription,
+  BusinessSegment,
+  SegmentCustomization
 } from '@/types';
 import { supabase } from '@/lib/supabase';
 
@@ -36,6 +38,82 @@ export function generateUUID(): string {
     return v.toString(16);
   });
 }
+
+// Preset Segment Configurations
+export const SEGMENT_PRESETS: Record<BusinessSegment, SegmentCustomization> = {
+  RECARGA_CARTUCHOS: {
+    segment: 'RECARGA_CARTUCHOS',
+    segmentName: 'Recarga de Cartuchos & Toners',
+    itemLabelSingular: 'Cartucho',
+    itemLabelPlural: 'Cartuchos',
+    identifierLabel: 'Final de Série',
+    serviceLabel: 'Serviço Solicitado',
+    hasWeightInspection: true,
+    hasChecklist: false,
+    defaultChecklistItems: [],
+    defaultCategories: ['Cartuchos Jato de Tinta', 'Toners Laser', 'Garrafas de Tinta', 'Outros'],
+    iconName: 'Printer'
+  },
+  ASSISTENCIA_CELULARES_INFORMATICA: {
+    segment: 'ASSISTENCIA_CELULARES_INFORMATICA',
+    segmentName: 'Assistência Técnica de Celulares & Informática',
+    itemLabelSingular: 'Aparelho / Dispositivo',
+    itemLabelPlural: 'Aparelhos',
+    identifierLabel: 'IMEI / Serial',
+    serviceLabel: 'Serviço / Reparo Solicitado',
+    hasWeightInspection: false,
+    hasChecklist: true,
+    defaultChecklistItems: [
+      'Tela / Vidro Trincado ou Riscos',
+      'Touch Screen 100% Funcional',
+      'Câmeras Frontal & Traseira',
+      'Bateria / Conector de Carga',
+      'Wi-Fi & Bluetooth',
+      'Alto-falantes & Microfone',
+      'Gaveta de Chip / Leitor Biométrico'
+    ],
+    defaultCategories: ['Smartphones', 'Notebooks', 'Tablets', 'Consoles de Games', 'Monitores', 'Periféricos'],
+    iconName: 'Smartphone'
+  },
+  FERRAMENTAS_MOTORES: {
+    segment: 'FERRAMENTAS_MOTORES',
+    segmentName: 'Manutenção de Ferramentas & Motores',
+    itemLabelSingular: 'Equipamento / Máquina',
+    itemLabelPlural: 'Equipamentos',
+    identifierLabel: 'Nº de Série / Tag',
+    serviceLabel: 'Serviço / Manutenção',
+    hasWeightInspection: false,
+    hasChecklist: true,
+    defaultChecklistItems: [
+      'Cabo de Força / Plugue Elétrico',
+      'Escovas de Carvão / Coletor',
+      'Gatilho / Interruptor Liga-Desliga',
+      'Rolamentos & Engrenagens',
+      'Mandril / Eixo de Encaixe',
+      'Carcaça & Proteção de Segurança'
+    ],
+    defaultCategories: ['Furadeiras & Parafusadeiras', 'Serras & Lixadeiras', 'Lavadoras de Alta Pressão', 'Motores Elétricos', 'Geradores', 'Compressores'],
+    iconName: 'Wrench'
+  },
+  OFICINA_GERAL: {
+    segment: 'OFICINA_GERAL',
+    segmentName: 'Oficina & Serviços Gerais',
+    itemLabelSingular: 'Item / Peça',
+    itemLabelPlural: 'Itens',
+    identifierLabel: 'Código / Serial',
+    serviceLabel: 'Serviço Solicitado',
+    hasWeightInspection: false,
+    hasChecklist: true,
+    defaultChecklistItems: [
+      'Estado Geral de Conservação',
+      'Avarias Estéticas Visíveis',
+      'Acessórios / Componentes Entregues',
+      'Funcionamento no Recebimento'
+    ],
+    defaultCategories: ['Geral', 'Eletrônicos', 'Mecânica', 'Manutenção Preventiva', 'Outros'],
+    iconName: 'Layers'
+  }
+};
 
 // Default Seed Companies
 export const MOCK_COMPANIES: Company[] = [
@@ -53,6 +131,7 @@ export const MOCK_COMPANIES: Company[] = [
     state: 'SP',
     zip_code: '01310-100',
     logo_url: '',
+    business_segment: 'RECARGA_CARTUCHOS',
     is_active: true,
     created_at: '2026-01-15T00:00:00.000Z',
     updated_at: '2026-01-15T00:00:00.000Z'
@@ -71,6 +150,7 @@ export const MOCK_COMPANIES: Company[] = [
     state: 'SP',
     zip_code: '13010-000',
     logo_url: '',
+    business_segment: 'RECARGA_CARTUCHOS',
     is_active: true,
     created_at: '2026-01-20T00:00:00.000Z',
     updated_at: '2026-01-20T00:00:00.000Z'
@@ -89,6 +169,7 @@ export const MOCK_COMPANIES: Company[] = [
     state: 'SP',
     zip_code: '14015-000',
     logo_url: '',
+    business_segment: 'RECARGA_CARTUCHOS',
     is_active: false,
     created_at: '2026-02-05T00:00:00.000Z',
     updated_at: '2026-02-05T00:00:00.000Z'
@@ -385,17 +466,19 @@ export const MOCK_CUSTOMERS: Customer[] = [
 ];
 
 export const MOCK_MODELS: CartridgeModel[] = [
+  // 1. Segmento: Recarga de Cartuchos
   {
     id: '01000000-0000-0000-0000-000000000001',
     tenant_id: MOCK_COMPANY_SUPREME.id,
     brand_name: 'HP',
     model_name: 'HP 664',
+    category: 'Cartuchos Jato de Tinta',
     color: 'Preto',
     is_xl: false,
     capacity_ml: 2.0,
     empty_weight_grams: 26.5,
     full_weight_grams: 30.5,
-    technical_notes: 'Injetor padrão HP',
+    technical_notes: 'Injetor padrão HP DeskJet',
     refill_price: 30.00,
     verification_price: 15.00,
     test_price: 10.00,
@@ -406,6 +489,7 @@ export const MOCK_MODELS: CartridgeModel[] = [
     tenant_id: MOCK_COMPANY_SUPREME.id,
     brand_name: 'HP',
     model_name: 'HP 664',
+    category: 'Cartuchos Jato de Tinta',
     color: 'Colorido',
     is_xl: false,
     capacity_ml: 2.0,
@@ -422,6 +506,7 @@ export const MOCK_MODELS: CartridgeModel[] = [
     tenant_id: MOCK_COMPANY_SUPREME.id,
     brand_name: 'HP',
     model_name: 'HP 664 XL',
+    category: 'Cartuchos Jato de Tinta',
     color: 'Preto',
     is_xl: true,
     capacity_ml: 8.5,
@@ -436,24 +521,9 @@ export const MOCK_MODELS: CartridgeModel[] = [
   {
     id: '01000000-0000-0000-0000-000000000004',
     tenant_id: MOCK_COMPANY_SUPREME.id,
-    brand_name: 'HP',
-    model_name: 'HP 667',
-    color: 'Preto',
-    is_xl: false,
-    capacity_ml: 2.0,
-    empty_weight_grams: 26.0,
-    full_weight_grams: 30.0,
-    technical_notes: 'Linha DeskJet Ink Advantage',
-    refill_price: 32.00,
-    verification_price: 15.00,
-    test_price: 10.00,
-    is_active: true
-  },
-  {
-    id: '01000000-0000-0000-0000-000000000005',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
     brand_name: 'Canon',
     model_name: 'Canon PG-145',
+    category: 'Cartuchos Jato de Tinta',
     color: 'Preto',
     is_xl: false,
     capacity_ml: 8.0,
@@ -466,19 +536,136 @@ export const MOCK_MODELS: CartridgeModel[] = [
     is_active: true
   },
   {
-    id: '01000000-0000-0000-0000-000000000006',
+    id: '01000000-0000-0000-0000-000000000005',
     tenant_id: MOCK_COMPANY_SUPREME.id,
-    brand_name: 'Canon',
-    model_name: 'Canon CL-146',
-    color: 'Colorido',
+    brand_name: 'Epson',
+    model_name: 'Refil T544 Black (EcoTank)',
+    category: 'Garrafas de Tinta',
+    color: 'Preto',
     is_xl: false,
-    capacity_ml: 9.0,
-    empty_weight_grams: 34.0,
-    full_weight_grams: 48.0,
-    technical_notes: 'Tricolor Canon',
+    capacity_ml: 65.0,
+    technical_notes: 'Tinta pigmentada L3150 / L3250',
     refill_price: 40.00,
     verification_price: 15.00,
     test_price: 10.00,
+    is_active: true
+  },
+
+  // 2. Segmento: Assistência de Celulares & Informática
+  {
+    id: '01000000-0000-0000-0000-000000000010',
+    tenant_id: MOCK_COMPANY_SUPREME.id,
+    brand_name: 'Apple',
+    model_name: 'iPhone 13 / 13 Pro',
+    category: 'Smartphones',
+    color: 'Preto',
+    is_xl: false,
+    technical_notes: 'Conector Lightning / Tela Super Retina XDR OLED',
+    refill_price: 250.00, // Preço base troca de tela/bateria
+    verification_price: 50.00,
+    test_price: 30.00,
+    is_active: true
+  },
+  {
+    id: '01000000-0000-0000-0000-000000000011',
+    tenant_id: MOCK_COMPANY_SUPREME.id,
+    brand_name: 'Samsung',
+    model_name: 'Galaxy S23 / S23 Ultra',
+    category: 'Smartphones',
+    color: 'Preto',
+    is_xl: false,
+    technical_notes: 'Conector Type-C / Tela Dynamic AMOLED 2X',
+    refill_price: 280.00,
+    verification_price: 50.00,
+    test_price: 30.00,
+    is_active: true
+  },
+  {
+    id: '01000000-0000-0000-0000-000000000012',
+    tenant_id: MOCK_COMPANY_SUPREME.id,
+    brand_name: 'Motorola',
+    model_name: 'Moto G84 5G',
+    category: 'Smartphones',
+    color: 'Preto',
+    is_xl: false,
+    technical_notes: 'Tela pOLED / Bateria 5000mAh',
+    refill_price: 180.00,
+    verification_price: 40.00,
+    test_price: 25.00,
+    is_active: true
+  },
+  {
+    id: '01000000-0000-0000-0000-000000000013',
+    tenant_id: MOCK_COMPANY_SUPREME.id,
+    brand_name: 'Dell',
+    model_name: 'Inspiron 15 3000 / 5000',
+    category: 'Notebooks',
+    color: 'Prata',
+    is_xl: false,
+    technical_notes: 'Formatação, troca de teclado, SSD NVMe, cooler',
+    refill_price: 150.00,
+    verification_price: 60.00,
+    test_price: 40.00,
+    is_active: true
+  },
+
+  // 3. Segmento: Ferramentas & Motores
+  {
+    id: '01000000-0000-0000-0000-000000000020',
+    tenant_id: MOCK_COMPANY_SUPREME.id,
+    brand_name: 'Makita',
+    model_name: 'Furadeira de Impacto HP1640 (760W)',
+    category: 'Furadeiras & Parafusadeiras',
+    color: 'Azul',
+    is_xl: false,
+    technical_notes: 'Voltagem 127V/220V - Mandril 1/2 Pol',
+    refill_price: 90.00,
+    verification_price: 35.00,
+    test_price: 20.00,
+    is_active: true
+  },
+  {
+    id: '01000000-0000-0000-0000-000000000021',
+    tenant_id: MOCK_COMPANY_SUPREME.id,
+    brand_name: 'Bosch',
+    model_name: 'Serra Circular GKS 150 (1500W)',
+    category: 'Serras & Lixadeiras',
+    color: 'Azul',
+    is_xl: false,
+    technical_notes: 'Disco 7.1/4 Pol - Troca de rolamentos e induzido',
+    refill_price: 120.00,
+    verification_price: 40.00,
+    test_price: 25.00,
+    is_active: true
+  },
+  {
+    id: '01000000-0000-0000-0000-000000000022',
+    tenant_id: MOCK_COMPANY_SUPREME.id,
+    brand_name: 'Wap',
+    model_name: 'Lavadora de Alta Pressão Eco Power 2200',
+    category: 'Lavadoras de Alta Pressão',
+    color: 'Amarelo',
+    is_xl: false,
+    technical_notes: 'Bomba com pistões de inox, troca de gaxeta e válvulas',
+    refill_price: 140.00,
+    verification_price: 45.00,
+    test_price: 30.00,
+    is_active: true
+  },
+
+  // 4. Segmento: Oficina & Geral
+  {
+    id: '01000000-0000-0000-0000-000000000030',
+    tenant_id: MOCK_COMPANY_SUPREME.id,
+    brand_name: 'Geral',
+    model_name: 'Item / Equipamento Eletrônico Geral',
+    category: 'Geral',
+    color: 'Preto',
+    is_xl: false,
+    technical_notes: 'Equipamento genérico de atendimento',
+    refill_price: 80.00,
+    verification_price: 30.00,
+    test_price: 20.00,
     is_active: true
   }
 ];
@@ -910,7 +1097,8 @@ export class AppStore {
     companyData: Omit<Company, 'id' | 'created_at' | 'updated_at'>,
     initialAdmin?: { fullName: string; email: string; password?: string; phone?: string },
     planId?: string,
-    performedByName?: string
+    performedByName?: string,
+    businessSegment?: BusinessSegment
   ): { company: Company; admin?: Profile; subscription: Subscription } {
     const data = this.getStoreData();
     if (!Array.isArray(data.companies)) data.companies = MOCK_COMPANIES;
@@ -918,17 +1106,44 @@ export class AppStore {
     if (!Array.isArray(data.plans)) data.plans = MOCK_PLANS;
     if (!Array.isArray(data.profiles)) data.profiles = MOCK_PROFILES;
 
-    const companyId = generateUUID();
+    const companyId = (companyData as any).id || generateUUID();
     const now = new Date().toISOString();
+    const segment = businessSegment || companyData.business_segment || 'RECARGA_CARTUCHOS';
+    const segmentPreset = SEGMENT_PRESETS[segment] || SEGMENT_PRESETS.RECARGA_CARTUCHOS;
 
     const newCompany: Company = {
       ...companyData,
       id: companyId,
+      business_segment: segment,
       created_at: now,
       updated_at: now
     };
 
     data.companies.unshift(newCompany);
+
+    // Create Company Settings with Segment Config
+    const newSettings: CompanySettings = {
+      id: generateUUID(),
+      tenant_id: companyId,
+      business_segment: segment,
+      segment_config: segmentPreset,
+      custom_checklist_items: segmentPreset.defaultChecklistItems,
+      show_prices_on_receipt: true,
+      receipt_header_note: `${newCompany.trade_name}\nAtendimento e Manutenção Especializada`,
+      receipt_footer_note: 'Garantia legal de 90 dias com a apresentação desta comanda.\nAgradecemos a preferência!',
+      verification_waiver_policy: 'CREDIT_IF_REFILLED',
+      waive_verification_if_refilled: true,
+      default_refill_price: 30.00,
+      default_refill_xl_price: 45.00,
+      default_verification_price: 15.00,
+      default_test_price: 10.00,
+      input_weight_responsibility: segmentPreset.hasWeightInspection ? 'AMBOS' : 'TECNICO',
+      thermal_paper_width_mm: 80,
+      require_customer_document: false,
+      require_cartridge_serial: true
+    };
+
+    data.settings = newSettings;
 
     // Create Subscription
     const selectedPlanId = planId || data.plans[0]?.id || MOCK_PLANS[0].id;
@@ -971,6 +1186,7 @@ export class AppStore {
 
     // Push to Supabase
     supabase.from('companies').insert(newCompany).then();
+    supabase.from('company_settings').upsert(newSettings).then();
     supabase.from('subscriptions').insert(newSubscription).then();
     if (newAdmin) {
       supabase.from('profiles').insert(newAdmin).then();
@@ -982,7 +1198,7 @@ export class AppStore {
       action: 'CRIACAO_EMPRESA_SAAS',
       resource: 'companies',
       resource_id: companyId,
-      details: `Cadastrada nova empresa ${newCompany.trade_name} (CNPJ: ${newCompany.cnpj || 'Não informado'}) no ${selectedPlan.name}.`
+      details: `Cadastrada nova empresa ${newCompany.trade_name} [Segmento: ${segmentPreset.segmentName}] (CNPJ: ${newCompany.cnpj || 'Não informado'}) no ${selectedPlan.name}.`
     });
 
     return { company: newCompany, admin: newAdmin, subscription: newSubscription };
@@ -1838,10 +2054,63 @@ export class AppStore {
     });
   }
 
-  // Company Settings
+  // Company Settings & Segment Customization
   static getSettings(tenantId: string): CompanySettings {
     const data = this.getStoreData();
     return data.settings || MOCK_COMPANY_SETTINGS;
+  }
+
+  static getAvailableSegments(): SegmentCustomization[] {
+    return Object.values(SEGMENT_PRESETS);
+  }
+
+  static getSegmentConfig(tenantId?: string): SegmentCustomization {
+    const data = this.getStoreData();
+    const company = this.getCompany(tenantId);
+    const settings = data.settings;
+    
+    const isMatchingSettings = settings && (!tenantId || settings.tenant_id === tenantId);
+    const segmentKey: BusinessSegment = (isMatchingSettings && settings.business_segment)
+      || company?.business_segment 
+      || 'RECARGA_CARTUCHOS';
+
+    const basePreset = SEGMENT_PRESETS[segmentKey] || SEGMENT_PRESETS.RECARGA_CARTUCHOS;
+
+    if (isMatchingSettings && settings?.segment_config) {
+      return {
+        ...basePreset,
+        ...settings.segment_config,
+        defaultChecklistItems: settings.custom_checklist_items || settings.segment_config.defaultChecklistItems || basePreset.defaultChecklistItems
+      };
+    }
+
+    return {
+      ...basePreset,
+      defaultChecklistItems: (isMatchingSettings && settings?.custom_checklist_items) || basePreset.defaultChecklistItems
+    };
+  }
+
+  static setCompanySegment(
+    tenantId: string, 
+    segment: BusinessSegment, 
+    customConfig?: Partial<SegmentCustomization>, 
+    performedByName?: string
+  ): CompanySettings {
+    const basePreset = SEGMENT_PRESETS[segment] || SEGMENT_PRESETS.RECARGA_CARTUCHOS;
+    const mergedConfig: SegmentCustomization = {
+      ...basePreset,
+      ...(customConfig || {})
+    };
+
+    const updated = this.updateSettings(tenantId, {
+      business_segment: segment,
+      segment_config: mergedConfig,
+      custom_checklist_items: mergedConfig.defaultChecklistItems
+    }, performedByName);
+
+    this.updateCompany(tenantId, { business_segment: segment }, performedByName);
+
+    return updated;
   }
 
   static updateSettings(tenantId: string, updates: Partial<CompanySettings>, performedByName?: string): CompanySettings {
@@ -1869,7 +2138,7 @@ export class AppStore {
       user_name: performedByName || 'Administrador',
       action: 'CONFIGURACAO_EMPRESA',
       resource: 'company_settings',
-      details: `Atualizadas regras e políticas da empresa: Recarga Padrão: R$ ${Number(updated.default_refill_price || 0).toFixed(2)}, Recarga XL: R$ ${Number(updated.default_refill_xl_price || 0).toFixed(2)}, Verificação: R$ ${Number(updated.default_verification_price || 0).toFixed(2)}, Pesagem Entrada: ${pesagemLabel}, Verificação Gratuita: ${updated.waive_verification_if_refilled ? 'Sim' : 'Não'}, CPF/CNPJ Obrigatório: ${updated.require_customer_document ? 'Sim' : 'Não'}, Serial Cartucho Obrigatório: ${updated.require_cartridge_serial ? 'Sim' : 'Não'}`
+      details: `Atualizadas regras da empresa: Segmento: ${updated.business_segment || 'RECARGA_CARTUCHOS'}, Recarga Padrão: R$ ${Number(updated.default_refill_price || 0).toFixed(2)}, Pesagem: ${pesagemLabel}, CPF/CNPJ Obrigatório: ${updated.require_customer_document ? 'Sim' : 'Não'}, Serial Obrigatório: ${updated.require_cartridge_serial ? 'Sim' : 'Não'}`
     });
 
     return updated;
@@ -2216,67 +2485,80 @@ export class AppStore {
 
   // Create Entry with Cartridges & Audit Log
   static createEntry(payload: {
-    tenant_id: string;
-    customer_id: string;
-    attendant_id: string;
+    tenant_id?: string;
+    tenantId?: string;
+    customer_id?: string;
+    customerId?: string;
+    attendant_id?: string;
+    attendantId?: string;
     attendant_name?: string;
     general_notes?: string;
     discount_amount?: number;
     payment_method?: PaymentMethod;
+    paymentMethod?: PaymentMethod;
     payment_status?: PaymentStatus;
     payments?: Array<{ method: PaymentMethod; amount: number; notes?: string }>;
-    items: Array<{
-      model_id: string;
-      service_requested: RequestedService;
-      color: string;
-      is_xl: boolean;
-      final_serie: string;
-      reception_notes?: string;
-      input_weight_grams?: number;
-      price: number;
-    }>;
+    items: Array<any>;
   }): CartridgeEntry {
     const data = this.getStoreData();
     const currentYear = new Date().getFullYear();
-    const tenantEntries = (data.entries || []).filter((e: CartridgeEntry) => e.tenant_id === payload.tenant_id);
+    const tenantId = payload.tenant_id || payload.tenantId || MOCK_COMPANY_SUPREME.id;
+    const customerId = payload.customer_id || payload.customerId || '';
+    const attendantId = payload.attendant_id || payload.attendantId || (data.profiles?.[0]?.id || 'att-system');
+
+    const normalizedItems = (payload.items || []).map(raw => ({
+      model_id: raw.model_id || raw.modelId || '',
+      service_requested: raw.service_requested || raw.serviceRequested || 'RECARGA_SIMPLES',
+      color: raw.color || 'Preto',
+      is_xl: raw.is_xl ?? raw.isXl ?? false,
+      final_serie: raw.final_serie || raw.finalSerie || 'S/N',
+      reception_notes: raw.reception_notes || raw.receptionNotes,
+      input_weight_grams: raw.input_weight_grams ?? raw.inputWeightGrams,
+      price: raw.price !== undefined ? Number(raw.price) : Number(raw.finalPrice ?? raw.unitPrice ?? 30.0),
+      accessories: raw.accessories,
+      checklist: raw.checklist,
+      custom_fields: raw.custom_fields || raw.customFields
+    }));
+
+    const tenantEntries = (data.entries || []).filter((e: CartridgeEntry) => e.tenant_id === tenantId);
     const seq = tenantEntries.length + 1;
     const entryNumber = `${currentYear}-${String(seq).padStart(6, '0')}`;
     const entryId = generateUUID();
     const trackingToken = `trk-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
     let subtotal = 0;
-    payload.items.forEach(i => { subtotal += i.price; });
+    normalizedItems.forEach(i => { subtotal += i.price; });
     const discount = payload.discount_amount || 0;
     const total = Math.max(0, subtotal - discount);
 
-    const customer = (data.customers || []).find((c: Customer) => c.id === payload.customer_id);
+    const customer = (data.customers || []).find((c: Customer) => c.id === customerId);
 
     const newEntry: CartridgeEntry = {
       id: entryId,
-      tenant_id: payload.tenant_id,
+      tenant_id: tenantId,
       entry_number: entryNumber,
       entry_sequence: seq,
       entry_year: currentYear,
-      customer_id: payload.customer_id,
-      attendant_id: payload.attendant_id,
+      customer_id: customerId,
+      attendant_id: attendantId,
       entry_date: new Date().toISOString(),
       subtotal_amount: subtotal,
       discount_amount: discount,
       surcharge_amount: 0,
       total_amount: total,
       payment_status: payload.payment_status || 'PENDENTE',
-      payment_method: payload.payment_method || 'DINHEIRO',
+      payment_method: payload.payment_method || payload.paymentMethod || 'DINHEIRO',
       payments: payload.payments,
       general_notes: payload.general_notes,
       tracking_token: trackingToken,
       created_at: new Date().toISOString()
     };
 
-    const newCartridges: Cartridge[] = payload.items.map((item, idx) => {
+    const newCartridges: Cartridge[] = normalizedItems.map((item, idx) => {
       const serialNumber = `${entryNumber}-${String(idx + 1).padStart(2, '0')}`;
       return {
         id: generateUUID(),
-        tenant_id: payload.tenant_id,
+        tenant_id: tenantId,
         entry_id: entryId,
         serial_number: serialNumber,
         item_index: idx + 1,
@@ -2289,6 +2571,9 @@ export class AppStore {
         result_classification: 'PENDENTE',
         input_weight_grams: item.input_weight_grams,
         reception_notes: item.reception_notes,
+        accessories: item.accessories,
+        checklist: item.checklist,
+        custom_fields: item.custom_fields,
         original_price: item.price,
         applied_price: item.price,
         discount_amount: 0,
@@ -2365,7 +2650,7 @@ export class AppStore {
       action: 'NOVA_ENTRADA',
       resource: 'cartridge_entries',
       resource_id: entryId,
-      details: `Gerada comanda ${entryNumber} (${payload.items.length} cartuchos) para o cliente ${customer?.name || 'Cliente'} - Total: R$ ${total.toFixed(2)}`
+      details: `Gerada ordem ${entryNumber} (${payload.items.length} itens) para o cliente ${customer?.name || 'Cliente'} - Total: R$ ${total.toFixed(2)}`
     });
 
     return {
@@ -2389,10 +2674,13 @@ export class AppStore {
     inputWeightGrams?: number;
     outputWeightGrams?: number;
     technicalNotes?: string;
+    accessories?: string;
+    checklist?: Array<{ item: string; checked: boolean; notes?: string }>;
+    custom_fields?: Record<string, any>;
   }): Cartridge {
     const data = this.getStoreData();
     const idx = data.cartridges.findIndex((c: Cartridge) => c.id === payload.cartridgeId);
-    if (idx === -1) throw new Error('Cartucho não encontrado');
+    if (idx === -1) throw new Error('Item não encontrado');
 
     const current = data.cartridges[idx];
     const inputWeight = payload.inputWeightGrams ?? current.input_weight_grams;
@@ -2429,6 +2717,9 @@ export class AppStore {
       applied_price: newPrice,
       final_price: newPrice,
       technical_notes: payload.technicalNotes ?? current.technical_notes,
+      accessories: payload.accessories ?? current.accessories,
+      checklist: payload.checklist ?? current.checklist,
+      custom_fields: payload.custom_fields ?? current.custom_fields,
       updated_at: new Date().toISOString()
     };
 
@@ -2480,7 +2771,7 @@ export class AppStore {
       action: 'DIAGNOSTICO_TECNICO',
       resource: 'cartridges',
       resource_id: current.id,
-      details: `Cartucho ${current.serial_number} (${current.final_serie}): Status alterado para ${payload.status} | Diagnóstico: ${newResultClass} | Peso: ${inputWeight || '-'}g -> ${outputWeight || '-'}g (${weightDiff ? `+${weightDiff}g` : '-'}) | Valor: R$ ${newPrice.toFixed(2)}`
+      details: `Item ${current.serial_number} (${current.final_serie}): Status alterado para ${payload.status} | Diagnóstico: ${newResultClass} | Valor: R$ ${newPrice.toFixed(2)}`
     });
 
     return updated;

@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { AppStore } from '@/lib/store';
-import { CartridgeModel, CompanySettings } from '@/types';
+import { CartridgeModel, CompanySettings, SegmentCustomization } from '@/types';
 import { formatCurrency } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -30,7 +30,9 @@ export default function CartridgeModelsPage() {
   const { currentCompany, currentUser, hasPermission } = useAuth();
   const [models, setModels] = useState<CartridgeModel[]>([]);
   const [settings, setSettings] = useState<CompanySettings>(AppStore.getSettings(currentCompany.id));
+  const [segmentConfig, setSegmentConfig] = useState<SegmentCustomization>(AppStore.getSegmentConfig(currentCompany.id));
   const [searchFilter, setSearchFilter] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('ALL');
   
   // Create / Edit Model Modal
   const [showModal, setShowModal] = useState(false);
@@ -39,6 +41,7 @@ export default function CartridgeModelsPage() {
   // Form State
   const [brandName, setBrandName] = useState('HP');
   const [modelName, setModelName] = useState('');
+  const [category, setCategory] = useState('');
   const [color, setColor] = useState('Preto');
   const [isXl, setIsXl] = useState(false);
   const [capacityMl, setCapacityMl] = useState('');
@@ -61,8 +64,10 @@ export default function CartridgeModelsPage() {
   const loadData = () => {
     const mods = AppStore.getModels(currentCompany.id);
     const sets = AppStore.getSettings(currentCompany.id);
+    const seg = AppStore.getSegmentConfig(currentCompany.id);
     setModels(mods);
     setSettings(sets);
+    setSegmentConfig(seg);
     setGlobalRefill(sets.default_refill_price || 30.00);
     setGlobalRefillXl(sets.default_refill_xl_price || 45.00);
     setGlobalVerification(sets.default_verification_price || 15.00);
@@ -80,17 +85,31 @@ export default function CartridgeModelsPage() {
 
   if (!currentUser) return null;
 
-  const filtered = models.filter(m => 
-    m.model_name.toLowerCase().includes(searchFilter.toLowerCase()) ||
-    m.brand_name?.toLowerCase().includes(searchFilter.toLowerCase()) ||
-    m.color.toLowerCase().includes(searchFilter.toLowerCase())
+  const categoriesAvailable = Array.from(
+    new Set([
+      ...segmentConfig.defaultCategories,
+      ...models.map(m => m.category).filter(Boolean) as string[]
+    ])
   );
+
+  const filtered = models.filter(m => {
+    const matchesSearch = 
+      m.model_name.toLowerCase().includes(searchFilter.toLowerCase()) ||
+      m.brand_name?.toLowerCase().includes(searchFilter.toLowerCase()) ||
+      (m.category && m.category.toLowerCase().includes(searchFilter.toLowerCase())) ||
+      m.color.toLowerCase().includes(searchFilter.toLowerCase());
+
+    const matchesCategory = categoryFilter === 'ALL' || m.category === categoryFilter;
+
+    return matchesSearch && matchesCategory;
+  });
 
   // Open Add Model
   const handleOpenAdd = () => {
     setEditingModelId(null);
-    setBrandName('HP');
+    setBrandName(segmentConfig.segment === 'ASSISTENCIA_CELULARES_INFORMATICA' ? 'Apple' : segmentConfig.segment === 'FERRAMENTAS_MOTORES' ? 'Makita' : 'HP');
     setModelName('');
+    setCategory(segmentConfig.defaultCategories[0] || '');
     setColor('Preto');
     setIsXl(false);
     setCapacityMl('');
@@ -106,8 +125,9 @@ export default function CartridgeModelsPage() {
   // Open Edit Model
   const handleOpenEdit = (mod: CartridgeModel) => {
     setEditingModelId(mod.id);
-    setBrandName(mod.brand_name || 'HP');
+    setBrandName(mod.brand_name || 'Geral');
     setModelName(mod.model_name);
+    setCategory(mod.category || '');
     setColor(mod.color);
     setIsXl(mod.is_xl);
     setCapacityMl(mod.capacity_ml?.toString() || '');
@@ -129,6 +149,7 @@ export default function CartridgeModelsPage() {
       AppStore.updateModel(editingModelId, {
         brand_name: brandName,
         model_name: modelName,
+        category: category || undefined,
         color,
         is_xl: isXl,
         capacity_ml: capacityMl ? Number(capacityMl) : undefined,
@@ -144,6 +165,7 @@ export default function CartridgeModelsPage() {
         tenant_id: currentCompany.id,
         brand_name: brandName,
         model_name: modelName,
+        category: category || undefined,
         color,
         is_xl: isXl,
         capacity_ml: capacityMl ? Number(capacityMl) : undefined,
@@ -358,7 +380,44 @@ export default function CartridgeModelsPage() {
         </Card>
       )}
 
-      {/* Grid of Cartridge Models */}
+      {/* Category Pills Filter */}
+      {categoriesAvailable.length > 0 && (
+        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+          <button
+            type="button"
+            onClick={() => setCategoryFilter('ALL')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors ${
+              categoryFilter === 'ALL'
+                ? 'bg-slate-900 text-white dark:bg-emerald-600 shadow-sm'
+                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+            }`}
+          >
+            Todas as Categorias ({models.length})
+          </button>
+          {categoriesAvailable.map((cat, i) => {
+            const count = models.filter(m => m.category === cat).length;
+            return (
+              <button
+                key={i}
+                type="button"
+                onClick={() => setCategoryFilter(cat)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+                  categoryFilter === cat
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-emerald-300'
+                }`}
+              >
+                <span>{cat}</span>
+                <span className="text-[10px] opacity-80 px-1 py-0.2 rounded-full bg-black/10 dark:bg-white/20">
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Grid of Models */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filtered.map(mod => {
           const modRefill = mod.refill_price ?? globalRefill;
@@ -370,16 +429,23 @@ export default function CartridgeModelsPage() {
               <div>
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
-                    <Badge variant="outline" className="font-bold text-xs bg-slate-100 text-slate-800 border-slate-300">
+                    <Badge variant="outline" className="font-bold text-xs bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-slate-300 dark:border-slate-700">
                       {mod.brand_name || 'Fabricante N/I'}
                     </Badge>
-                    {mod.is_xl && <Badge className="bg-purple-700 text-white font-bold text-[10px]">XL Alta Cap.</Badge>}
+                    <div className="flex items-center gap-1.5">
+                      {mod.category && (
+                        <Badge className="bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 font-semibold text-[10px]">
+                          {mod.category}
+                        </Badge>
+                      )}
+                      {mod.is_xl && <Badge className="bg-purple-700 text-white font-bold text-[10px]">XL Alta Cap.</Badge>}
+                    </div>
                   </div>
                   <CardTitle className="text-base font-bold mt-2 text-slate-900 dark:text-slate-100">
                     {mod.model_name}
                   </CardTitle>
                   <CardDescription className="text-xs">
-                    Cor: <strong className="text-slate-800 dark:text-slate-200">{mod.color}</strong>
+                    {mod.color ? <span>Cor/Tipo: <strong className="text-slate-800 dark:text-slate-200">{mod.color}</strong></span> : null}
                   </CardDescription>
                 </CardHeader>
 
@@ -387,11 +453,11 @@ export default function CartridgeModelsPage() {
                   {/* Pricing Box */}
                   <div className="p-3 bg-emerald-50/50 dark:bg-emerald-950/20 rounded-xl space-y-1.5 border border-emerald-200 dark:border-emerald-800/60">
                     <div className="flex justify-between items-center">
-                      <span className="text-slate-600 dark:text-slate-400 font-medium">Preço de Recarga:</span>
+                      <span className="text-slate-600 dark:text-slate-400 font-medium">{segmentConfig.serviceLabel}:</span>
                       <span className="font-bold text-emerald-700 dark:text-emerald-400 text-sm">{formatCurrency(modRefill)}</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-slate-600 dark:text-slate-400 font-medium">Taxa de Verificação:</span>
+                      <span className="text-slate-600 dark:text-slate-400 font-medium">Diagnóstico / Triagem:</span>
                       <span className="font-semibold text-slate-800 dark:text-slate-200">{formatCurrency(modVerif)}</span>
                     </div>
                     <div className="flex justify-between items-center">
@@ -400,21 +466,23 @@ export default function CartridgeModelsPage() {
                     </div>
                   </div>
 
-                  {/* Weights info */}
-                  <div className="p-2.5 bg-slate-50 dark:bg-slate-800 rounded-lg space-y-1 text-[11px] border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300">
-                    <div className="flex justify-between">
-                      <span>Capacidade:</span>
-                      <strong>{mod.capacity_ml ? `${mod.capacity_ml} ml` : 'N/I'}</strong>
+                  {/* Weights info for Cartridges */}
+                  {segmentConfig.hasWeightInspection && (
+                    <div className="p-2.5 bg-slate-50 dark:bg-slate-800 rounded-lg space-y-1 text-[11px] border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300">
+                      <div className="flex justify-between">
+                        <span>Capacidade:</span>
+                        <strong>{mod.capacity_ml ? `${mod.capacity_ml} ml` : 'N/I'}</strong>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Peso Vazio Médio:</span>
+                        <span>{mod.empty_weight_grams ? `${mod.empty_weight_grams} g` : 'N/I'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Peso Cheio Ideal:</span>
+                        <strong className="text-emerald-600">{mod.full_weight_grams ? `${mod.full_weight_grams} g` : 'N/I'}</strong>
+                      </div>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Peso Vazio Médio:</span>
-                      <span>{mod.empty_weight_grams ? `${mod.empty_weight_grams} g` : 'N/I'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Peso Cheio Ideal:</span>
-                      <strong className="text-emerald-600">{mod.full_weight_grams ? `${mod.full_weight_grams} g` : 'N/I'}</strong>
-                    </div>
-                  </div>
+                  )}
 
                   {mod.technical_notes && (
                     <p className="text-slate-500 italic text-[11px] bg-amber-50 dark:bg-amber-950/20 p-2 rounded border border-amber-200 dark:border-amber-800/40">
@@ -427,13 +495,13 @@ export default function CartridgeModelsPage() {
               {hasPermission('manage_models') && (
                 <div className="p-3 pt-0 border-t border-slate-100 dark:border-slate-800 flex justify-end">
                   <Button 
-                    variant="outline" 
                     size="sm" 
-                    onClick={() => handleOpenEdit(mod)}
-                    className="text-xs gap-1.5 h-7 text-slate-700 dark:text-slate-300"
+                    variant="outline" 
+                    onClick={() => handleOpenEdit(mod)} 
+                    className="text-xs gap-1.5 h-8 font-semibold"
                   >
-                    <Edit3 className="w-3 h-3" />
-                    <span>Editar Dados & Preços</span>
+                    <Edit3 className="w-3.5 h-3.5" />
+                    <span>Editar Item & Preços</span>
                   </Button>
                 </div>
               )}
@@ -442,14 +510,14 @@ export default function CartridgeModelsPage() {
         })}
       </div>
 
-      {/* Model Creation & Edit Modal */}
+      {/* Modal Create / Edit */}
       {showModal && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 w-full max-w-lg p-4 sm:p-6 shadow-2xl space-y-4 max-h-[92vh] flex flex-col overflow-hidden">
             <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800 shrink-0">
               <div>
                 <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
-                  {editingModelId ? 'Editar Modelo & Preços' : 'Cadastrar Novo Modelo'}
+                  {editingModelId ? `Editar ${segmentConfig.itemLabelSingular}` : `Cadastrar Novo ${segmentConfig.itemLabelSingular}`}
                 </h3>
                 <p className="text-xs text-slate-500">Defina especificações técnicas e valores individuais</p>
               </div>
@@ -459,86 +527,102 @@ export default function CartridgeModelsPage() {
             </div>
 
             <form onSubmit={handleSaveModel} className="space-y-3 flex-1 overflow-y-auto pr-1">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="text-xs font-semibold mb-1 block">Fabricante *</label>
-                  <Select value={brandName} onChange={e => setBrandName(e.target.value)} className="text-xs">
-                    <option value="HP">HP</option>
-                    <option value="Canon">Canon</option>
-                    <option value="Epson">Epson</option>
-                    <option value="Brother">Brother</option>
-                    <option value="Lexmark">Lexmark</option>
-                  </Select>
+                  <label className="text-xs font-semibold mb-1 block">Marca / Fabricante *</label>
+                  <Input 
+                    required 
+                    placeholder="Ex: Apple, HP, Bosch..." 
+                    value={brandName} 
+                    onChange={e => setBrandName(e.target.value)} 
+                    className="text-xs font-semibold" 
+                  />
                 </div>
 
-                <div>
-                  <label className="text-xs font-semibold mb-1 block">Nome do Modelo *</label>
-                  <Input required placeholder="Ex: HP 664, Canon PG-145" value={modelName} onChange={e => setModelName(e.target.value)} className="text-xs font-semibold" />
+                <div className="sm:col-span-2">
+                  <label className="text-xs font-semibold mb-1 block">Nome do Modelo / Item *</label>
+                  <Input 
+                    required 
+                    placeholder="Ex: iPhone 13, Furadeira HP1640..." 
+                    value={modelName} 
+                    onChange={e => setModelName(e.target.value)} 
+                    className="text-xs font-semibold" 
+                  />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-semibold mb-1 block">Cor *</label>
-                  <Select value={color} onChange={e => setColor(e.target.value)} className="text-xs">
-                    <option value="Preto">Preto</option>
-                    <option value="Colorido">Colorido</option>
-                    <option value="Ciano">Ciano</option>
-                    <option value="Magenta">Magenta</option>
-                    <option value="Amarelo">Amarelo</option>
-                  </Select>
+                  <label className="text-xs font-semibold mb-1 block">Categoria</label>
+                  <Input
+                    placeholder="Ex: Smartphones, Furadeiras..."
+                    value={category}
+                    onChange={e => setCategory(e.target.value)}
+                    list="category-suggestions"
+                    className="text-xs"
+                  />
+                  <datalist id="category-suggestions">
+                    {categoriesAvailable.map((c, i) => (
+                      <option key={i} value={c} />
+                    ))}
+                  </datalist>
                 </div>
 
-                <div className="flex items-center pt-2 sm:pt-5">
-                  <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer">
-                    <input type="checkbox" checked={isXl} onChange={e => setIsXl(e.target.checked)} className="w-4 h-4 rounded text-emerald-600" />
-                    <span>Alta Capacidade (XL)</span>
-                  </label>
+                <div>
+                  <label className="text-xs font-semibold mb-1 block">Cor / Variante</label>
+                  <Input 
+                    placeholder="Ex: Preto, Azul, Cinza..." 
+                    value={color} 
+                    onChange={e => setColor(e.target.value)} 
+                    className="text-xs" 
+                  />
                 </div>
               </div>
 
-              {/* Specific Pricing Per Cartridge */}
+              {/* Specific Pricing Per Item */}
               <div className="p-3 bg-emerald-50/60 dark:bg-emerald-950/20 rounded-xl border border-emerald-200 dark:border-emerald-800/60 space-y-2">
                 <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 block">
-                  Tabela de Preços Deste Cartucho:
+                  Tabela de Preços Deste {segmentConfig.itemLabelSingular}:
                 </span>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <div>
-                    <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-0.5 block">Preço Recarga (R$)</label>
+                    <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-0.5 block">Serviço Padrão (R$)</label>
                     <Input type="number" step="0.50" required value={refillPrice} onChange={e => setRefillPrice(e.target.value)} className="text-xs font-bold text-emerald-700" />
                   </div>
                   <div>
-                    <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-0.5 block">Verificação (R$)</label>
+                    <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-0.5 block">Diagnóstico (R$)</label>
                     <Input type="number" step="0.50" required value={verificationPrice} onChange={e => setVerificationPrice(e.target.value)} className="text-xs font-bold" />
                   </div>
                   <div>
-                    <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-0.5 block">Teste Impressão (R$)</label>
+                    <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-0.5 block">Teste / Laudo (R$)</label>
                     <Input type="number" step="0.50" required value={testPrice} onChange={e => setTestPrice(e.target.value)} className="text-xs font-bold" />
                   </div>
                 </div>
               </div>
 
-              {/* Weights */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
-                <div>
-                  <label className="text-xs font-semibold mb-1 block">Capacidade (ml)</label>
-                  <Input type="number" step="0.5" placeholder="Ex: 8.5" value={capacityMl} onChange={e => setCapacityMl(e.target.value)} className="text-xs" />
+              {/* Weights for Scale inspection */}
+              {segmentConfig.hasWeightInspection && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
+                  <div>
+                    <label className="text-xs font-semibold mb-1 block">Capacidade (ml)</label>
+                    <Input type="number" step="0.5" placeholder="Ex: 8.5" value={capacityMl} onChange={e => setCapacityMl(e.target.value)} className="text-xs" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold mb-1 block">Peso Vazio (g)</label>
+                    <Input type="number" step="0.1" placeholder="Ex: 27.5" value={emptyWeight} onChange={e => setEmptyWeight(e.target.value)} className="text-xs" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold mb-1 block">Peso Cheio (g)</label>
+                    <Input type="number" step="0.1" placeholder="Ex: 33.5" value={fullWeight} onChange={e => setFullWeight(e.target.value)} className="text-xs" />
+                  </div>
                 </div>
-                <div>
-                  <label className="text-xs font-semibold mb-1 block">Peso Vazio (g)</label>
-                  <Input type="number" step="0.1" placeholder="Ex: 27.5" value={emptyWeight} onChange={e => setEmptyWeight(e.target.value)} className="text-xs" />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold mb-1 block">Peso Cheio (g)</label>
-                  <Input type="number" step="0.1" placeholder="Ex: 33.5" value={fullWeight} onChange={e => setFullWeight(e.target.value)} className="text-xs" />
-                </div>
-              </div>
+              )}
 
               <div>
                 <label className="text-xs font-semibold mb-1 block">Observações Técnicas</label>
                 <textarea
                   className="w-full h-16 p-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg outline-none"
-                  placeholder="Dicas de desentupimento, compatibilidade de chip..."
+                  placeholder="Dicas de reparo, compatibilidade de peças, tensão elétrica..."
                   value={techNotes}
                   onChange={e => setTechNotes(e.target.value)}
                 />
@@ -549,7 +633,7 @@ export default function CartridgeModelsPage() {
                   Cancelar
                 </Button>
                 <Button type="submit" size="sm" className="bg-emerald-600 hover:bg-emerald-700 font-bold text-white">
-                  {editingModelId ? 'Salvar Alterações' : 'Salvar Novo Modelo'}
+                  {editingModelId ? 'Salvar Alterações' : 'Salvar Novo Item'}
                 </Button>
               </div>
             </form>
