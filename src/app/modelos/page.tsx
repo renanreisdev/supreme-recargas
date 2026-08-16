@@ -127,6 +127,8 @@ export default function CatalogAndModelsPage() {
 
   // Category Technical Verdicts / Resultados
   const [catTechnicalVerdicts, setCatTechnicalVerdicts] = useState<string[]>([]);
+  const [editingVerdictIndex, setEditingVerdictIndex] = useState<number | null>(null);
+  const [editingVerdictOldText, setEditingVerdictOldText] = useState<string | null>(null);
   const [newVerdictInput, setNewVerdictInput] = useState('');
 
   // ==========================================
@@ -531,13 +533,62 @@ export default function CatalogAndModelsPage() {
     setCatChecklistItems(catChecklistItems.filter((_, i) => i !== index));
   };
 
-  // Technical verdicts handlers
-  const handleAddTechnicalVerdict = () => {
-    if (!newVerdictInput.trim()) return;
-    if (!catTechnicalVerdicts.includes(newVerdictInput.trim())) {
-      setCatTechnicalVerdicts([...catTechnicalVerdicts, newVerdictInput.trim()]);
-    }
+  // Technical verdicts handlers (Editing, Reordering, Usage checks)
+  const handleStartEditTechnicalVerdict = (index: number) => {
+    setEditingVerdictIndex(index);
+    setEditingVerdictOldText(catTechnicalVerdicts[index]);
+    setNewVerdictInput(catTechnicalVerdicts[index]);
+  };
+
+  const handleCancelEditTechnicalVerdict = () => {
+    setEditingVerdictIndex(null);
+    setEditingVerdictOldText(null);
     setNewVerdictInput('');
+  };
+
+  const handleSaveTechnicalVerdict = () => {
+    if (!newVerdictInput.trim()) return;
+    const newVal = newVerdictInput.trim();
+
+    if (editingVerdictIndex !== null) {
+      const oldVal = editingVerdictOldText || catTechnicalVerdicts[editingVerdictIndex];
+
+      // If name changed, check if it is being used in any Kanban/OS item
+      if (newVal !== oldVal) {
+        const orders = AppStore.getServiceOrders(currentCompany.id);
+        let usedCount = 0;
+        orders.forEach(ord => {
+          ord.items?.forEach(item => {
+            if (item.result_code === oldVal || item.result_description === oldVal) {
+              usedCount++;
+            }
+          });
+        });
+
+        if (usedCount > 0) {
+          const confirmed = confirm(
+            `Atenção: O parecer técnico "${oldVal}" está sendo utilizado em ${usedCount} item(ns) no Kanban/Ordens de Serviço.\n\nDeseja realmente salvar a alteração para "${newVal}"?`
+          );
+          if (!confirmed) return;
+        }
+      }
+
+      const updated = [...catTechnicalVerdicts];
+      updated[editingVerdictIndex] = newVal;
+      setCatTechnicalVerdicts(updated);
+      setEditingVerdictIndex(null);
+      setEditingVerdictOldText(null);
+      setNewVerdictInput('');
+      showToast(`Parecer técnico atualizado para "${newVal}"!`);
+    } else {
+      if (catTechnicalVerdicts.includes(newVal)) {
+        showToast('Este parecer técnico já está cadastrado nesta categoria.', 'error');
+        return;
+      }
+      setCatTechnicalVerdicts([...catTechnicalVerdicts, newVal]);
+      setNewVerdictInput('');
+      showToast(`Parecer técnico "${newVal}" adicionado!`);
+    }
   };
 
   const handleRemoveTechnicalVerdict = (index: number) => {
@@ -545,7 +596,37 @@ export default function CatalogAndModelsPage() {
       showToast('A categoria deve ter pelo menos 1 parecer técnico cadastrado.', 'error');
       return;
     }
+
+    const verdictText = catTechnicalVerdicts[index];
+    const orders = AppStore.getServiceOrders(currentCompany.id);
+    let usedCount = 0;
+    orders.forEach(ord => {
+      ord.items?.forEach(item => {
+        if (item.result_code === verdictText || item.result_description === verdictText) {
+          usedCount++;
+        }
+      });
+    });
+
+    if (usedCount > 0) {
+      alert(`Não é possível excluir o parecer técnico "${verdictText}" pois ele está registrado em ${usedCount} item(ns) no Kanban/Ordens de Serviço.`);
+      return;
+    }
+
     setCatTechnicalVerdicts(catTechnicalVerdicts.filter((_, i) => i !== index));
+    if (editingVerdictIndex === index) {
+      handleCancelEditTechnicalVerdict();
+    }
+    showToast(`Parecer "${verdictText}" removido.`);
+  };
+
+  const handleMoveTechnicalVerdict = (index: number, direction: 'UP' | 'DOWN') => {
+    const targetIndex = direction === 'UP' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= catTechnicalVerdicts.length) return;
+    const updated = [...catTechnicalVerdicts];
+    const [moved] = updated.splice(index, 1);
+    updated.splice(targetIndex, 0, moved);
+    setCatTechnicalVerdicts(updated);
   };
 
   // Edit / Add custom optional specification field to category
@@ -2378,8 +2459,23 @@ export default function CatalogAndModelsPage() {
                   <span className="text-[11px] text-slate-400 font-bold">{catTechnicalVerdicts.length} opções</span>
                 </div>
                 <p className="text-[11px] text-slate-400">
-                  Configure os pareceres técnicos que o técnico poderá escolher na bancada para equipamentos desta categoria.
+                  Configure e ordene os pareceres técnicos que o técnico poderá escolher na bancada para equipamentos desta categoria. O primeiro item da lista será o padrão inicial.
                 </p>
+
+                {editingVerdictIndex !== null && (
+                  <div className="flex items-center justify-between p-2 bg-emerald-50 dark:bg-emerald-950/40 rounded-lg border border-emerald-200 dark:border-emerald-800 text-xs">
+                    <span className="text-emerald-800 dark:text-emerald-200 font-bold">
+                      ✏️ Editando parecer #{editingVerdictIndex + 1}: &quot;{editingVerdictOldText}&quot;
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleCancelEditTechnicalVerdict}
+                      className="text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 underline"
+                    >
+                      Cancelar Edição
+                    </button>
+                  </div>
+                )}
 
                 <div className="flex gap-2">
                   <Input
@@ -2388,31 +2484,111 @@ export default function CatalogAndModelsPage() {
                     onKeyDown={e => {
                       if (e.key === 'Enter') {
                         e.preventDefault();
-                        handleAddTechnicalVerdict();
+                        handleSaveTechnicalVerdict();
                       }
                     }}
                     placeholder="Ex: 100% OK / Concluído, Circuito Queimado, Sem Reparo..."
                     className="text-xs h-8"
                   />
-                  <Button type="button" size="sm" onClick={handleAddTechnicalVerdict} className="bg-emerald-600 text-white text-xs font-bold shrink-0 h-8">
-                    + Adicionar Parecer
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={handleSaveTechnicalVerdict}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shrink-0 h-8 gap-1"
+                  >
+                    {editingVerdictIndex !== null ? (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        Salvar Parecer
+                      </>
+                    ) : (
+                      <>
+                        <PlusCircle className="w-3.5 h-3.5" />
+                        Adicionar Parecer
+                      </>
+                    )}
                   </Button>
                 </div>
 
-                <div className="space-y-1.5 max-h-36 overflow-y-auto bg-slate-50 dark:bg-slate-800/40 p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800">
-                  {catTechnicalVerdicts.map((verdict, idx) => (
-                    <div key={idx} className="flex items-center justify-between gap-2 bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-200 dark:border-slate-800 text-xs">
-                      <span className="text-slate-700 dark:text-slate-300 font-medium">📋 {verdict}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveTechnicalVerdict(idx)}
-                        className="text-slate-400 hover:text-rose-600 p-1"
-                        title="Remover parecer"
+                <div className="space-y-1.5 max-h-48 overflow-y-auto bg-slate-50 dark:bg-slate-800/40 p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800">
+                  {catTechnicalVerdicts.map((verdict, idx) => {
+                    const isFirst = idx === 0;
+                    const isLast = idx === catTechnicalVerdicts.length - 1;
+                    const isEditing = editingVerdictIndex === idx;
+
+                    return (
+                      <div
+                        key={idx}
+                        className={cn(
+                          "flex items-center justify-between gap-2 p-2 rounded-lg border text-xs transition-colors",
+                          isEditing
+                            ? "bg-emerald-50 dark:bg-emerald-950/50 border-emerald-400 dark:border-emerald-700"
+                            : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+                        )}
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-0.5">
+                            <button
+                              type="button"
+                              onClick={() => handleMoveTechnicalVerdict(idx, 'UP')}
+                              disabled={isFirst}
+                              className={cn(
+                                "p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200",
+                                isFirst ? "opacity-20 cursor-not-allowed" : "hover:bg-slate-100 dark:hover:bg-slate-800"
+                              )}
+                              title="Mover para cima"
+                            >
+                              <ArrowUp className="w-3 h-3" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleMoveTechnicalVerdict(idx, 'DOWN')}
+                              disabled={isLast}
+                              className={cn(
+                                "p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200",
+                                isLast ? "opacity-20 cursor-not-allowed" : "hover:bg-slate-100 dark:hover:bg-slate-800"
+                              )}
+                              title="Mover para baixo"
+                            >
+                              <ArrowDown className="w-3 h-3" />
+                            </button>
+                          </div>
+
+                          <span className="text-[10px] font-mono font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
+                            #{idx + 1}
+                          </span>
+
+                          <span className="text-slate-800 dark:text-slate-200 font-semibold flex items-center gap-1.5">
+                            📋 {verdict}
+                            {isFirst && (
+                              <Badge className="bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-[9px] px-1 py-0">
+                                Padrão Inicial
+                              </Badge>
+                            )}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleStartEditTechnicalVerdict(idx)}
+                            className="p-1 rounded text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 transition-colors"
+                            title="Editar parecer"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveTechnicalVerdict(idx)}
+                            className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors"
+                            title="Excluir parecer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
