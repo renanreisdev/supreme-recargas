@@ -16,7 +16,8 @@ import {
   UserCheck,
   Building2,
   Wrench,
-  Inbox
+  Inbox,
+  Crown
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { Button } from '@/components/ui/button';
