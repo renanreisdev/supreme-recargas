@@ -24,10 +24,16 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUserState] = useState<Profile | null>(null);
-  const [currentCompany] = useState<Company>(MOCK_COMPANY_SUPREME);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
   const pathname = usePathname();
+
+  const currentCompany: Company = React.useMemo(() => {
+    if (currentUser?.tenant_id) {
+      return AppStore.getCompany(currentUser.tenant_id);
+    }
+    return MOCK_COMPANY_SUPREME;
+  }, [currentUser]);
 
   // Load session from localStorage on boot
   useEffect(() => {
@@ -36,10 +42,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const stored = localStorage.getItem(AUTH_STORAGE_KEY);
         if (stored) {
           const parsed: Profile = JSON.parse(stored);
-          const users = AppStore.getUsers(parsed.tenant_id || currentCompany.id);
+          const users = AppStore.getUsers(parsed.tenant_id || '');
           const fresh = users.find(u => u.id === parsed.id) || parsed;
           if (fresh && fresh.is_active !== false) {
             setCurrentUserState(fresh);
+            if (fresh.tenant_id) {
+              AppStore.initRealtime(fresh.tenant_id);
+            }
           } else {
             localStorage.removeItem(AUTH_STORAGE_KEY);
           }
@@ -50,13 +59,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, [currentCompany.id]);
+  }, []);
 
   const setCurrentUser = (user: Profile | null) => {
     setCurrentUserState(user);
     if (typeof window !== 'undefined') {
       if (user) {
         localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
+        if (user.tenant_id) {
+          AppStore.initRealtime(user.tenant_id);
+        }
       } else {
         localStorage.removeItem(AUTH_STORAGE_KEY);
       }

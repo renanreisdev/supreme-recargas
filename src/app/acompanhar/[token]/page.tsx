@@ -41,9 +41,12 @@ export default function PublicTrackingPage() {
       const found = AppStore.getEntryByToken(token);
       if (found) {
         setEntry(found);
+        const st = AppStore.getCompany(found.tenant_id);
+        if (st) setCompany(st);
+      } else {
+        const st = AppStore.getCompany();
+        if (st) setCompany(st);
       }
-      const st = AppStore.getCompany();
-      if (st) setCompany(st);
     }
   };
 
