@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
 import { 
   Crown, 
   Building2, 
@@ -28,10 +29,14 @@ import {
   Copy,
   Sliders,
   TrendingUp,
-  Award
+  Award,
+  KeyRound,
+  ExternalLink,
+  Inbox,
+  Wrench
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
-import { AppStore } from '@/lib/store';
+import { AppStore, DemoSandboxConfig } from '@/lib/store';
 import { formatCurrency, formatDate, getRoleBadgeConfig, cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -44,7 +49,7 @@ export default function SuperAdminPage() {
   const { currentUser } = useAuth();
 
   // State
-  const [activeTab, setActiveTab] = useState<'tenants' | 'plans' | 'users' | 'calculator'>('tenants');
+  const [activeTab, setActiveTab] = useState<'tenants' | 'plans' | 'users' | 'calculator' | 'demo'>('tenants');
   const [companies, setCompanies] = useState<Company[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
@@ -52,6 +57,8 @@ export default function SuperAdminPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'PAUSED'>('ALL');
   const [overview, setOverview] = useState<any>(null);
+  const [sandbox, setSandbox] = useState<DemoSandboxConfig | null>(null);
+  const [demoCopied, setDemoCopied] = useState(false);
 
   // Modals
   const [showAddTenantModal, setShowAddTenantModal] = useState(false);
@@ -134,12 +141,14 @@ export default function SuperAdminPage() {
     const sList = AppStore.getSubscriptions();
     const uList = AppStore.getAllProfiles();
     const ov = AppStore.getPlatformOverview();
+    const demoCfg = AppStore.getDemoSandboxConfig();
 
     setCompanies(cList);
     setPlans(pList);
     setSubscriptions(sList);
     setAllUsers(uList);
     setOverview(ov);
+    setSandbox(demoCfg);
 
     if (pList.length > 0 && !newPlanId) {
       setNewPlanId(pList[0].id);
@@ -147,6 +156,40 @@ export default function SuperAdminPage() {
     if (pList.length > 0 && !calcPlanId) {
       setCalcPlanId(pList[0].id);
     }
+  };
+
+  const handleForceResetDemo = () => {
+    try {
+      const updated = AppStore.resetDemoSandbox(currentUser?.full_name || 'Super Administrador');
+      setSandbox(updated);
+      loadPlatformData();
+      showToast('Ambiente Demo resetado com sucesso! Novas senhas semanais geradas e usuários extras removidos.');
+    } catch (err: any) {
+      showToast(err?.message || 'Erro ao resetar demo.', 'error');
+    }
+  };
+
+  const copyDemoCredentialsToClipboard = () => {
+    if (!sandbox) return;
+    const text = `*ACESSO AO AMBIENTE DE DEMONSTRAÇÃO - SUPREME RECARGAS* 🚀
+Olá! Conforme solicitado, aqui estão os dados para você testar nosso sistema de recargas:
+
+🔗 *Link do Ambiente de Teste:* https://supreme-recargas.vercel.app/demo
+🏢 *Empresa de Demonstração:* Supreme Informática
+
+🔑 *SENHAS DESTA SEMANA:*
+• *Administrador Geral (Dono):* admin@supreme.com.br
+  Senha: ${sandbox.passwords.admin}
+• *Atendente de Balcão:* mariana.atendente@supreme.com.br
+  Senha: ${sandbox.passwords.attendant}
+• *Técnico de Oficina:* rafael.tecnico@supreme.com.br
+  Senha: ${sandbox.passwords.technician}
+
+💡 *Dica:* Na página de demonstração, você pode clicar nos botões de 1-Clique para entrar direto em qualquer um dos 3 perfis!`;
+
+    navigator.clipboard.writeText(text);
+    setDemoCopied(true);
+    setTimeout(() => setDemoCopied(false), 2500);
   };
 
   useEffect(() => {
@@ -699,6 +742,19 @@ Incluso: Emissão com QR Code, Bancada Técnica, Rastreio e Impressão Térmica.
         >
           <Calculator className="w-4 h-4" />
           <span>Simulador de Propostas SaaS</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('demo')}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all",
+            activeTab === 'demo'
+              ? "border-emerald-600 text-emerald-600 dark:text-emerald-400"
+              : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+          )}
+        >
+          <Sparkles className="w-4 h-4 text-emerald-500" />
+          <span>Ambiente Demo Sandbox</span>
         </button>
       </div>
 
@@ -1283,6 +1339,275 @@ Incluso: Emissão com QR Code, Bancada Técnica, Rastreio e Impressão Térmica.
               </CardContent>
             </Card>
           </div>
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* TAB 5: AMBIENTE DEMO SANDBOX (SENHAS SEMANAIS & PURGE)                */}
+      {/* ===================================================================== */}
+      {activeTab === 'demo' && (
+        <div className="space-y-6">
+          {/* Header Sandbox Card */}
+          <div className="bg-gradient-to-r from-emerald-950 via-slate-900 to-teal-950 p-6 rounded-2xl border border-emerald-800/40 text-white shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="space-y-1.5 max-w-2xl">
+              <div className="flex items-center gap-2">
+                <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                  Ambiente Demo Sandbox Ativo
+                </span>
+                <Badge className="bg-slate-800 text-slate-300 text-[10px]">Empresa Modelo: Supreme Informática</Badge>
+              </div>
+              <h2 className="text-xl font-bold text-white">Gestão das Senhas Semanais & Limpeza Automática</h2>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Este ambiente é utilizado por potenciais clientes para testar o sistema. A cada <strong>7 dias</strong> o sistema gera automaticamente novas senhas para os 6 perfis fixos (1 Admin, 3 Atendentes, 2 Técnicos) e exclui quaisquer operadores extras criados durante os testes.
+              </p>
+              {sandbox?.nextResetAt && (
+                <div className="flex items-center gap-4 text-xs text-emerald-300/80 font-mono pt-1">
+                  <span>Último Reset: {formatDate(sandbox.lastResetAt)}</span>
+                  <span>•</span>
+                  <span>Próximo Reset Semanal: {formatDate(sandbox.nextResetAt)}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="flex flex-wrap md:flex-col gap-2 shrink-0">
+              <Button
+                onClick={handleForceResetDemo}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs gap-1.5 shadow-lg shadow-emerald-950/40"
+              >
+                <RefreshCw className="w-4 h-4" />
+                <span>Forçar Reset da Demo Agora</span>
+              </Button>
+              <Button
+                onClick={copyDemoCredentialsToClipboard}
+                variant="outline"
+                className="bg-slate-900 hover:bg-slate-800 border-emerald-600/50 text-emerald-300 font-bold text-xs gap-1.5"
+              >
+                {demoCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                <span>{demoCopied ? 'Copiado para WhatsApp!' : 'Copiar Acesso para WhatsApp'}</span>
+              </Button>
+              <a href="/demo" target="_blank" rel="noopener noreferrer">
+                <Button
+                  variant="outline"
+                  className="w-full bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-300 font-bold text-xs gap-1.5"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  <span>Abrir Página /demo</span>
+                </Button>
+              </a>
+            </div>
+          </div>
+
+          {/* 3 Active Password Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Admin Password Card */}
+            <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm">
+              <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                    <Crown className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-xs font-bold">Administrador (1 Fixo)</CardTitle>
+                    <CardDescription className="text-[10px]">Carlos Oliveira</CardDescription>
+                  </div>
+                </div>
+                <Badge className="bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 text-[10px]">
+                  Admin
+                </Badge>
+              </CardHeader>
+              <CardContent className="p-4 pt-2 space-y-3">
+                <div className="p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1">
+                  <span className="text-[10px] text-slate-500 uppercase font-semibold">E-mail de Acesso:</span>
+                  <p className="text-xs font-mono font-bold text-slate-900 dark:text-slate-100">admin@supreme.com.br</p>
+                  <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] text-slate-500 uppercase font-semibold">Senha Desta Semana:</span>
+                      <p className="text-sm font-mono font-black text-purple-600 dark:text-purple-400">
+                        {sandbox?.passwords?.admin || 'demo-adm-842'}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        navigator.clipboard.writeText(sandbox?.passwords?.admin || 'demo-adm-842');
+                        showToast('Senha do Administrador copiada!');
+                      }}
+                      className="h-7 px-2 text-slate-400 hover:text-purple-400"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Attendants Password Card */}
+            <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm">
+              <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-teal-100 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 flex items-center justify-center">
+                    <Inbox className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-xs font-bold">Atendentes (3 Fixos)</CardTitle>
+                    <CardDescription className="text-[10px]">Mariana, Lucas, Beatriz</CardDescription>
+                  </div>
+                </div>
+                <Badge className="bg-teal-100 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 text-[10px]">
+                  Balcão
+                </Badge>
+              </CardHeader>
+              <CardContent className="p-4 pt-2 space-y-3">
+                <div className="p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1">
+                  <span className="text-[10px] text-slate-500 uppercase font-semibold">E-mail de Exemplo:</span>
+                  <p className="text-xs font-mono font-bold text-slate-900 dark:text-slate-100">mariana.atendente@supreme.com.br</p>
+                  <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] text-slate-500 uppercase font-semibold">Senha Desta Semana:</span>
+                      <p className="text-sm font-mono font-black text-teal-600 dark:text-teal-400">
+                        {sandbox?.passwords?.attendant || 'demo-atd-193'}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        navigator.clipboard.writeText(sandbox?.passwords?.attendant || 'demo-atd-193');
+                        showToast('Senha dos Atendentes copiada!');
+                      }}
+                      className="h-7 px-2 text-slate-400 hover:text-teal-400"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Technicians Password Card */}
+            <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm">
+              <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                    <Wrench className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-xs font-bold">Técnicos (2 Fixos)</CardTitle>
+                    <CardDescription className="text-[10px]">Rafael Souza, Marcos Silva</CardDescription>
+                  </div>
+                </div>
+                <Badge className="bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 text-[10px]">
+                  Oficina
+                </Badge>
+              </CardHeader>
+              <CardContent className="p-4 pt-2 space-y-3">
+                <div className="p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1">
+                  <span className="text-[10px] text-slate-500 uppercase font-semibold">E-mail de Exemplo:</span>
+                  <p className="text-xs font-mono font-bold text-slate-900 dark:text-slate-100">rafael.tecnico@supreme.com.br</p>
+                  <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] text-slate-500 uppercase font-semibold">Senha Desta Semana:</span>
+                      <p className="text-sm font-mono font-black text-amber-600 dark:text-amber-400">
+                        {sandbox?.passwords?.technician || 'demo-tec-557'}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        navigator.clipboard.writeText(sandbox?.passwords?.technician || 'demo-tec-557');
+                        showToast('Senha dos Técnicos copiada!');
+                      }}
+                      className="h-7 px-2 text-slate-400 hover:text-amber-400"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Table of the 6 Fixed Protected Users */}
+          <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm">
+            <CardHeader className="p-4 pb-3 border-b border-slate-200 dark:border-slate-800">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                    Perfis Fixos da Conta de Demonstração (6 Usuários Imutáveis)
+                  </CardTitle>
+                  <CardDescription className="text-xs text-slate-500">
+                    Estes usuários possuem proteção nativa contra alteração de senha e exclusão por visitantes da demo.
+                  </CardDescription>
+                </div>
+                <Badge className="bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-xs">
+                  6 Usuários Fixos
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 border-b border-slate-200 dark:border-slate-800">
+                    <tr>
+                      <th className="p-3 font-semibold">Nome Completo</th>
+                      <th className="p-3 font-semibold">E-mail de Login</th>
+                      <th className="p-3 font-semibold">Perfil</th>
+                      <th className="p-3 font-semibold">Senha Ativa</th>
+                      <th className="p-3 font-semibold text-right">Proteção</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                      <td className="p-3 font-bold text-slate-900 dark:text-slate-100">Carlos Oliveira</td>
+                      <td className="p-3 text-slate-500 font-mono">admin@supreme.com.br</td>
+                      <td className="p-3"><Badge className="bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-300 text-[10px]">ADMINISTRADOR</Badge></td>
+                      <td className="p-3 font-mono font-bold text-purple-500">{sandbox?.passwords?.admin || 'demo-adm-842'}</td>
+                      <td className="p-3 text-right"><span className="text-[10px] text-emerald-600 font-bold">🔒 Fixo / Semanal</span></td>
+                    </tr>
+                    <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                      <td className="p-3 font-bold text-slate-900 dark:text-slate-100">Mariana Santos</td>
+                      <td className="p-3 text-slate-500 font-mono">mariana.atendente@supreme.com.br</td>
+                      <td className="p-3"><Badge className="bg-teal-100 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300 text-[10px]">ATENDENTE 1</Badge></td>
+                      <td className="p-3 font-mono font-bold text-teal-500">{sandbox?.passwords?.attendant || 'demo-atd-193'}</td>
+                      <td className="p-3 text-right"><span className="text-[10px] text-emerald-600 font-bold">🔒 Fixo / Semanal</span></td>
+                    </tr>
+                    <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                      <td className="p-3 font-bold text-slate-900 dark:text-slate-100">Lucas Lima</td>
+                      <td className="p-3 text-slate-500 font-mono">lucas.atendente@supreme.com.br</td>
+                      <td className="p-3"><Badge className="bg-teal-100 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300 text-[10px]">ATENDENTE 2</Badge></td>
+                      <td className="p-3 font-mono font-bold text-teal-500">{sandbox?.passwords?.attendant || 'demo-atd-193'}</td>
+                      <td className="p-3 text-right"><span className="text-[10px] text-emerald-600 font-bold">🔒 Fixo / Semanal</span></td>
+                    </tr>
+                    <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                      <td className="p-3 font-bold text-slate-900 dark:text-slate-100">Beatriz Costa</td>
+                      <td className="p-3 text-slate-500 font-mono">beatriz.atendente@supreme.com.br</td>
+                      <td className="p-3"><Badge className="bg-teal-100 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300 text-[10px]">ATENDENTE 3</Badge></td>
+                      <td className="p-3 font-mono font-bold text-teal-500">{sandbox?.passwords?.attendant || 'demo-atd-193'}</td>
+                      <td className="p-3 text-right"><span className="text-[10px] text-emerald-600 font-bold">🔒 Fixo / Semanal</span></td>
+                    </tr>
+                    <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                      <td className="p-3 font-bold text-slate-900 dark:text-slate-100">Rafael Souza</td>
+                      <td className="p-3 text-slate-500 font-mono">rafael.tecnico@supreme.com.br</td>
+                      <td className="p-3"><Badge className="bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 text-[10px]">TÉCNICO 1</Badge></td>
+                      <td className="p-3 font-mono font-bold text-amber-500">{sandbox?.passwords?.technician || 'demo-tec-557'}</td>
+                      <td className="p-3 text-right"><span className="text-[10px] text-emerald-600 font-bold">🔒 Fixo / Semanal</span></td>
+                    </tr>
+                    <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                      <td className="p-3 font-bold text-slate-900 dark:text-slate-100">Marcos Silva</td>
+                      <td className="p-3 text-slate-500 font-mono">marcos.tecnico@supreme.com.br</td>
+                      <td className="p-3"><Badge className="bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 text-[10px]">TÉCNICO 2</Badge></td>
+                      <td className="p-3 font-mono font-bold text-amber-500">{sandbox?.passwords?.technician || 'demo-tec-557'}</td>
+                      <td className="p-3 text-right"><span className="text-[10px] text-emerald-600 font-bold">🔒 Fixo / Semanal</span></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
 

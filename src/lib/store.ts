@@ -232,26 +232,60 @@ export const MOCK_SUBSCRIPTIONS: Subscription[] = [
 
 export const MOCK_SUBSCRIPTION_SUPREME: Subscription = MOCK_SUBSCRIPTIONS[0];
 
+// Fixed Demo User IDs (Protected from modification/deletion)
+export const FIXED_DEMO_USER_IDS = [
+  'd4000000-0000-0000-0000-000000000001', // Admin
+  'd4000000-0000-0000-0000-000000000002', // Atendente 1
+  'd4000000-0000-0000-0000-000000000004', // Atendente 2
+  'd4000000-0000-0000-0000-000000000005', // Atendente 3
+  'd4000000-0000-0000-0000-000000000003', // Técnico 1
+  'd4000000-0000-0000-0000-000000000006'  // Técnico 2
+];
+
+export interface DemoSandboxConfig {
+  lastResetAt: string;
+  nextResetAt: string;
+  passwords: {
+    admin: string;
+    attendant: string;
+    technician: string;
+  };
+  fixedUserIds: string[];
+}
+
+export const INITIAL_DEMO_SANDBOX: DemoSandboxConfig = {
+  lastResetAt: new Date().toISOString(),
+  nextResetAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+  passwords: {
+    admin: 'demo-adm-842',
+    attendant: 'demo-atd-193',
+    technician: 'demo-tec-557'
+  },
+  fixedUserIds: FIXED_DEMO_USER_IDS
+};
+
 // Default Profiles
 export const MOCK_PROFILES: Profile[] = [
+  // 1 Administrador Fixo da Demo
   {
     id: 'd4000000-0000-0000-0000-000000000001',
     tenant_id: MOCK_COMPANY_SUPREME.id,
-    full_name: 'Carlos Oliveira (Admin)',
+    full_name: 'Carlos Oliveira (Admin Demo)',
     email: 'admin@supreme.com.br',
-    password: 'admin123',
+    password: 'demo-adm-842',
     phone: '(11) 91111-1111',
     role: 'ADMINISTRADOR',
     is_active: true,
     created_at: '2026-01-15T00:00:00.000Z',
     company: MOCK_COMPANY_SUPREME
   },
+  // 3 Atendentes Fixos da Demo
   {
     id: 'd4000000-0000-0000-0000-000000000002',
     tenant_id: MOCK_COMPANY_SUPREME.id,
-    full_name: 'Mariana Santos (Atendente)',
-    email: 'atendente@supreme.com.br',
-    password: 'atendente123',
+    full_name: 'Mariana Santos (Atendente 1)',
+    email: 'mariana.atendente@supreme.com.br',
+    password: 'demo-atd-193',
     phone: '(11) 92222-2222',
     role: 'ATENDENTE',
     is_active: true,
@@ -259,17 +293,55 @@ export const MOCK_PROFILES: Profile[] = [
     company: MOCK_COMPANY_SUPREME
   },
   {
+    id: 'd4000000-0000-0000-0000-000000000004',
+    tenant_id: MOCK_COMPANY_SUPREME.id,
+    full_name: 'Lucas Lima (Atendente 2)',
+    email: 'lucas.atendente@supreme.com.br',
+    password: 'demo-atd-193',
+    phone: '(11) 92222-4444',
+    role: 'ATENDENTE',
+    is_active: true,
+    created_at: '2026-01-16T00:00:00.000Z',
+    company: MOCK_COMPANY_SUPREME
+  },
+  {
+    id: 'd4000000-0000-0000-0000-000000000005',
+    tenant_id: MOCK_COMPANY_SUPREME.id,
+    full_name: 'Beatriz Costa (Atendente 3)',
+    email: 'beatriz.atendente@supreme.com.br',
+    password: 'demo-atd-193',
+    phone: '(11) 92222-5555',
+    role: 'ATENDENTE',
+    is_active: true,
+    created_at: '2026-01-16T00:00:00.000Z',
+    company: MOCK_COMPANY_SUPREME
+  },
+  // 2 Técnicos Fixos da Demo
+  {
     id: 'd4000000-0000-0000-0000-000000000003',
     tenant_id: MOCK_COMPANY_SUPREME.id,
-    full_name: 'Rafael Souza (Técnico)',
-    email: 'tecnico@supreme.com.br',
-    password: 'tecnico123',
+    full_name: 'Rafael Souza (Técnico 1)',
+    email: 'rafael.tecnico@supreme.com.br',
+    password: 'demo-tec-557',
     phone: '(11) 93333-3333',
     role: 'TECNICO',
     is_active: true,
     created_at: '2026-01-16T00:00:00.000Z',
     company: MOCK_COMPANY_SUPREME
   },
+  {
+    id: 'd4000000-0000-0000-0000-000000000006',
+    tenant_id: MOCK_COMPANY_SUPREME.id,
+    full_name: 'Marcos Silva (Técnico 2)',
+    email: 'marcos.tecnico@supreme.com.br',
+    password: 'demo-tec-557',
+    phone: '(11) 93333-6666',
+    role: 'TECNICO',
+    is_active: true,
+    created_at: '2026-01-16T00:00:00.000Z',
+    company: MOCK_COMPANY_SUPREME
+  },
+  // Super Admin
   {
     id: 'd4000000-0000-0000-0000-000000000000',
     tenant_id: '',
@@ -629,7 +701,7 @@ export const INITIAL_CARTRIDGES: Cartridge[] = [
   }
 ];
 
-const LOCAL_STORAGE_KEY = 'supreme_recargas_store_v4';
+const LOCAL_STORAGE_KEY = 'supreme_recargas_store_v5';
 let isRealtimeInitialized = false;
 
 export class AppStore {
@@ -649,6 +721,7 @@ export class AppStore {
         companies: MOCK_COMPANIES,
         plans: MOCK_PLANS,
         subscriptions: MOCK_SUBSCRIPTIONS,
+        demoSandbox: INITIAL_DEMO_SANDBOX,
         auditLogs: INITIAL_AUDIT_LOGS
       };
     }
@@ -667,6 +740,7 @@ export class AppStore {
         companies: MOCK_COMPANIES,
         plans: MOCK_PLANS,
         subscriptions: MOCK_SUBSCRIPTIONS,
+        demoSandbox: INITIAL_DEMO_SANDBOX,
         auditLogs: INITIAL_AUDIT_LOGS
       };
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(initial));
@@ -686,6 +760,7 @@ export class AppStore {
       if (!Array.isArray(parsed.companies) || parsed.companies.length === 0) parsed.companies = MOCK_COMPANIES;
       if (!Array.isArray(parsed.plans) || parsed.plans.length === 0) parsed.plans = MOCK_PLANS;
       if (!Array.isArray(parsed.subscriptions) || parsed.subscriptions.length === 0) parsed.subscriptions = MOCK_SUBSCRIPTIONS;
+      if (!parsed.demoSandbox) parsed.demoSandbox = INITIAL_DEMO_SANDBOX;
       if (!Array.isArray(parsed.auditLogs)) parsed.auditLogs = INITIAL_AUDIT_LOGS;
       return parsed;
     } catch {
@@ -701,6 +776,7 @@ export class AppStore {
         companies: MOCK_COMPANIES,
         plans: MOCK_PLANS,
         subscriptions: MOCK_SUBSCRIPTIONS,
+        demoSandbox: INITIAL_DEMO_SANDBOX,
         auditLogs: INITIAL_AUDIT_LOGS
       };
     }
@@ -1336,6 +1412,99 @@ export class AppStore {
     };
   }
 
+  // ==========================================================================
+  // DEMO SANDBOX AUTO-ROTATION & MANAGEMENT (WEEKLY PASSWORDS & PURGE)
+  // ==========================================================================
+
+  static getDemoSandboxConfig(): DemoSandboxConfig {
+    this.checkAndAutoResetDemo();
+    const data = this.getStoreData();
+    return data.demoSandbox || INITIAL_DEMO_SANDBOX;
+  }
+
+  static checkAndAutoResetDemo(): boolean {
+    const data = this.getStoreData();
+    const sandbox: DemoSandboxConfig = data.demoSandbox || INITIAL_DEMO_SANDBOX;
+
+    const now = Date.now();
+    const nextResetTime = new Date(sandbox.nextResetAt).getTime();
+
+    // If 7 days have passed, automatically trigger weekly rotation
+    if (now >= nextResetTime) {
+      this.resetDemoSandbox('Sistema Automático Semanal');
+      return true;
+    }
+    return false;
+  }
+
+  static resetDemoSandbox(performedByName = 'Super Administrador'): DemoSandboxConfig {
+    const data = this.getStoreData();
+
+    // 1. Generate 3 new random memorable passwords for the week
+    const rand1 = Math.floor(100 + Math.random() * 900);
+    const rand2 = Math.floor(100 + Math.random() * 900);
+    const rand3 = Math.floor(100 + Math.random() * 900);
+
+    const newAdminPass = `demo-adm-${rand1}`;
+    const newAttendantPass = `demo-atd-${rand2}`;
+    const newTechPass = `demo-tec-${rand3}`;
+
+    const now = new Date();
+    const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+    const updatedSandbox: DemoSandboxConfig = {
+      lastResetAt: now.toISOString(),
+      nextResetAt: nextWeek.toISOString(),
+      passwords: {
+        admin: newAdminPass,
+        attendant: newAttendantPass,
+        technician: newTechPass
+      },
+      fixedUserIds: FIXED_DEMO_USER_IDS
+    };
+
+    data.demoSandbox = updatedSandbox;
+
+    // 2. Filter out any EXTRA users created in the demo company (MOCK_COMPANY_SUPREME)
+    // Keep all non-demo company users, plus only the 6 fixed demo users + Super Admin
+    if (Array.isArray(data.profiles)) {
+      data.profiles = data.profiles.filter((p: Profile) => {
+        if (p.tenant_id === MOCK_COMPANY_SUPREME.id) {
+          return FIXED_DEMO_USER_IDS.includes(p.id);
+        }
+        return true;
+      });
+
+      // 3. Update the passwords of the 6 fixed demo users
+      data.profiles = data.profiles.map((p: Profile) => {
+        if (p.tenant_id === MOCK_COMPANY_SUPREME.id) {
+          if (p.role === 'ADMINISTRADOR') {
+            return { ...p, password: newAdminPass, is_active: true };
+          }
+          if (p.role === 'ATENDENTE') {
+            return { ...p, password: newAttendantPass, is_active: true };
+          }
+          if (p.role === 'TECNICO') {
+            return { ...p, password: newTechPass, is_active: true };
+          }
+        }
+        return p;
+      });
+    }
+
+    this.saveStoreData(data);
+
+    this.logAudit({
+      tenant_id: MOCK_COMPANY_SUPREME.id,
+      user_name: performedByName,
+      action: 'RESET_SANDBOX_DEMO',
+      resource: 'demo_sandbox',
+      details: `Ambiente de demonstração resetado com sucesso! Novas senhas semanais geradas (Admin: ${newAdminPass}, Atendentes: ${newAttendantPass}, Técnicos: ${newTechPass}). Usuários extras excluídos.`
+    });
+
+    return updatedSandbox;
+  }
+
   // Audit Logs Management
   static getAuditLogs(tenantId?: string): AuditLog[] {
     const data = this.getStoreData();
@@ -1576,6 +1745,17 @@ export class AppStore {
     if (idx === -1) throw new Error('Usuário não encontrado');
 
     const user = data.profiles[idx];
+
+    // Protect fixed demo users from being changed by test clients
+    if (FIXED_DEMO_USER_IDS.includes(userId)) {
+      const isSuper = performedByName === 'Super Administrador' || 
+                      performedByName === 'Super Admin Plataforma' || 
+                      performedByName === 'Sistema Automático Semanal';
+      if (!isSuper) {
+        throw new Error('As senhas dos usuários da conta de demonstração são protegidas e renovadas semanalmente pelo sistema.');
+      }
+    }
+
     user.password = newPassword;
     this.saveStoreData(data);
 

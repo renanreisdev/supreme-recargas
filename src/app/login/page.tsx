@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { 
   Zap, 
   Lock, 
@@ -10,20 +11,13 @@ import {
   EyeOff, 
   ArrowRight, 
   ShieldCheck, 
-  CheckCircle2, 
   AlertCircle,
-  Sparkles,
-  UserCheck,
-  Building2,
-  Wrench,
-  Inbox,
-  Crown
+  Sparkles
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -59,12 +53,6 @@ export default function LoginPage() {
     }, 250);
   };
 
-  const handleFillCredentials = (demoEmail: string, demoPass: string) => {
-    setEmail(demoEmail);
-    setPassword(demoPass);
-    setErrorMsg('');
-  };
-
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col justify-center items-center p-4 relative overflow-hidden font-sans">
       {/* Background Ambient Glows */}
@@ -90,7 +78,7 @@ export default function LoginPage() {
           <CardContent className="p-6 space-y-5">
             <div className="border-b border-slate-800 pb-3">
               <h2 className="text-base font-bold text-white">Acesse sua conta</h2>
-              <p className="text-xs text-slate-400">Entre com seu e-mail e senha para continuar</p>
+              <p className="text-xs text-slate-400">Entre com seu e-mail e senha corporativos</p>
             </div>
 
             {errorMsg && (
@@ -126,7 +114,7 @@ export default function LoginPage() {
                     Senha
                   </label>
                   <span className="text-[11px] text-slate-400 cursor-not-allowed">
-                    Esqueceu? Contate o Admin
+                    Esqueceu? Contate seu Administrador
                   </span>
                 </div>
                 <div className="relative">
@@ -158,7 +146,7 @@ export default function LoginPage() {
                     onChange={(e) => setRememberMe(e.target.checked)}
                     className="rounded bg-slate-950 border-slate-700 text-emerald-600 focus:ring-emerald-500"
                   />
-                  <span>Lembrar meu acesso</span>
+                  <span>Lembrar meu acesso neste dispositivo</span>
                 </label>
               </div>
 
@@ -181,61 +169,33 @@ export default function LoginPage() {
           </CardContent>
         </Card>
 
-        {/* Demo Credentials Helper for Quick Testing */}
-        <div className="p-4 bg-slate-900/60 border border-slate-800 rounded-xl space-y-2.5 text-xs">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="font-bold text-slate-300 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Contas de Acesso para Demonstração:</span>
-            </span>
-            <span className="text-[10px] text-slate-400 font-mono">1-Clique</span>
+        {/* Link to Live Demo Sandbox for Prospective Clients */}
+        <div className="p-3.5 bg-gradient-to-r from-emerald-950/50 via-slate-900 to-slate-900 border border-emerald-800/40 rounded-xl flex items-center justify-between gap-3 shadow-lg">
+          <div className="flex items-center gap-2.5 text-xs">
+            <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="text-white font-semibold">Novo por aqui?</p>
+              <p className="text-[11px] text-slate-400">Acesse o ambiente de demonstração</p>
+            </div>
           </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
-            <button
-              type="button"
-              onClick={() => handleFillCredentials('super@supreme-recargas.com', 'super123')}
-              className="p-2 bg-purple-950/40 hover:bg-purple-900/60 border border-purple-800/60 hover:border-purple-600 rounded-lg text-left transition-all"
+          <Link href="/demo">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 px-3 text-xs font-bold border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 hover:text-emerald-200 gap-1.5 shrink-0"
             >
-              <span className="font-bold text-amber-300 block text-[11px] flex items-center gap-1">
-                <Crown className="w-3 h-3 text-amber-400" /> Super Admin
-              </span>
-              <span className="text-[10px] text-purple-200 truncate block">super@supreme...</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleFillCredentials('admin@supreme.com.br', 'admin123')}
-              className="p-2 bg-slate-950 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 rounded-lg text-left transition-all"
-            >
-              <span className="font-bold text-emerald-400 block text-[11px]">🏢 Admin Loja</span>
-              <span className="text-[10px] text-slate-400 truncate block">admin@supreme...</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleFillCredentials('atendente@supreme.com.br', 'atendente123')}
-              className="p-2 bg-slate-950 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 rounded-lg text-left transition-all"
-            >
-              <span className="font-bold text-teal-400 block text-[11px]">📥 Atendente</span>
-              <span className="text-[10px] text-slate-400 truncate block">atendente@...</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleFillCredentials('tecnico@supreme.com.br', 'tecnico123')}
-              className="p-2 bg-slate-950 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 rounded-lg text-left transition-all"
-            >
-              <span className="font-bold text-amber-400 block text-[11px]">🛠️ Técnico</span>
-              <span className="text-[10px] text-slate-400 truncate block">tecnico@...</span>
-            </button>
-          </div>
+              <span>Testar Demo</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Button>
+          </Link>
         </div>
 
         {/* Footer Security Notice */}
         <p className="text-center text-[11px] text-slate-400 flex items-center justify-center gap-1.5">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-          <span>Ambiente Seguro com Trilha de Auditoria e Controle Granular</span>
+          <span>Ambiente Seguro Multi-Empresa com Criptografia de Ponta a Ponta</span>
         </p>
       </div>
     </div>
