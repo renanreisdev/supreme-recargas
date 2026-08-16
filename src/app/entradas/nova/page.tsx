@@ -29,6 +29,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { ModelCombobox } from '@/components/ModelCombobox';
 
 interface CartridgeItemInput {
   id: string;
@@ -514,23 +515,19 @@ export default function NewEntryPage() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
-                {/* Model */}
+                {/* Model Searchable Combobox */}
                 <div className="md:col-span-2">
-                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 block">
-                    Modelo / Item *
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+                    <span>{segmentConfig.itemLabelSingular} *</span>
+                    <span className="text-[10px] text-slate-400 font-normal">Digite para pesquisar</span>
                   </label>
-                  <Select
-                    value={item.model_id}
-                    onChange={(e) => handleUpdateItem(item.id, 'model_id', e.target.value)}
+                  <ModelCombobox
+                    models={models}
+                    selectedModelId={item.model_id}
+                    onSelect={(modelId) => handleUpdateItem(item.id, 'model_id', modelId)}
+                    itemLabelSingular={segmentConfig.itemLabelSingular}
                     required
-                    className="text-xs font-medium"
-                  >
-                    {models.map(m => (
-                      <option key={m.id} value={m.id}>
-                        {m.brand_name} {m.model_name} {m.color ? `(${m.color})` : ''} {m.is_xl ? '[XL]' : ''} — R$ {Number(m.refill_price || 30).toFixed(2)}
-                      </option>
-                    ))}
-                  </Select>
+                  />
                 </div>
 
                 {/* Service Requested */}
