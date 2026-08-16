@@ -16,7 +16,8 @@ import {
   Printer,
   FileText,
   Lock,
-  Edit
+  Edit,
+  Tag
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { AppStore } from '@/lib/store';
@@ -108,6 +109,13 @@ export default function CompanySettingsPage() {
   const [printerPaperWidth, setPrinterPaperWidth] = useState<'58mm' | '80mm'>(settings.printer_paper_width || '80mm');
   const [receiptHeader, setReceiptHeader] = useState(settings.receipt_header || '');
   const [receiptFooter, setReceiptFooter] = useState(settings.receipt_footer || '');
+  
+  // SKU Configuration State
+  const [skuMode, setSkuMode] = useState<'MANUAL' | 'AUTO_INCREMENT'>(settings.sku_mode || 'MANUAL');
+  const [skuPrefix, setSkuPrefix] = useState(settings.sku_prefix !== undefined ? settings.sku_prefix : 'MOD-');
+  const [skuStartNumber, setSkuStartNumber] = useState<string>(String(settings.sku_start_number || 1));
+  const [skuDigits, setSkuDigits] = useState<string>(String(settings.sku_digits || 4));
+
   const [policySaveSuccess, setPolicySaveSuccess] = useState(false);
 
   // Reset Password Modal State
@@ -132,6 +140,10 @@ export default function CompanySettingsPage() {
     setPrinterPaperWidth(sets.printer_paper_width || '80mm');
     setReceiptHeader(sets.receipt_header || '');
     setReceiptFooter(sets.receipt_footer || '');
+    setSkuMode(sets.sku_mode || 'MANUAL');
+    setSkuPrefix(sets.sku_prefix !== undefined ? sets.sku_prefix : 'MOD-');
+    setSkuStartNumber(String(sets.sku_start_number || 1));
+    setSkuDigits(String(sets.sku_digits || 4));
 
     setTradeName(comp.trade_name || '');
     setCorporateName(comp.corporate_name || '');
@@ -160,7 +172,11 @@ export default function CompanySettingsPage() {
       require_cartridge_serial: requireCartridgeSerial,
       printer_paper_width: printerPaperWidth,
       receipt_header: receiptHeader,
-      receipt_footer: receiptFooter
+      receipt_footer: receiptFooter,
+      sku_mode: skuMode,
+      sku_prefix: skuPrefix.trim(),
+      sku_start_number: parseInt(skuStartNumber, 10) || 1,
+      sku_digits: parseInt(skuDigits, 10) || 4
     }, currentUser?.full_name || 'Administrador');
     setSettings(updated);
     setPolicySaveSuccess(true);
@@ -943,6 +959,108 @@ export default function CompanySettingsPage() {
                     className="text-xs rounded-xl"
                   />
                 </div>
+              </div>
+            </div>
+
+            {/* SKU / Código Interno Configuration Section */}
+            <div className="p-4 bg-slate-50 dark:bg-slate-900/60 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                    <Tag className="w-4 h-4 text-emerald-600" />
+                    <span>Código Interno / SKU dos Produtos & Equipamentos</span>
+                  </h4>
+                  <p className="text-[11px] text-slate-500">
+                    Defina se os códigos de identificação serão gerados de forma manual ou automática incremental.
+                  </p>
+                </div>
+
+                <Badge className={skuMode === 'AUTO_INCREMENT' ? 'bg-emerald-600 text-white text-[10px]' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px]'}>
+                  {skuMode === 'AUTO_INCREMENT' ? 'Automático Incremental' : 'Manual'}
+                </Badge>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-300">
+                    <input
+                      type="radio"
+                      name="sku_mode"
+                      value="MANUAL"
+                      checked={skuMode === 'MANUAL'}
+                      onChange={() => setSkuMode('MANUAL')}
+                      className="text-emerald-600"
+                    />
+                    <span>Manual (Digitado livremente no cadastro)</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-300">
+                    <input
+                      type="radio"
+                      name="sku_mode"
+                      value="AUTO_INCREMENT"
+                      checked={skuMode === 'AUTO_INCREMENT'}
+                      onChange={() => setSkuMode('AUTO_INCREMENT')}
+                      className="text-emerald-600"
+                    />
+                    <span>Automático Incremental (Gerado pelo sistema)</span>
+                  </label>
+                </div>
+
+                {skuMode === 'AUTO_INCREMENT' && (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-slate-200/60 dark:border-slate-800 animate-in fade-in-0">
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                        Prefixo do Código (Opcional)
+                      </label>
+                      <Input
+                        value={skuPrefix}
+                        onChange={e => setSkuPrefix(e.target.value)}
+                        placeholder="Ex: MOD-, SKU-, PROD-"
+                        className="text-xs rounded-xl font-mono uppercase"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                        Padrão Inicial / Número
+                      </label>
+                      <Input
+                        type="number"
+                        min="1"
+                        value={skuStartNumber}
+                        onChange={e => setSkuStartNumber(e.target.value)}
+                        placeholder="Ex: 1 ou 1001"
+                        className="text-xs rounded-xl font-mono font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                        Formato com Zeros à Esquerda
+                      </label>
+                      <Select
+                        value={skuDigits}
+                        onChange={e => setSkuDigits(e.target.value)}
+                        className="text-xs rounded-xl"
+                      >
+                        <option value="3">3 Dígitos (001)</option>
+                        <option value="4">4 Dígitos (0001)</option>
+                        <option value="5">5 Dígitos (00001)</option>
+                        <option value="6">6 Dígitos (000001)</option>
+                      </Select>
+                    </div>
+
+                    <div className="sm:col-span-3 p-2.5 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-between text-xs">
+                      <span className="text-emerald-800 dark:text-emerald-300 font-medium">
+                        Exemplo do próximo código gerado:
+                      </span>
+                      <span className="font-mono font-black text-emerald-700 dark:text-emerald-300 text-sm">
+                        {skuPrefix}{String(parseInt(skuStartNumber, 10) || 1).padStart(parseInt(skuDigits, 10) || 4, '0')}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 

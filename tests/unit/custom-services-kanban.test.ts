@@ -174,5 +174,76 @@ describe('Custom Services, Kanban & Financial Report Suite', () => {
       AppStore.deleteCategory(catWithChecklist.id);
     });
   });
+
+  describe('8. SKU & Internal Code Generation Engine', () => {
+    it('generates sequential SKUs when mode is AUTO_INCREMENT and returns empty when MANUAL', () => {
+      // 1. Manual mode test
+      AppStore.updateSettings(tenantId, {
+        sku_mode: 'MANUAL'
+      });
+      expect(AppStore.getNextSku(tenantId)).toBe('');
+
+      // 2. Auto-increment mode test with default settings
+      AppStore.updateSettings(tenantId, {
+        sku_mode: 'AUTO_INCREMENT',
+        sku_prefix: 'MOD-',
+        sku_start_number: 100,
+        sku_digits: 4
+      });
+
+      const nextSku = AppStore.getNextSku(tenantId);
+      expect(nextSku).toBe('MOD-0100');
+
+      // 3. Add model and check next sequential SKU
+      const model = AppStore.addModel({
+        tenant_id: tenantId,
+        category_id: 'cat-notebooks',
+        name: 'Dell Inspiron 15',
+        internal_code: 'MOD-0100',
+        is_active: true
+      });
+
+      const nextSkuAfter = AppStore.getNextSku(tenantId);
+      expect(nextSkuAfter).toBe('MOD-0101');
+
+      // Clean up model
+      AppStore.deleteModel(model.id);
+    });
+  });
+
+  describe('9. Category Dynamic Custom Optionals & Specifications', () => {
+    it('manages custom fields with options and description composition flag', () => {
+      const cat = AppStore.addCategory({
+        tenant_id: tenantId,
+        name: 'Impressoras Térmicas Não Fiscais',
+        slug: 'impressoras-termicas',
+        inspection_type: 'CHECKLIST',
+        custom_fields: [
+          {
+            id: 'f-1',
+            name: 'Interface de Comunicação',
+            type: 'select',
+            options: ['USB + Serial', 'Ethernet (Rede)', 'Wi-Fi / Bluetooth'],
+            include_in_description: true
+          },
+          {
+            id: 'f-2',
+            name: 'Largura da Bobina',
+            type: 'select',
+            options: ['58mm', '80mm'],
+            include_in_description: true
+          }
+        ],
+        is_active: true
+      });
+
+      expect(cat.custom_fields).toHaveLength(2);
+      expect(cat.custom_fields![0].name).toBe('Interface de Comunicação');
+      expect(cat.custom_fields![0].include_in_description).toBe(true);
+      expect(cat.custom_fields![0].options).toContain('Ethernet (Rede)');
+
+      AppStore.deleteCategory(cat.id);
+    });
+  });
 });
 

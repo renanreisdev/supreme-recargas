@@ -39,11 +39,10 @@ export function ModelCombobox({
 
   const getModelDisplayName = (m?: ItemModel) => {
     if (!m) return '';
-    const brand = m.brand_name ? `${m.brand_name} ` : '';
     const name = m.name || (m as any).model_name || '';
     const colorTag = m.attributes?.color ? ` (${m.attributes.color})` : (m as any).color ? ` (${(m as any).color})` : '';
     const xlTag = m.attributes?.is_xl || (m as any).is_xl ? ' [XL]' : '';
-    return `${brand}${name}${colorTag}${xlTag}`.trim();
+    return `${name}${colorTag}${xlTag}`.trim();
   };
 
   // Sync display value when selectedModel changes and dropdown is closed
@@ -237,12 +236,7 @@ export function ModelCombobox({
                       </div>
                       <div className="truncate">
                         <div className="flex items-center gap-1.5 truncate">
-                          {model.brand_name && (
-                            <span className="font-bold text-slate-900 dark:text-white shrink-0">
-                              {model.brand_name}
-                            </span>
-                          )}
-                          <span className="truncate">{modelName}</span>
+                          <span className="truncate font-medium">{modelName}</span>
                           {model.internal_code && (
                             <span className="text-[10px] text-slate-400 font-mono">
                               ({model.internal_code})

@@ -1461,6 +1461,41 @@ export class AppStore {
     return Number(srv.default_price || 0);
   }
 
+  static getNextSku(tenantId: string): string {
+    const settings = this.getSettings(tenantId);
+    const mode = settings.sku_mode || 'MANUAL';
+    if (mode !== 'AUTO_INCREMENT') return '';
+
+    const prefix = settings.sku_prefix !== undefined ? settings.sku_prefix : 'MOD-';
+    const digits = settings.sku_digits || 4;
+    const startNum = settings.sku_start_number || 1;
+
+    const data = this.getStoreData();
+    const models = (data.models || INITIAL_MODELS).filter((m: ItemModel) => !m.tenant_id || m.tenant_id === tenantId);
+    
+    let maxSeq = startNum - 1;
+    models.forEach((m: ItemModel) => {
+      if (m.internal_code) {
+        if (prefix && m.internal_code.startsWith(prefix)) {
+          const numPart = m.internal_code.substring(prefix.length).replace(/\D/g, '');
+          const val = parseInt(numPart, 10);
+          if (!isNaN(val) && val > maxSeq) {
+            maxSeq = val;
+          }
+        } else if (!prefix && /^\d+$/.test(m.internal_code)) {
+          const val = parseInt(m.internal_code, 10);
+          if (!isNaN(val) && val > maxSeq) {
+            maxSeq = val;
+          }
+        }
+      }
+    });
+
+    const nextSeq = Math.max(maxSeq + 1, settings.sku_current_number || startNum);
+    const padded = String(nextSeq).padStart(digits, '0');
+    return `${prefix}${padded}`;
+  }
+
   static getModels(tenantId: string): ItemModel[] {
     const data = this.getStoreData();
     return (data.models || INITIAL_MODELS).filter((m: ItemModel) => m.tenant_id === tenantId || !m.tenant_id);
@@ -1468,7 +1503,14 @@ export class AppStore {
 
   static addModel(model: Omit<ItemModel, 'id' | 'created_at' | 'updated_at'>, performedByName?: string): ItemModel {
     const data = this.getStoreData();
-    const newModel: ItemModel = { ...model, id: generateUUID(), created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+    const assignedCode = model.internal_code?.trim() || this.getNextSku(model.tenant_id) || undefined;
+    const newModel: ItemModel = {
+      ...model,
+      internal_code: assignedCode,
+      id: generateUUID(),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
     if (!Array.isArray(data.models)) data.models = [];
     data.models.push(newModel);
     this.saveStoreData(data);

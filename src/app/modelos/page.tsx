@@ -27,11 +27,22 @@ import {
   HelpCircle,
   ArrowUp,
   ArrowDown,
-  Kanban
+  Kanban,
+  ListPlus,
+  FileText
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { AppStore } from '@/lib/store';
-import { ItemModel, ItemCategory, Brand, Service, WorkflowState, KanbanColumnColor, StageType } from '@/types';
+import { 
+  ItemModel, 
+  ItemCategory, 
+  Brand, 
+  Service, 
+  WorkflowState, 
+  KanbanColumnColor, 
+  StageType,
+  CategoryCustomField
+} from '@/types';
 import { formatCurrency, cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -66,16 +77,14 @@ export default function CatalogAndModelsPage() {
   const [modelBarcode, setModelBarcode] = useState('');
   const [modelDesc, setModelDesc] = useState('');
   
-  // Specific optionals
-  const [modelColor, setModelColor] = useState('');
-  const [modelIsXl, setModelIsXl] = useState(false);
-  const [modelCapacityMl, setModelCapacityMl] = useState('');
+  // Custom Dynamic Attributes for Model
+  const [modelCustomAttributes, setModelCustomAttributes] = useState<Record<string, any>>({});
+  
+  // Scale / Cartridge specific weights (fixed for scale/cartridge categories)
   const [modelEmptyWeight, setModelEmptyWeight] = useState('');
   const [modelFullWeight, setModelFullWeight] = useState('');
-  const [modelVoltage, setModelVoltage] = useState('Bivolt');
-  const [modelPowerSpecs, setModelPowerSpecs] = useState('');
-  const [modelHardwareSpecs, setModelHardwareSpecs] = useState('');
-  const [modelRecommendedAccessories, setModelRecommendedAccessories] = useState('');
+  
+  // Custom service price overrides for this specific model
   const [modelServicePrices, setModelServicePrices] = useState<Record<string, string>>({});
 
   // ==========================================
@@ -91,7 +100,7 @@ export default function CatalogAndModelsPage() {
   const [selectedServiceCategories, setSelectedServiceCategories] = useState<string[]>([]);
 
   // ==========================================
-  // CATEGORY MODAL STATE & CHECKLIST
+  // CATEGORY MODAL STATE, CHECKLIST & CUSTOM FIELDS
   // ==========================================
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
@@ -103,6 +112,13 @@ export default function CatalogAndModelsPage() {
   const [catIcon, setCatIcon] = useState('Laptop');
   const [catChecklistItems, setCatChecklistItems] = useState<string[]>([]);
   const [newChecklistInput, setNewChecklistInput] = useState('');
+
+  // Category Custom Optionals / Specifications builder
+  const [catCustomFields, setCatCustomFields] = useState<CategoryCustomField[]>([]);
+  const [newFieldName, setNewFieldName] = useState('');
+  const [newFieldType, setNewFieldType] = useState<'select' | 'text' | 'number'>('select');
+  const [newFieldOptionsInput, setNewFieldOptionsInput] = useState('');
+  const [newFieldIncludeInDescription, setNewFieldIncludeInDescription] = useState(true);
 
   // ==========================================
   // BRAND MODAL STATE
@@ -154,7 +170,7 @@ export default function CatalogAndModelsPage() {
 
   if (!currentUser) return null;
 
-  // Selected category info for dynamic form helper
+  // Selected category info for dynamic form helper in Model Modal
   const activeSelectedCategory = categories.find(c => c.id === modelCategoryId);
   const isScaleCategory = activeSelectedCategory?.inspection_type === 'SCALE' || 
     activeSelectedCategory?.slug?.includes('cartucho') || 
@@ -164,22 +180,19 @@ export default function CatalogAndModelsPage() {
   // MODEL HANDLERS
   // ==========================================
   const handleOpenAddModel = () => {
+    const autoSku = AppStore.getNextSku(currentCompany.id);
+    const firstCat = categories[0];
+
     setEditingModelId(null);
     setModelName('');
     setModelBrandId(brands[0]?.id || '');
-    setModelCategoryId(categories[0]?.id || '');
-    setModelInternalCode('');
+    setModelCategoryId(firstCat?.id || '');
+    setModelInternalCode(autoSku);
     setModelBarcode('');
     setModelDesc('');
-    setModelColor('');
-    setModelIsXl(false);
-    setModelCapacityMl('');
+    setModelCustomAttributes({});
     setModelEmptyWeight('');
     setModelFullWeight('');
-    setModelVoltage('Bivolt');
-    setModelPowerSpecs('');
-    setModelHardwareSpecs('');
-    setModelRecommendedAccessories('');
     setModelServicePrices({});
     setShowModelModal(true);
   };
@@ -192,15 +205,21 @@ export default function CatalogAndModelsPage() {
     setModelInternalCode(model.internal_code || '');
     setModelBarcode(model.barcode || '');
     setModelDesc(model.description || '');
-    setModelColor(model.color || '');
-    setModelIsXl(Boolean(model.is_xl));
-    setModelCapacityMl(model.capacity_ml ? String(model.capacity_ml) : '');
+    
+    // Merge existing attributes
+    const mergedAttrs: Record<string, any> = {
+      ...(model.custom_attributes || {}),
+      ...(model.attributes || {})
+    };
+    if (model.color) mergedAttrs['Cor'] = model.color;
+    if (model.voltage) mergedAttrs['Voltagem'] = model.voltage;
+    if (model.power_specs) mergedAttrs['Potência'] = model.power_specs;
+    if (model.hardware_specs) mergedAttrs['Hardware'] = model.hardware_specs;
+    if (model.recommended_accessories) mergedAttrs['Acessórios'] = model.recommended_accessories;
+
+    setModelCustomAttributes(mergedAttrs);
     setModelEmptyWeight(model.empty_weight_grams ? String(model.empty_weight_grams) : '');
     setModelFullWeight(model.full_weight_grams ? String(model.full_weight_grams) : '');
-    setModelVoltage(model.voltage || 'Bivolt');
-    setModelPowerSpecs(model.power_specs || '');
-    setModelHardwareSpecs(model.hardware_specs || '');
-    setModelRecommendedAccessories(model.recommended_accessories || '');
     
     // Map service prices
     const pricesObj: Record<string, string> = {};
@@ -211,6 +230,23 @@ export default function CatalogAndModelsPage() {
     }
     setModelServicePrices(pricesObj);
     setShowModelModal(true);
+  };
+
+  // Helper to compose automatic description from name + attributes marked for description
+  const handleAutoComposeDescription = () => {
+    if (!modelName.trim()) return;
+    const cat = categories.find(c => c.id === modelCategoryId);
+    const parts: string[] = [modelName.trim()];
+
+    if (cat?.custom_fields) {
+      cat.custom_fields.forEach(f => {
+        if (f.include_in_description && modelCustomAttributes[f.name]) {
+          parts.push(String(modelCustomAttributes[f.name]));
+        }
+      });
+    }
+
+    setModelDesc(parts.join(' - '));
   };
 
   const handleSaveModel = (e: React.FormEvent) => {
@@ -240,15 +276,9 @@ export default function CatalogAndModelsPage() {
       internal_code: modelInternalCode.trim().toUpperCase() || undefined,
       barcode: modelBarcode.trim() || undefined,
       description: modelDesc.trim() || undefined,
-      color: modelColor.trim() || undefined,
-      is_xl: modelIsXl,
-      capacity_ml: modelCapacityMl ? parseFloat(modelCapacityMl) : undefined,
+      custom_attributes: modelCustomAttributes,
       empty_weight_grams: modelEmptyWeight ? parseFloat(modelEmptyWeight) : undefined,
       full_weight_grams: modelFullWeight ? parseFloat(modelFullWeight) : undefined,
-      voltage: modelVoltage || undefined,
-      power_specs: modelPowerSpecs.trim() || undefined,
-      hardware_specs: modelHardwareSpecs.trim() || undefined,
-      recommended_accessories: modelRecommendedAccessories.trim() || undefined,
       service_prices: Object.keys(numericServicePrices).length > 0 ? numericServicePrices : undefined,
       is_active: true
     };
@@ -357,7 +387,7 @@ export default function CatalogAndModelsPage() {
   };
 
   // ==========================================
-  // CATEGORY HANDLERS & CHECKLIST
+  // CATEGORY HANDLERS, CHECKLIST & CUSTOM FIELDS
   // ==========================================
   const handleOpenAddCategory = () => {
     setEditingCategoryId(null);
@@ -372,7 +402,26 @@ export default function CatalogAndModelsPage() {
       'Sem riscos ou trincas na carcaça',
       'Acompanha Carregador / Fonte Original'
     ]);
+    setCatCustomFields([
+      {
+        id: 'f-1',
+        name: 'Voltagem',
+        type: 'select',
+        options: ['Bivolt', '110V', '220V', 'Bateria / Recarregável'],
+        include_in_description: true
+      },
+      {
+        id: 'f-2',
+        name: 'Potência / Rotação',
+        type: 'text',
+        include_in_description: false
+      }
+    ]);
     setNewChecklistInput('');
+    setNewFieldName('');
+    setNewFieldType('select');
+    setNewFieldOptionsInput('');
+    setNewFieldIncludeInDescription(true);
     setShowCategoryModal(true);
   };
 
@@ -385,7 +434,36 @@ export default function CatalogAndModelsPage() {
     setCatInspectionType(cat.inspection_type || 'CHECKLIST');
     setCatIcon(cat.icon || 'Laptop');
     setCatChecklistItems(cat.checklist_items || []);
+    
+    // Custom Fields fallback if empty
+    let fields = cat.custom_fields || [];
+    if (fields.length === 0) {
+      if (cat.slug.includes('cartucho') || cat.slug.includes('toner')) {
+        fields = [
+          { id: 'f-cor', name: 'Cor / Tipo de Tinta', type: 'select', options: ['Preto', 'Tricolor', 'Ciano', 'Magenta', 'Amarelo'], include_in_description: true },
+          { id: 'f-xl', name: 'Versão XL / Alta Capacidade', type: 'select', options: ['Padrão (Normal)', 'Versão XL (Alta Capacidade)'], include_in_description: true },
+          { id: 'f-cap', name: 'Capacidade (ml)', type: 'number', include_in_description: false }
+        ];
+      } else if (cat.slug.includes('notebook') || cat.slug.includes('computador') || cat.slug.includes('pc')) {
+        fields = [
+          { id: 'f-ram', name: 'Memória RAM', type: 'select', options: ['4GB', '8GB', '16GB', '32GB', '64GB'], include_in_description: true },
+          { id: 'f-ssd', name: 'Armazenamento SSD/HD', type: 'select', options: ['SSD 120GB', 'SSD 240GB', 'SSD 480GB', 'SSD 1TB', 'HD 500GB', 'HD 1TB'], include_in_description: true },
+          { id: 'f-cpu', name: 'Processador / CPU', type: 'text', include_in_description: true },
+          { id: 'f-volt', name: 'Voltagem / Fonte', type: 'select', options: ['Bivolt', '110V', '220V', 'Bateria'], include_in_description: false }
+        ];
+      } else {
+        fields = [
+          { id: 'f-volt', name: 'Voltagem / Alimentação', type: 'select', options: ['Bivolt', '110V', '220V', 'Trifásico', 'Bateria'], include_in_description: true },
+          { id: 'f-pot', name: 'Potência / Rotação', type: 'text', include_in_description: false }
+        ];
+      }
+    }
+    setCatCustomFields(fields);
     setNewChecklistInput('');
+    setNewFieldName('');
+    setNewFieldType('select');
+    setNewFieldOptionsInput('');
+    setNewFieldIncludeInDescription(true);
     setShowCategoryModal(true);
   };
 
@@ -397,6 +475,39 @@ export default function CatalogAndModelsPage() {
 
   const handleRemoveChecklistItem = (index: number) => {
     setCatChecklistItems(catChecklistItems.filter((_, i) => i !== index));
+  };
+
+  // Add custom optional specification field to category
+  const handleAddCustomField = () => {
+    if (!newFieldName.trim()) {
+      showToast('Informe o nome da especificação / opcional.', 'error');
+      return;
+    }
+
+    const optionsList = newFieldType === 'select'
+      ? newFieldOptionsInput.split(/[,;\n]+/).map(s => s.trim()).filter(Boolean)
+      : undefined;
+
+    const newField: CategoryCustomField = {
+      id: `f-${Date.now()}`,
+      name: newFieldName.trim(),
+      type: newFieldType,
+      options: optionsList && optionsList.length > 0 ? optionsList : undefined,
+      include_in_description: newFieldIncludeInDescription
+    };
+
+    setCatCustomFields([...catCustomFields, newField]);
+    setNewFieldName('');
+    setNewFieldOptionsInput('');
+    setNewFieldIncludeInDescription(true);
+  };
+
+  const handleRemoveCustomField = (fieldId: string) => {
+    setCatCustomFields(catCustomFields.filter(f => f.id !== fieldId));
+  };
+
+  const handleToggleFieldIncludeInDescription = (fieldId: string) => {
+    setCatCustomFields(catCustomFields.map(f => f.id === fieldId ? { ...f, include_in_description: !f.include_in_description } : f));
   };
 
   const handleSaveCategory = (e: React.FormEvent) => {
@@ -414,6 +525,7 @@ export default function CatalogAndModelsPage() {
       identifier_label: catIdentifierLabel.trim() || 'Nº de Série',
       inspection_type: catInspectionType,
       checklist_items: catChecklistItems,
+      custom_fields: catCustomFields,
       icon: catIcon,
       is_active: true
     };
@@ -652,7 +764,7 @@ export default function CatalogAndModelsPage() {
                 Catálogo & Engenharia de Serviços
               </h1>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Personalize equipamentos, categorias, marcas, serviços e as etapas do fluxo Kanban da bancada técnica.
+                Personalize equipamentos, especificações, categorias, marcas, serviços e as etapas do fluxo Kanban da bancada técnica.
               </p>
             </div>
           </div>
@@ -739,7 +851,7 @@ export default function CatalogAndModelsPage() {
           )}
         >
           <Layers className="w-4 h-4" />
-          <span>Categorias & Checklists</span>
+          <span>Categorias & Especificações</span>
           <Badge className={cn("text-[10px] ml-1", activeTab === 'CATEGORIES' ? "bg-white/20 text-white dark:bg-slate-900/20 dark:text-slate-900" : "bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400")}>
             {categories.length}
           </Badge>
@@ -790,7 +902,7 @@ export default function CatalogAndModelsPage() {
               <Input
                 value={searchFilter}
                 onChange={e => setSearchFilter(e.target.value)}
-                placeholder="Buscar por nome, código ou modelo..."
+                placeholder="Buscar por descrição ou código interno..."
                 className="pl-9 text-xs"
               />
             </div>
@@ -839,6 +951,7 @@ export default function CatalogAndModelsPage() {
                 const cat = categories.find(c => c.id === model.category_id);
                 const br = brands.find(b => b.id === model.brand_id);
                 const hasCustomPrices = model.service_prices && Object.keys(model.service_prices).length > 0;
+                const dynamicAttrs = model.custom_attributes || {};
 
                 return (
                   <Card key={model.id} className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-emerald-500/40 transition-all shadow-sm group">
@@ -856,17 +969,12 @@ export default function CatalogAndModelsPage() {
                                 {br.name}
                               </Badge>
                             )}
-                            {model.is_xl && (
-                              <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-[10px] font-bold">
-                                XL / Alta Cap.
-                              </Badge>
-                            )}
                           </div>
                           <CardTitle className="text-base font-extrabold text-slate-900 dark:text-slate-100 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
                             {model.name}
                           </CardTitle>
                           {model.internal_code && (
-                            <p className="text-[11px] text-slate-400 font-mono">Cód: {model.internal_code}</p>
+                            <p className="text-[11px] text-slate-400 font-mono">Cód / SKU: {model.internal_code}</p>
                           )}
                         </div>
 
@@ -898,36 +1006,26 @@ export default function CatalogAndModelsPage() {
                         </p>
                       )}
 
-                      {/* Technical Specs Tags */}
+                      {/* Technical Specs & Dynamic Attributes */}
                       <div className="flex flex-wrap gap-1.5 text-[10px] text-slate-600 dark:text-slate-300">
-                        {model.color && (
-                          <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 font-medium">
-                            🎨 Cor: {model.color}
-                          </span>
-                        )}
-                        {model.capacity_ml && (
-                          <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 font-medium">
-                            💧 Cap: {model.capacity_ml}ml
-                          </span>
-                        )}
+                        {Object.entries(dynamicAttrs).map(([k, v]) => {
+                          if (v === undefined || v === '') return null;
+                          return (
+                            <span key={k} className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 font-medium">
+                              {k}: <strong className="text-slate-800 dark:text-slate-200">{String(v)}</strong>
+                            </span>
+                          );
+                        })}
+
+                        {/* Weights if scale/cartridge */}
                         {model.empty_weight_grams && (
-                          <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 font-medium">
+                          <span className="px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 font-medium">
                             ⚖️ Tara: {model.empty_weight_grams}g
                           </span>
                         )}
                         {model.full_weight_grams && (
-                          <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 font-medium">
+                          <span className="px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 font-medium">
                             ⚖️ Cheio: {model.full_weight_grams}g
-                          </span>
-                        )}
-                        {model.voltage && model.voltage !== 'Bivolt' && (
-                          <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 font-medium">
-                            ⚡ {model.voltage}
-                          </span>
-                        )}
-                        {model.hardware_specs && (
-                          <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 font-medium">
-                            💻 {model.hardware_specs}
                           </span>
                         )}
                       </div>
@@ -937,10 +1035,10 @@ export default function CatalogAndModelsPage() {
                         <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[11px]">
                           <span className="text-slate-400 flex items-center gap-1">
                             <DollarSign className="w-3.5 h-3.5 text-emerald-500" />
-                            Preços Específicos:
+                            Preços Customizados:
                           </span>
                           <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                            {Object.keys(model.service_prices!).length} serviço(s) customizados
+                            {Object.keys(model.service_prices!).length} serviço(s)
                           </span>
                         </div>
                       )}
@@ -1066,17 +1164,17 @@ export default function CatalogAndModelsPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 3: CATEGORIAS & CHECKLISTS */}
+      {/* TAB 3: CATEGORIAS & ESPECIFICAÇÕES */}
       {/* ========================================================================= */}
       {activeTab === 'CATEGORIES' && (
         <div className="space-y-4">
           <div className="flex justify-between items-center bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
             <div>
               <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200">
-                Segmentação & Tipos de Equipamentos
+                Segmentação, Opcionais & Especificações
               </h2>
               <p className="text-xs text-slate-400">
-                Configure as categorias atendidas e defina o checklist de conferência específico de cada uma.
+                Configure as categorias e os opcionais técnicos dinâmicos que cada equipamento terá.
               </p>
             </div>
             {canManage && (
@@ -1092,6 +1190,7 @@ export default function CatalogAndModelsPage() {
               const modelCount = models.filter(m => m.category_id === cat.id).length;
               const serviceCount = services.filter(s => s.category_ids?.includes(cat.id)).length;
               const checklistCount = cat.checklist_items?.length || 0;
+              const customFieldsCount = cat.custom_fields?.length || 0;
 
               return (
                 <Card key={cat.id} className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm hover:border-emerald-500/40 transition-all">
@@ -1139,13 +1238,15 @@ export default function CatalogAndModelsPage() {
 
                     <div className="space-y-1.5 text-xs text-slate-600 dark:text-slate-300 pt-1">
                       <div className="flex justify-between">
-                        <span className="text-slate-400">Rótulo do Serial:</span>
-                        <span className="font-semibold">{cat.identifier_label || 'Nº de Série'}</span>
-                      </div>
-                      <div className="flex justify-between">
                         <span className="text-slate-400">Tipo de Inspeção:</span>
                         <Badge className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[10px]">
                           {cat.inspection_type === 'SCALE' ? '⚖️ Balança (g)' : cat.inspection_type === 'CHECKLIST' ? '📋 Checklist' : '🔧 Padrão'}
+                        </Badge>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Opcionais Customizados:</span>
+                        <Badge className="bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 text-[10px] font-bold">
+                          {customFieldsCount} especificação(ões)
                         </Badge>
                       </div>
                       <div className="flex justify-between pt-1 border-t border-slate-100 dark:border-slate-800 text-[11px]">
@@ -1358,7 +1459,7 @@ export default function CatalogAndModelsPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL: CRIAR / EDITAR MODELO COM OPCIONAIS & PREÇOS DE SERVIÇO */}
+      {/* MODAL: CRIAR / EDITAR MODELO COM ESPECIFICAÇÕES DINÂMICAS */}
       {/* ========================================================================= */}
       {showModelModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
@@ -1380,19 +1481,6 @@ export default function CatalogAndModelsPage() {
               <div className="space-y-4">
                 <h4 className="text-xs font-bold uppercase text-slate-400 tracking-wider">1. Dados Principais</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="sm:col-span-2">
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                      Nome do Modelo / Equipamento *
-                    </label>
-                    <Input
-                      value={modelName}
-                      onChange={e => setModelName(e.target.value)}
-                      placeholder="Ex: HP 664, Dell Latitude 3470, iPhone 13 Pro..."
-                      className="text-xs"
-                      required
-                    />
-                  </div>
-
                   <div>
                     <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
                       Categoria do Equipamento *
@@ -1425,14 +1513,29 @@ export default function CatalogAndModelsPage() {
                     </Select>
                   </div>
 
-                  <div>
+                  <div className="sm:col-span-2">
                     <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                      Código Interno / SKU
+                      Nome do Modelo / Descrição Principal *
                     </label>
+                    <Input
+                      value={modelName}
+                      onChange={e => setModelName(e.target.value)}
+                      placeholder="Ex: HP 664, Latitude 3470, iPhone 13 Pro, Furadeira HP1640..."
+                      className="text-xs"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                        Código Interno / SKU
+                      </label>
+                    </div>
                     <Input
                       value={modelInternalCode}
                       onChange={e => setModelInternalCode(e.target.value)}
-                      placeholder="Ex: HP-664-BLK ou LAT3470"
+                      placeholder="Ex: MOD-0001 ou SKU-HP664"
                       className="text-xs font-mono"
                     />
                   </div>
@@ -1450,157 +1553,133 @@ export default function CatalogAndModelsPage() {
                   </div>
 
                   <div className="sm:col-span-2">
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                      Descrição & Observações Técnicas
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                        Descrição Completa do Produto
+                      </label>
+                      <button
+                        type="button"
+                        onClick={handleAutoComposeDescription}
+                        className="text-[10px] text-emerald-600 hover:underline font-bold flex items-center gap-1"
+                      >
+                        <Sparkles className="w-3 h-3" />
+                        <span>Gerar da Especificação</span>
+                      </button>
+                    </div>
                     <Input
                       value={modelDesc}
                       onChange={e => setModelDesc(e.target.value)}
-                      placeholder="Ex: Cartucho padrão preto 2ml ou Notebook Core i5 8ª Ger."
+                      placeholder="Ex: Cartucho HP 664 Preto Original ou Notebook Dell i5 16GB SSD 512GB"
                       className="text-xs"
                     />
                   </div>
                 </div>
               </div>
 
-              {/* Section 2: Technical Optionals (Dynamic per Category) */}
+              {/* Section 2: Dynamic Technical Specifications & Optionals */}
               <div className="space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800">
-                <h4 className="text-xs font-bold uppercase text-slate-400 tracking-wider">2. Opcionais & Especificações Técnicas</h4>
-                
-                {isScaleCategory ? (
-                  /* Cartridge / Fluid / Toner Specifics */
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 dark:bg-slate-800/40 p-4 rounded-xl border border-slate-200/60 dark:border-slate-800">
-                    <div>
-                      <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                        Cor / Tipo de Tinta
-                      </label>
-                      <Select
-                        value={modelColor}
-                        onChange={e => setModelColor(e.target.value)}
-                        className="text-xs"
-                      >
-                        <option value="">Selecione...</option>
-                        <option value="Preto">Preto (Black)</option>
-                        <option value="Tricolor">Tricolor (Color)</option>
-                        <option value="Ciano">Ciano (Cyan)</option>
-                        <option value="Magenta">Magenta</option>
-                        <option value="Amarelo">Amarelo (Yellow)</option>
-                        <option value="Preto Fotográfico">Preto Fotográfico</option>
-                      </Select>
-                    </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-xs font-bold uppercase text-slate-400 tracking-wider">
+                      2. Opcionais & Especificações ({activeSelectedCategory?.name || 'Categoria'})
+                    </h4>
+                    <p className="text-[11px] text-slate-400">
+                      Campos customizados configurados nesta categoria para este equipamento.
+                    </p>
+                  </div>
+                </div>
 
-                    <div>
-                      <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                        Tara / Peso Vazio (g)
-                      </label>
-                      <Input
-                        type="number"
-                        step="0.1"
-                        value={modelEmptyWeight}
-                        onChange={e => setModelEmptyWeight(e.target.value)}
-                        placeholder="Ex: 28.5"
-                        className="text-xs font-mono"
-                      />
-                    </div>
+                <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-xl border border-slate-200/60 dark:border-slate-800 space-y-4">
+                  {/* Category Custom Fields */}
+                  {activeSelectedCategory?.custom_fields && activeSelectedCategory.custom_fields.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {activeSelectedCategory.custom_fields.map(field => {
+                        const currentVal = modelCustomAttributes[field.name] || '';
 
-                    <div>
-                      <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                        Peso Cheio de Ref. (g)
-                      </label>
-                      <Input
-                        type="number"
-                        step="0.1"
-                        value={modelFullWeight}
-                        onChange={e => setModelFullWeight(e.target.value)}
-                        placeholder="Ex: 38.0"
-                        className="text-xs font-mono"
-                      />
-                    </div>
+                        return (
+                          <div key={field.id} className={field.type === 'text' ? 'sm:col-span-2' : ''}>
+                            <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                              {field.name}
+                              {field.include_in_description && (
+                                <span className="text-[9px] text-emerald-600 ml-1.5 font-normal">(compõe descrição)</span>
+                              )}
+                            </label>
 
-                    <div>
-                      <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                        Capacidade Estimada (ml)
-                      </label>
-                      <Input
-                        type="number"
-                        step="0.5"
-                        value={modelCapacityMl}
-                        onChange={e => setModelCapacityMl(e.target.value)}
-                        placeholder="Ex: 2.0 ou 8.5"
-                        className="text-xs font-mono"
-                      />
+                            {field.type === 'select' && field.options && field.options.length > 0 ? (
+                              <Select
+                                value={currentVal}
+                                onChange={e => {
+                                  setModelCustomAttributes({
+                                    ...modelCustomAttributes,
+                                    [field.name]: e.target.value
+                                  });
+                                }}
+                                className="text-xs"
+                              >
+                                <option value="">Selecione {field.name}...</option>
+                                {field.options.map((opt, oIdx) => (
+                                  <option key={oIdx} value={opt}>{opt}</option>
+                                ))}
+                              </Select>
+                            ) : (
+                              <Input
+                                type={field.type === 'number' ? 'number' : 'text'}
+                                value={currentVal}
+                                onChange={e => {
+                                  setModelCustomAttributes({
+                                    ...modelCustomAttributes,
+                                    [field.name]: e.target.value
+                                  });
+                                }}
+                                placeholder={`Informe ${field.name}...`}
+                                className="text-xs"
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
+                  ) : (
+                    <p className="text-xs text-slate-400 text-center py-1">
+                      Nenhuma especificação customizada para esta categoria. Você pode adicionar na aba <strong>Categorias & Especificações</strong>.
+                    </p>
+                  )}
 
-                    <div className="sm:col-span-2 flex items-center gap-3 pt-4">
-                      <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-300">
-                        <input
-                          type="checkbox"
-                          checked={modelIsXl}
-                          onChange={e => setModelIsXl(e.target.checked)}
-                          className="w-4 h-4 text-emerald-600 rounded"
+                  {/* SPECIAL RULE: Cartridge categories ALWAYS have fixed Tare / Full Weights */}
+                  {isScaleCategory && (
+                    <div className="pt-3 border-t border-slate-200/60 dark:border-slate-700/60 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                          ⚖️ Tara / Peso Vazio (g) *
+                        </label>
+                        <Input
+                          type="number"
+                          step="0.1"
+                          value={modelEmptyWeight}
+                          onChange={e => setModelEmptyWeight(e.target.value)}
+                          placeholder="Ex: 28.5"
+                          className="text-xs font-mono font-bold"
                         />
-                        <span>Versão XL (Alta Capacidade / Rendimento Extra)</span>
-                      </label>
-                    </div>
-                  </div>
-                ) : (
-                  /* Electronics, Computers, Tools, Motors Specifics */
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 dark:bg-slate-800/40 p-4 rounded-xl border border-slate-200/60 dark:border-slate-800">
-                    <div>
-                      <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                        Voltagem / Alimentação
-                      </label>
-                      <Select
-                        value={modelVoltage}
-                        onChange={e => setModelVoltage(e.target.value)}
-                        className="text-xs"
-                      >
-                        <option value="Bivolt">Bivolt Automático</option>
-                        <option value="110V">110V / 127V</option>
-                        <option value="220V">220V</option>
-                        <option value="Trifásico 220V">Trifásico 220V</option>
-                        <option value="Trifásico 380V">Trifásico 380V</option>
-                        <option value="Bateria / Recarregável">Bateria / Recarregável</option>
-                      </Select>
-                    </div>
+                        <span className="text-[10px] text-slate-400">Preenchimento fixo para cartuchos e fluidos</span>
+                      </div>
 
-                    <div>
-                      <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                        Potência / Especificação Mecânica
-                      </label>
-                      <Input
-                        value={modelPowerSpecs}
-                        onChange={e => setModelPowerSpecs(e.target.value)}
-                        placeholder="Ex: 650W, 12V 2Ah, 3.5 HP, 2800 RPM..."
-                        className="text-xs"
-                      />
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                          ⚖️ Tara / Peso Cheio de Referência (g)
+                        </label>
+                        <Input
+                          type="number"
+                          step="0.1"
+                          value={modelFullWeight}
+                          onChange={e => setModelFullWeight(e.target.value)}
+                          placeholder="Ex: 38.0"
+                          className="text-xs font-mono font-bold"
+                        />
+                        <span className="text-[10px] text-slate-400">Referência de peso líquido 100% carregado</span>
+                      </div>
                     </div>
-
-                    <div className="sm:col-span-2">
-                      <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                        Configuração de Hardware / Chips
-                      </label>
-                      <Input
-                        value={modelHardwareSpecs}
-                        onChange={e => setModelHardwareSpecs(e.target.value)}
-                        placeholder="Ex: Intel Core i5 11ª Ger, 16GB RAM, SSD 512GB..."
-                        className="text-xs"
-                      />
-                    </div>
-
-                    <div className="sm:col-span-2">
-                      <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                        Acessórios Padrão Recomendados
-                      </label>
-                      <Input
-                        value={modelRecommendedAccessories}
-                        onChange={e => setModelRecommendedAccessories(e.target.value)}
-                        placeholder="Ex: Acompanha Fonte Original 65W, Cabo de Força..."
-                        className="text-xs"
-                      />
-                    </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
 
               {/* Section 3: Custom Service Price Overrides for this Model */}
@@ -1829,16 +1908,16 @@ export default function CatalogAndModelsPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL: CRIAR / EDITAR CATEGORIA & CHECKLIST INTEGRADO */}
+      {/* MODAL: CRIAR / EDITAR CATEGORIA, CHECKLIST & ESPECIFICAÇÕES DINÂMICAS */}
       {/* ========================================================================= */}
       {showCategoryModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl animate-in zoom-in-95 my-8">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 my-8">
             <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/40">
               <div className="flex items-center gap-2">
                 <Layers className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                 <h3 className="font-black text-slate-900 dark:text-slate-100 text-base">
-                  {editingCategoryId ? 'Editar Categoria & Checklist' : 'Nova Categoria de Equipamentos'}
+                  {editingCategoryId ? 'Editar Categoria & Especificações' : 'Nova Categoria de Equipamentos'}
                 </h3>
               </div>
               <button onClick={() => setShowCategoryModal(false)} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
@@ -1846,59 +1925,196 @@ export default function CatalogAndModelsPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSaveCategory} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
-              <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                  Nome da Categoria *
-                </label>
-                <Input
-                  value={catName}
-                  onChange={e => setCatName(e.target.value)}
-                  placeholder="Ex: Smartphones & Celulares, Motores Elétricos..."
-                  className="text-xs"
-                  required
-                />
+            <form onSubmit={handleSaveCategory} className="p-6 space-y-5 max-h-[80vh] overflow-y-auto">
+              <div className="space-y-4">
+                <h4 className="text-xs font-bold uppercase text-slate-400 tracking-wider">1. Dados Básicos da Categoria</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                      Nome da Categoria *
+                    </label>
+                    <Input
+                      value={catName}
+                      onChange={e => setCatName(e.target.value)}
+                      placeholder="Ex: Smartphones, Notebooks, Ferramentas..."
+                      className="text-xs"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                      Rótulo do Serial / Código
+                    </label>
+                    <Input
+                      value={catIdentifierLabel}
+                      onChange={e => setCatIdentifierLabel(e.target.value)}
+                      placeholder="Ex: IMEI / Serial, Nº de Série, Chassi..."
+                      className="text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                      Tipo de Inspeção no Balcão
+                    </label>
+                    <Select
+                      value={catInspectionType}
+                      onChange={e => setCatInspectionType(e.target.value as any)}
+                      className="text-xs"
+                    >
+                      <option value="CHECKLIST">📋 Checklist Físico & Funcional</option>
+                      <option value="SCALE">⚖️ Balança & Pesagem em Gramas (Cartuchos/Fluidos)</option>
+                      <option value="STANDARD">🔧 Padrão / Sintomas Gerais</option>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                      Descrição Breve
+                    </label>
+                    <Input
+                      value={catDesc}
+                      onChange={e => setCatDesc(e.target.value)}
+                      placeholder="Ex: Manutenção e reparos em geral..."
+                      className="text-xs"
+                    />
+                  </div>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                    Rótulo do Serial / Código
-                  </label>
-                  <Input
-                    value={catIdentifierLabel}
-                    onChange={e => setCatIdentifierLabel(e.target.value)}
-                    placeholder="Ex: IMEI / Serial, Nº de Série..."
-                    className="text-xs"
-                  />
+              {/* Dynamic Optionals & Specifications Builder */}
+              <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-xs font-bold uppercase text-slate-400 tracking-wider flex items-center gap-1.5">
+                      <ListPlus className="w-4 h-4 text-purple-600" />
+                      <span>2. Opcionais & Especificações Técnicas Desta Categoria</span>
+                    </h4>
+                    <p className="text-[11px] text-slate-400">
+                      Defina os campos técnicos que o usuário preencherá ao cadastrar produtos desta categoria (ex: Cor, Voltagem, RAM, SSD, Potência).
+                    </p>
+                  </div>
+                  <span className="text-[11px] text-purple-600 font-bold">{catCustomFields.length} campos</span>
                 </div>
 
-                <div>
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                    Tipo de Inspeção
-                  </label>
-                  <Select
-                    value={catInspectionType}
-                    onChange={e => setCatInspectionType(e.target.value as any)}
-                    className="text-xs"
-                  >
-                    <option value="CHECKLIST">📋 Checklist Físico</option>
-                    <option value="SCALE">⚖️ Balança (g)</option>
-                    <option value="STANDARD">🔧 Padrão / Sintomas</option>
-                  </Select>
-                </div>
-              </div>
+                {/* Add New Custom Field Form */}
+                <div className="p-3 bg-purple-50/50 dark:bg-purple-950/20 rounded-xl border border-purple-200/60 dark:border-purple-900/40 space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div className="sm:col-span-2">
+                      <label className="text-[10px] font-bold text-slate-700 dark:text-slate-300 block mb-0.5">
+                        Nome da Especificação / Opcional *
+                      </label>
+                      <Input
+                        value={newFieldName}
+                        onChange={e => setNewFieldName(e.target.value)}
+                        placeholder="Ex: Cor, Voltagem, Memória RAM, Potência..."
+                        className="text-xs h-8"
+                      />
+                    </div>
 
-              <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                  Descrição Breve
-                </label>
-                <Input
-                  value={catDesc}
-                  onChange={e => setCatDesc(e.target.value)}
-                  placeholder="Ex: Manutenção e reparos em celulares e tablets..."
-                  className="text-xs"
-                />
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-700 dark:text-slate-300 block mb-0.5">
+                        Tipo de Campo
+                      </label>
+                      <Select
+                        value={newFieldType}
+                        onChange={e => setNewFieldType(e.target.value as any)}
+                        className="text-xs h-8"
+                      >
+                        <option value="select">Seleção (Múltiplas opções)</option>
+                        <option value="text">Texto Livre</option>
+                        <option value="number">Número</option>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {newFieldType === 'select' && (
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-700 dark:text-slate-300 block mb-0.5">
+                        Possibilidades / Opções de Escolha (separadas por vírgula)
+                      </label>
+                      <Input
+                        value={newFieldOptionsInput}
+                        onChange={e => setNewFieldOptionsInput(e.target.value)}
+                        placeholder="Ex: Preto, Tricolor, Ciano, Magenta ou 110V, 220V, Bivolt"
+                        className="text-xs h-8"
+                      />
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between pt-1">
+                    <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      <input
+                        type="checkbox"
+                        checked={newFieldIncludeInDescription}
+                        onChange={e => setNewFieldIncludeInDescription(e.target.checked)}
+                        className="w-3.5 h-3.5 text-purple-600 rounded"
+                      />
+                      <span>Compor a descrição automática do produto</span>
+                    </label>
+
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleAddCustomField}
+                      className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold h-7 gap-1"
+                    >
+                      + Adicionar Campo
+                    </Button>
+                  </div>
+                </div>
+
+                {/* List of Custom Fields Configured for this Category */}
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {catCustomFields.length === 0 ? (
+                    <p className="text-[11px] text-slate-400 text-center py-2">
+                      Nenhum opcional configurado nesta categoria.
+                    </p>
+                  ) : (
+                    catCustomFields.map((field) => (
+                      <div key={field.id} className="flex items-center justify-between gap-2 p-2.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
+                        <div>
+                          <div className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                            <span>{field.name}</span>
+                            <Badge className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[9px]">
+                              {field.type === 'select' ? 'Seleção' : field.type === 'number' ? 'Número' : 'Texto'}
+                            </Badge>
+                            {field.include_in_description && (
+                              <Badge className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-[9px]">
+                                Compõe descrição
+                              </Badge>
+                            )}
+                          </div>
+                          {field.options && field.options.length > 0 && (
+                            <p className="text-[10px] text-slate-400 mt-0.5">
+                              Opções: {field.options.join(', ')}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleFieldIncludeInDescription(field.id)}
+                            className="text-[10px] text-slate-400 hover:text-purple-600 px-1.5 py-0.5 border rounded"
+                            title="Alternar se compõe descrição"
+                          >
+                            {field.include_in_description ? 'Desmarcar' : 'Marcar Descrição'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveCustomField(field.id)}
+                            className="text-slate-400 hover:text-rose-600 p-1"
+                            title="Excluir Opcional"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
 
               {/* Interactive Checklist Editor */}
@@ -1906,7 +2122,7 @@ export default function CatalogAndModelsPage() {
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                     <CheckSquare className="w-4 h-4 text-emerald-600" />
-                    <span>Checklist de Conferência desta Categoria</span>
+                    <span>3. Checklist de Conferência de Entrada</span>
                   </label>
                   <span className="text-[11px] text-slate-400 font-bold">{catChecklistItems.length} itens</span>
                 </div>
@@ -1922,9 +2138,9 @@ export default function CatalogAndModelsPage() {
                       }
                     }}
                     placeholder="Ex: Liga normalmente, Carcaça sem trincas..."
-                    className="text-xs"
+                    className="text-xs h-8"
                   />
-                  <Button type="button" onClick={handleAddChecklistItem} className="bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-xs font-bold shrink-0">
+                  <Button type="button" size="sm" onClick={handleAddChecklistItem} className="bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-xs font-bold shrink-0 h-8">
                     + Adicionar
                   </Button>
                 </div>

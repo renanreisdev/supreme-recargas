@@ -186,6 +186,15 @@ export interface Customer {
 // 2. CATALOG: CATEGORIES, BRANDS, MODELS, VARIANTS & ATTRIBUTES
 // ============================================================================
 
+export interface CategoryCustomField {
+  id: string;
+  name: string; // e.g. "Cor / Tinta", "Voltagem", "Potência", "Armazenamento", "Memória RAM"
+  type: 'select' | 'text' | 'number';
+  options?: string[]; // e.g. ["Preto", "Tricolor", "Ciano", "Magenta", "Amarelo"] or ["Bivolt", "110V", "220V", "Bateria"]
+  include_in_description: boolean; // se essa opção deve compor a descrição do produto
+  is_required?: boolean;
+}
+
 export interface ItemCategory {
   id: string;
   tenant_id?: string;
@@ -196,6 +205,7 @@ export interface ItemCategory {
   identifier_label?: string; // e.g. "Final de Série", "IMEI / Serial", "Nº de Série", "Placa / Chassi", "Patrimônio"
   inspection_type?: 'SCALE' | 'CHECKLIST' | 'STANDARD';
   checklist_items?: string[]; // Custom checklist items per category
+  custom_fields?: CategoryCustomField[]; // Opcionais & Especificações Técnicas editáveis pelo usuário
   is_system?: boolean;
   is_active: boolean;
   created_at?: string;
@@ -254,6 +264,7 @@ export interface ItemModel {
   custom_checklist?: string[];
 
   attributes?: Record<string, any>;
+  custom_attributes?: Record<string, any>; // Dynamic values for category custom_fields
   is_active: boolean;
   created_at?: string;
   updated_at?: string;
@@ -634,6 +645,13 @@ export interface CompanySettings {
   default_test_price?: number;
   input_weight_responsibility?: 'ATENDENTE' | 'TECNICO' | 'AMBOS';
   waive_verification_if_refilled?: boolean;
+
+  // SKU / Código Interno Configuration:
+  sku_mode?: 'MANUAL' | 'AUTO_INCREMENT';
+  sku_prefix?: string; // Prefixo, ex: "MOD-", "SKU-", "PROD-" ou ""
+  sku_start_number?: number; // Padrão inicial, ex: 1, 100, 1000
+  sku_current_number?: number; // Número atual de sequência
+  sku_digits?: number; // Dígitos preenchidos com zero à esquerda, ex: 4 (0001)
 }
 
 // ============================================================================
