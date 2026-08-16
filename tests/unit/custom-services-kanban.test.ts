@@ -245,5 +245,46 @@ describe('Custom Services, Kanban & Financial Report Suite', () => {
       AppStore.deleteCategory(cat.id);
     });
   });
+
+  describe('10. Category Custom Technical Verdicts & Custom Inspection Types', () => {
+    it('stores and retrieves category custom verdicts and inspection types', () => {
+      const cat = AppStore.addCategory({
+        tenant_id: tenantId,
+        name: 'Drones & Estabilizadores',
+        slug: 'drones',
+        inspection_type: 'CUSTOM',
+        inspection_type_label: 'Voo de Teste & Calibração de Giroscópio',
+        technical_verdicts: [
+          'Calibração e Motores 100% OK',
+          'Gimbal Danificado',
+          'ESC Queimado / Sem Reparo'
+        ],
+        custom_fields: [
+          {
+            id: 'f-1',
+            name: 'Alcance do Rádio',
+            type: 'number',
+            unit: 'km',
+            include_in_description: true
+          },
+          {
+            id: 'f-2',
+            name: 'Possui Câmera 4K',
+            type: 'checkbox',
+            include_in_description: true
+          }
+        ],
+        is_active: true
+      });
+
+      expect(cat.technical_verdicts).toHaveLength(3);
+      expect(cat.technical_verdicts).toContain('Gimbal Danificado');
+      expect(cat.inspection_type_label).toBe('Voo de Teste & Calibração de Giroscópio');
+      expect(cat.custom_fields![0].unit).toBe('km');
+      expect(cat.custom_fields![1].type).toBe('checkbox');
+
+      AppStore.deleteCategory(cat.id);
+    });
+  });
 });
 

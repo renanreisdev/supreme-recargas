@@ -29,7 +29,9 @@ import {
   ArrowDown,
   Kanban,
   ListPlus,
-  FileText
+  FileText,
+  CheckCircle2,
+  FileCheck
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { AppStore } from '@/lib/store';
@@ -108,17 +110,24 @@ export default function CatalogAndModelsPage() {
   const [catSlug, setCatSlug] = useState('');
   const [catDesc, setCatDesc] = useState('');
   const [catIdentifierLabel, setCatIdentifierLabel] = useState('Nº de Série');
-  const [catInspectionType, setCatInspectionType] = useState<'SCALE' | 'CHECKLIST' | 'STANDARD'>('CHECKLIST');
+  const [catInspectionType, setCatInspectionType] = useState<string>('CHECKLIST');
+  const [catInspectionTypeLabel, setCatInspectionTypeLabel] = useState('');
   const [catIcon, setCatIcon] = useState('Laptop');
   const [catChecklistItems, setCatChecklistItems] = useState<string[]>([]);
   const [newChecklistInput, setNewChecklistInput] = useState('');
 
   // Category Custom Optionals / Specifications builder
   const [catCustomFields, setCatCustomFields] = useState<CategoryCustomField[]>([]);
+  const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
   const [newFieldName, setNewFieldName] = useState('');
-  const [newFieldType, setNewFieldType] = useState<'select' | 'text' | 'number'>('select');
+  const [newFieldType, setNewFieldType] = useState<'select' | 'text' | 'number' | 'checkbox'>('select');
+  const [newFieldUnit, setNewFieldUnit] = useState('');
   const [newFieldOptionsInput, setNewFieldOptionsInput] = useState('');
   const [newFieldIncludeInDescription, setNewFieldIncludeInDescription] = useState(true);
+
+  // Category Technical Verdicts / Resultados
+  const [catTechnicalVerdicts, setCatTechnicalVerdicts] = useState<string[]>([]);
+  const [newVerdictInput, setNewVerdictInput] = useState('');
 
   // ==========================================
   // BRAND MODAL STATE
@@ -241,7 +250,12 @@ export default function CatalogAndModelsPage() {
     if (cat?.custom_fields) {
       cat.custom_fields.forEach(f => {
         if (f.include_in_description && modelCustomAttributes[f.name]) {
-          parts.push(String(modelCustomAttributes[f.name]));
+          const val = modelCustomAttributes[f.name];
+          if (typeof val === 'boolean') {
+            if (val) parts.push(f.name);
+          } else {
+            parts.push(f.unit ? `${val}${f.unit}` : String(val));
+          }
         }
       });
     }
@@ -396,6 +410,7 @@ export default function CatalogAndModelsPage() {
     setCatDesc('');
     setCatIdentifierLabel('Nº de Série');
     setCatInspectionType('CHECKLIST');
+    setCatInspectionTypeLabel('');
     setCatIcon('Laptop');
     setCatChecklistItems([
       'Liga normalmente e dá vídeo',
@@ -412,16 +427,28 @@ export default function CatalogAndModelsPage() {
       },
       {
         id: 'f-2',
-        name: 'Potência / Rotação',
-        type: 'text',
+        name: 'Potência',
+        type: 'number',
+        unit: 'W',
         include_in_description: false
       }
     ]);
+    setCatTechnicalVerdicts([
+      '100% OK / Concluído',
+      'Reparo Concluído com Sucesso',
+      'Reparado com Ressalvas',
+      'Sem Reparo / Placa Inviável',
+      'Aguardando Peça do Cliente',
+      'Orçamento Reprovado / Devolvido'
+    ]);
+    setEditingFieldId(null);
     setNewChecklistInput('');
     setNewFieldName('');
     setNewFieldType('select');
+    setNewFieldUnit('');
     setNewFieldOptionsInput('');
     setNewFieldIncludeInDescription(true);
+    setNewVerdictInput('');
     setShowCategoryModal(true);
   };
 
@@ -432,6 +459,7 @@ export default function CatalogAndModelsPage() {
     setCatDesc(cat.description || '');
     setCatIdentifierLabel(cat.identifier_label || 'Nº de Série');
     setCatInspectionType(cat.inspection_type || 'CHECKLIST');
+    setCatInspectionTypeLabel(cat.inspection_type_label || '');
     setCatIcon(cat.icon || 'Laptop');
     setCatChecklistItems(cat.checklist_items || []);
     
@@ -441,8 +469,8 @@ export default function CatalogAndModelsPage() {
       if (cat.slug.includes('cartucho') || cat.slug.includes('toner')) {
         fields = [
           { id: 'f-cor', name: 'Cor / Tipo de Tinta', type: 'select', options: ['Preto', 'Tricolor', 'Ciano', 'Magenta', 'Amarelo'], include_in_description: true },
-          { id: 'f-xl', name: 'Versão XL / Alta Capacidade', type: 'select', options: ['Padrão (Normal)', 'Versão XL (Alta Capacidade)'], include_in_description: true },
-          { id: 'f-cap', name: 'Capacidade (ml)', type: 'number', include_in_description: false }
+          { id: 'f-xl', name: 'Versão XL / Alta Capacidade', type: 'checkbox', include_in_description: true },
+          { id: 'f-cap', name: 'Capacidade', type: 'number', unit: 'ml', include_in_description: false }
         ];
       } else if (cat.slug.includes('notebook') || cat.slug.includes('computador') || cat.slug.includes('pc')) {
         fields = [
@@ -454,16 +482,44 @@ export default function CatalogAndModelsPage() {
       } else {
         fields = [
           { id: 'f-volt', name: 'Voltagem / Alimentação', type: 'select', options: ['Bivolt', '110V', '220V', 'Trifásico', 'Bateria'], include_in_description: true },
-          { id: 'f-pot', name: 'Potência / Rotação', type: 'text', include_in_description: false }
+          { id: 'f-pot', name: 'Potência', type: 'number', unit: 'W', include_in_description: false }
         ];
       }
     }
     setCatCustomFields(fields);
+
+    // Technical Verdicts fallback if empty
+    let verdicts = cat.technical_verdicts || [];
+    if (verdicts.length === 0) {
+      if (cat.slug.includes('cartucho') || cat.slug.includes('toner')) {
+        verdicts = [
+          '100% OK / Concluído',
+          'CID / Circuito Queimado',
+          'Queimado / Sem Reparo',
+          'Entupido Irrecuperável',
+          'Recusado / Devolvido'
+        ];
+      } else {
+        verdicts = [
+          '100% OK / Concluído',
+          'Reparo Concluído com Sucesso',
+          'Reparado com Ressalvas',
+          'Sem Reparo / Placa Inviável',
+          'Aguardando Peça do Cliente',
+          'Orçamento Reprovado / Devolvido'
+        ];
+      }
+    }
+    setCatTechnicalVerdicts(verdicts);
+
+    setEditingFieldId(null);
     setNewChecklistInput('');
     setNewFieldName('');
     setNewFieldType('select');
+    setNewFieldUnit('');
     setNewFieldOptionsInput('');
     setNewFieldIncludeInDescription(true);
+    setNewVerdictInput('');
     setShowCategoryModal(true);
   };
 
@@ -477,8 +533,43 @@ export default function CatalogAndModelsPage() {
     setCatChecklistItems(catChecklistItems.filter((_, i) => i !== index));
   };
 
-  // Add custom optional specification field to category
-  const handleAddCustomField = () => {
+  // Technical verdicts handlers
+  const handleAddTechnicalVerdict = () => {
+    if (!newVerdictInput.trim()) return;
+    if (!catTechnicalVerdicts.includes(newVerdictInput.trim())) {
+      setCatTechnicalVerdicts([...catTechnicalVerdicts, newVerdictInput.trim()]);
+    }
+    setNewVerdictInput('');
+  };
+
+  const handleRemoveTechnicalVerdict = (index: number) => {
+    if (catTechnicalVerdicts.length <= 1) {
+      showToast('A categoria deve ter pelo menos 1 parecer técnico cadastrado.', 'error');
+      return;
+    }
+    setCatTechnicalVerdicts(catTechnicalVerdicts.filter((_, i) => i !== index));
+  };
+
+  // Edit / Add custom optional specification field to category
+  const handleStartEditCustomField = (field: CategoryCustomField) => {
+    setEditingFieldId(field.id);
+    setNewFieldName(field.name);
+    setNewFieldType(field.type);
+    setNewFieldUnit(field.unit || '');
+    setNewFieldOptionsInput(field.options?.join(', ') || '');
+    setNewFieldIncludeInDescription(field.include_in_description);
+  };
+
+  const handleCancelEditCustomField = () => {
+    setEditingFieldId(null);
+    setNewFieldName('');
+    setNewFieldType('select');
+    setNewFieldUnit('');
+    setNewFieldOptionsInput('');
+    setNewFieldIncludeInDescription(true);
+  };
+
+  const handleSaveCustomField = () => {
     if (!newFieldName.trim()) {
       showToast('Informe o nome da especificação / opcional.', 'error');
       return;
@@ -488,22 +579,57 @@ export default function CatalogAndModelsPage() {
       ? newFieldOptionsInput.split(/[,;\n]+/).map(s => s.trim()).filter(Boolean)
       : undefined;
 
-    const newField: CategoryCustomField = {
-      id: `f-${Date.now()}`,
-      name: newFieldName.trim(),
-      type: newFieldType,
-      options: optionsList && optionsList.length > 0 ? optionsList : undefined,
-      include_in_description: newFieldIncludeInDescription
-    };
+    if (editingFieldId) {
+      setCatCustomFields(catCustomFields.map(f => f.id === editingFieldId ? {
+        ...f,
+        name: newFieldName.trim(),
+        type: newFieldType,
+        unit: newFieldType === 'number' ? newFieldUnit.trim() || undefined : undefined,
+        options: optionsList && optionsList.length > 0 ? optionsList : undefined,
+        include_in_description: newFieldIncludeInDescription
+      } : f));
+      setEditingFieldId(null);
+      showToast(`Opcional "${newFieldName}" atualizado!`);
+    } else {
+      const newField: CategoryCustomField = {
+        id: `f-${Date.now()}`,
+        name: newFieldName.trim(),
+        type: newFieldType,
+        unit: newFieldType === 'number' ? newFieldUnit.trim() || undefined : undefined,
+        options: optionsList && optionsList.length > 0 ? optionsList : undefined,
+        include_in_description: newFieldIncludeInDescription
+      };
+      setCatCustomFields([...catCustomFields, newField]);
+      showToast(`Opcional "${newFieldName}" adicionado!`);
+    }
 
-    setCatCustomFields([...catCustomFields, newField]);
     setNewFieldName('');
+    setNewFieldType('select');
+    setNewFieldUnit('');
     setNewFieldOptionsInput('');
     setNewFieldIncludeInDescription(true);
   };
 
   const handleRemoveCustomField = (fieldId: string) => {
+    const fieldObj = catCustomFields.find(f => f.id === fieldId);
+    if (fieldObj) {
+      // Check if any model is currently utilizing this custom field
+      const usedModels = models.filter(m => {
+        if (editingCategoryId && m.category_id !== editingCategoryId) return false;
+        const val = m.custom_attributes?.[fieldObj.name] ?? (m as any).attributes?.[fieldObj.name];
+        return val !== undefined && val !== '' && val !== null && val !== false;
+      });
+
+      if (usedModels.length > 0) {
+        alert(`Não é possível excluir o opcional "${fieldObj.name}" pois existem ${usedModels.length} modelo(s) cadastrado(s) utilizando-o.`);
+        return;
+      }
+    }
+
     setCatCustomFields(catCustomFields.filter(f => f.id !== fieldId));
+    if (editingFieldId === fieldId) {
+      handleCancelEditCustomField();
+    }
   };
 
   const handleToggleFieldIncludeInDescription = (fieldId: string) => {
@@ -524,8 +650,10 @@ export default function CatalogAndModelsPage() {
       description: catDesc.trim() || undefined,
       identifier_label: catIdentifierLabel.trim() || 'Nº de Série',
       inspection_type: catInspectionType,
+      inspection_type_label: catInspectionTypeLabel.trim() || undefined,
       checklist_items: catChecklistItems,
       custom_fields: catCustomFields,
+      technical_verdicts: catTechnicalVerdicts,
       icon: catIcon,
       is_active: true
     };
@@ -764,7 +892,7 @@ export default function CatalogAndModelsPage() {
                 Catálogo & Engenharia de Serviços
               </h1>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Personalize equipamentos, especificações, categorias, marcas, serviços e as etapas do fluxo Kanban da bancada técnica.
+                Personalize equipamentos, opcionais técnicos, categorias, marcas, serviços e as etapas do fluxo Kanban da bancada técnica.
               </p>
             </div>
           </div>
@@ -1009,10 +1137,13 @@ export default function CatalogAndModelsPage() {
                       {/* Technical Specs & Dynamic Attributes */}
                       <div className="flex flex-wrap gap-1.5 text-[10px] text-slate-600 dark:text-slate-300">
                         {Object.entries(dynamicAttrs).map(([k, v]) => {
-                          if (v === undefined || v === '') return null;
+                          if (v === undefined || v === '' || v === false) return null;
+                          const fieldDef = cat?.custom_fields?.find(f => f.name === k);
+                          const displayVal = typeof v === 'boolean' ? (v ? 'Sim' : 'Não') : (fieldDef?.unit ? `${v}${fieldDef.unit}` : String(v));
+
                           return (
                             <span key={k} className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 font-medium">
-                              {k}: <strong className="text-slate-800 dark:text-slate-200">{String(v)}</strong>
+                              {k}: <strong className="text-slate-800 dark:text-slate-200">{displayVal}</strong>
                             </span>
                           );
                         })}
@@ -1171,10 +1302,10 @@ export default function CatalogAndModelsPage() {
           <div className="flex justify-between items-center bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
             <div>
               <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200">
-                Segmentação, Opcionais & Especificações
+                Segmentação, Opcionais, Pareceres & Inspeções
               </h2>
               <p className="text-xs text-slate-400">
-                Configure as categorias e os opcionais técnicos dinâmicos que cada equipamento terá.
+                Configure as categorias, opcionais técnicos, opções de parecer técnico e o tipo de inspeção do balcão.
               </p>
             </div>
             {canManage && (
@@ -1191,6 +1322,7 @@ export default function CatalogAndModelsPage() {
               const serviceCount = services.filter(s => s.category_ids?.includes(cat.id)).length;
               const checklistCount = cat.checklist_items?.length || 0;
               const customFieldsCount = cat.custom_fields?.length || 0;
+              const verdictCount = cat.technical_verdicts?.length || 0;
 
               return (
                 <Card key={cat.id} className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm hover:border-emerald-500/40 transition-all">
@@ -1237,16 +1369,22 @@ export default function CatalogAndModelsPage() {
                     )}
 
                     <div className="space-y-1.5 text-xs text-slate-600 dark:text-slate-300 pt-1">
-                      <div className="flex justify-between">
+                      <div className="flex justify-between items-center">
                         <span className="text-slate-400">Tipo de Inspeção:</span>
                         <Badge className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[10px]">
-                          {cat.inspection_type === 'SCALE' ? '⚖️ Balança (g)' : cat.inspection_type === 'CHECKLIST' ? '📋 Checklist' : '🔧 Padrão'}
+                          {cat.inspection_type_label || (cat.inspection_type === 'SCALE' ? '⚖️ Balança (g)' : cat.inspection_type === 'CHECKLIST' ? '📋 Checklist' : '🔧 ' + (cat.inspection_type || 'Padrão'))}
                         </Badge>
                       </div>
-                      <div className="flex justify-between">
+                      <div className="flex justify-between items-center">
                         <span className="text-slate-400">Opcionais Customizados:</span>
                         <Badge className="bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 text-[10px] font-bold">
                           {customFieldsCount} especificação(ões)
+                        </Badge>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-400">Pareceres no Kanban:</span>
+                        <Badge className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold">
+                          {verdictCount > 0 ? `${verdictCount} opções` : 'Padrão'}
                         </Badge>
                       </div>
                       <div className="flex justify-between pt-1 border-t border-slate-100 dark:border-slate-800 text-[11px]">
@@ -1594,12 +1732,39 @@ export default function CatalogAndModelsPage() {
                   {activeSelectedCategory?.custom_fields && activeSelectedCategory.custom_fields.length > 0 ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {activeSelectedCategory.custom_fields.map(field => {
-                        const currentVal = modelCustomAttributes[field.name] || '';
+                        const currentVal = modelCustomAttributes[field.name];
+
+                        if (field.type === 'checkbox') {
+                          return (
+                            <div key={field.id} className="sm:col-span-2">
+                              <label className="flex items-center gap-2 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 cursor-pointer hover:border-emerald-500/40 transition-colors">
+                                <input
+                                  type="checkbox"
+                                  checked={Boolean(currentVal)}
+                                  onChange={e => {
+                                    setModelCustomAttributes({
+                                      ...modelCustomAttributes,
+                                      [field.name]: e.target.checked
+                                    });
+                                  }}
+                                  className="w-4 h-4 text-emerald-600 rounded"
+                                />
+                                <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                                  {field.name}
+                                </span>
+                                {field.include_in_description && (
+                                  <span className="text-[9px] text-emerald-600 font-normal ml-auto">(compõe descrição)</span>
+                                )}
+                              </label>
+                            </div>
+                          );
+                        }
 
                         return (
                           <div key={field.id} className={field.type === 'text' ? 'sm:col-span-2' : ''}>
                             <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
                               {field.name}
+                              {field.unit && <span className="text-slate-400 ml-1">({field.unit})</span>}
                               {field.include_in_description && (
                                 <span className="text-[9px] text-emerald-600 ml-1.5 font-normal">(compõe descrição)</span>
                               )}
@@ -1607,7 +1772,7 @@ export default function CatalogAndModelsPage() {
 
                             {field.type === 'select' && field.options && field.options.length > 0 ? (
                               <Select
-                                value={currentVal}
+                                value={currentVal || ''}
                                 onChange={e => {
                                   setModelCustomAttributes({
                                     ...modelCustomAttributes,
@@ -1621,10 +1786,30 @@ export default function CatalogAndModelsPage() {
                                   <option key={oIdx} value={opt}>{opt}</option>
                                 ))}
                               </Select>
+                            ) : field.type === 'number' ? (
+                              <div className="relative">
+                                <Input
+                                  type="number"
+                                  value={currentVal !== undefined ? currentVal : ''}
+                                  onChange={e => {
+                                    setModelCustomAttributes({
+                                      ...modelCustomAttributes,
+                                      [field.name]: e.target.value
+                                    });
+                                  }}
+                                  placeholder={`Informe ${field.name}...`}
+                                  className={cn("text-xs font-mono font-bold", field.unit ? "pr-12" : "")}
+                                />
+                                {field.unit && (
+                                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 font-mono">
+                                    {field.unit}
+                                  </span>
+                                )}
+                              </div>
                             ) : (
                               <Input
-                                type={field.type === 'number' ? 'number' : 'text'}
-                                value={currentVal}
+                                type="text"
+                                value={currentVal || ''}
                                 onChange={e => {
                                   setModelCustomAttributes({
                                     ...modelCustomAttributes,
@@ -1908,7 +2093,7 @@ export default function CatalogAndModelsPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL: CRIAR / EDITAR CATEGORIA, CHECKLIST & ESPECIFICAÇÕES DINÂMICAS */}
+      {/* MODAL: CRIAR / EDITAR CATEGORIA, CHECKLIST, ESPECIFICAÇÕES DINÂMICAS & PARECERES */}
       {/* ========================================================================= */}
       {showCategoryModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
@@ -1917,7 +2102,7 @@ export default function CatalogAndModelsPage() {
               <div className="flex items-center gap-2">
                 <Layers className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                 <h3 className="font-black text-slate-900 dark:text-slate-100 text-base">
-                  {editingCategoryId ? 'Editar Categoria & Especificações' : 'Nova Categoria de Equipamentos'}
+                  {editingCategoryId ? 'Editar Categoria & Engenharia' : 'Nova Categoria de Equipamentos'}
                 </h3>
               </div>
               <button onClick={() => setShowCategoryModal(false)} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
@@ -1954,22 +2139,43 @@ export default function CatalogAndModelsPage() {
                     />
                   </div>
 
-                  <div>
+                  <div className="sm:col-span-2">
                     <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                      Tipo de Inspeção no Balcão
+                      Tipo de Inspeção no Balcão (Personalizável)
                     </label>
-                    <Select
-                      value={catInspectionType}
-                      onChange={e => setCatInspectionType(e.target.value as any)}
-                      className="text-xs"
-                    >
-                      <option value="CHECKLIST">📋 Checklist Físico & Funcional</option>
-                      <option value="SCALE">⚖️ Balança & Pesagem em Gramas (Cartuchos/Fluidos)</option>
-                      <option value="STANDARD">🔧 Padrão / Sintomas Gerais</option>
-                    </Select>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <Select
+                        value={['CHECKLIST', 'SCALE', 'STANDARD'].includes(catInspectionType) ? catInspectionType : 'CUSTOM'}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setCatInspectionType(val);
+                          if (val === 'CHECKLIST') setCatInspectionTypeLabel('Checklist Físico');
+                          else if (val === 'SCALE') setCatInspectionTypeLabel('Balança / Pesagem (g)');
+                          else if (val === 'STANDARD') setCatInspectionTypeLabel('Padrão');
+                        }}
+                        className="text-xs"
+                      >
+                        <option value="CHECKLIST">📋 Checklist Físico & Funcional</option>
+                        <option value="SCALE">⚖️ Balança & Pesagem em Gramas (Cartuchos/Fluidos)</option>
+                        <option value="STANDARD">🔧 Padrão / Sintomas Gerais</option>
+                        <option value="CUSTOM">✨ Personalizado / Outro Tipo...</option>
+                      </Select>
+
+                      <Input
+                        value={catInspectionTypeLabel}
+                        onChange={e => {
+                          setCatInspectionTypeLabel(e.target.value);
+                          if (!['CHECKLIST', 'SCALE', 'STANDARD'].includes(catInspectionType)) {
+                            setCatInspectionType(e.target.value || 'CUSTOM');
+                          }
+                        }}
+                        placeholder="Nome personalizado da inspeção (ex: Inspeção Visual, Teste de Tensão...)"
+                        className="text-xs"
+                      />
+                    </div>
                   </div>
 
-                  <div>
+                  <div className="sm:col-span-2">
                     <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
                       Descrição Breve
                     </label>
@@ -1983,7 +2189,7 @@ export default function CatalogAndModelsPage() {
                 </div>
               </div>
 
-              {/* Dynamic Optionals & Specifications Builder */}
+              {/* Dynamic Optionals & Specifications Builder with EDIT support */}
               <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
                 <div className="flex items-center justify-between">
                   <div>
@@ -1992,14 +2198,29 @@ export default function CatalogAndModelsPage() {
                       <span>2. Opcionais & Especificações Técnicas Desta Categoria</span>
                     </h4>
                     <p className="text-[11px] text-slate-400">
-                      Defina os campos técnicos que o usuário preencherá ao cadastrar produtos desta categoria (ex: Cor, Voltagem, RAM, SSD, Potência).
+                      Crie, edite ou exclua campos técnicos que o usuário preencherá nos produtos desta categoria (ex: Cor, Voltagem, RAM, Potência).
                     </p>
                   </div>
                   <span className="text-[11px] text-purple-600 font-bold">{catCustomFields.length} campos</span>
                 </div>
 
-                {/* Add New Custom Field Form */}
-                <div className="p-3 bg-purple-50/50 dark:bg-purple-950/20 rounded-xl border border-purple-200/60 dark:border-purple-900/40 space-y-3">
+                {/* Add / Edit Custom Field Form */}
+                <div className="p-3.5 bg-purple-50/50 dark:bg-purple-950/20 rounded-xl border border-purple-200/60 dark:border-purple-900/40 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-purple-900 dark:text-purple-300">
+                      {editingFieldId ? '✏️ Editar Opcional Selecionado' : '➕ Novo Opcional / Especificação'}
+                    </span>
+                    {editingFieldId && (
+                      <button
+                        type="button"
+                        onClick={handleCancelEditCustomField}
+                        className="text-[11px] text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 underline"
+                      >
+                        Cancelar Edição
+                      </button>
+                    )}
+                  </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     <div className="sm:col-span-2">
                       <label className="text-[10px] font-bold text-slate-700 dark:text-slate-300 block mb-0.5">
@@ -2025,12 +2246,28 @@ export default function CatalogAndModelsPage() {
                         <option value="select">Seleção (Múltiplas opções)</option>
                         <option value="text">Texto Livre</option>
                         <option value="number">Número</option>
+                        <option value="checkbox">Caixa de Seleção (Sim/Não)</option>
                       </Select>
                     </div>
                   </div>
 
+                  {newFieldType === 'number' && (
+                    <div className="animate-in fade-in-0">
+                      <label className="text-[10px] font-bold text-slate-700 dark:text-slate-300 block mb-0.5">
+                        Unidade de Medida (opcional, ex: W, V, g, ml, GB, TB, mm, kg)
+                      </label>
+                      <Input
+                        value={newFieldUnit}
+                        onChange={e => setNewFieldUnit(e.target.value)}
+                        placeholder="Ex: W, V, GB, ml"
+                        maxLength={6}
+                        className="text-xs h-8 w-32 font-mono font-bold"
+                      />
+                    </div>
+                  )}
+
                   {newFieldType === 'select' && (
-                    <div>
+                    <div className="animate-in fade-in-0">
                       <label className="text-[10px] font-bold text-slate-700 dark:text-slate-300 block mb-0.5">
                         Possibilidades / Opções de Escolha (separadas por vírgula)
                       </label>
@@ -2057,10 +2294,10 @@ export default function CatalogAndModelsPage() {
                     <Button
                       type="button"
                       size="sm"
-                      onClick={handleAddCustomField}
+                      onClick={handleSaveCustomField}
                       className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold h-7 gap-1"
                     >
-                      + Adicionar Campo
+                      {editingFieldId ? 'Salvar Opcional' : '+ Adicionar Campo'}
                     </Button>
                   </div>
                 </div>
@@ -2073,12 +2310,20 @@ export default function CatalogAndModelsPage() {
                     </p>
                   ) : (
                     catCustomFields.map((field) => (
-                      <div key={field.id} className="flex items-center justify-between gap-2 p-2.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
+                      <div 
+                        key={field.id} 
+                        className={cn(
+                          "flex items-center justify-between gap-2 p-2.5 rounded-xl border text-xs transition-colors",
+                          editingFieldId === field.id 
+                            ? "bg-purple-50 dark:bg-purple-950/40 border-purple-400 dark:border-purple-700" 
+                            : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+                        )}
+                      >
                         <div>
                           <div className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                             <span>{field.name}</span>
                             <Badge className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[9px]">
-                              {field.type === 'select' ? 'Seleção' : field.type === 'number' ? 'Número' : 'Texto'}
+                              {field.type === 'select' ? 'Seleção' : field.type === 'number' ? `Número${field.unit ? ` (${field.unit})` : ''}` : field.type === 'checkbox' ? 'Checkbox (Sim/Não)' : 'Texto'}
                             </Badge>
                             {field.include_in_description && (
                               <Badge className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-[9px]">
@@ -2094,6 +2339,14 @@ export default function CatalogAndModelsPage() {
                         </div>
 
                         <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleStartEditCustomField(field)}
+                            className="p-1 rounded text-slate-400 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950/50"
+                            title="Editar Opcional"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
                           <button
                             type="button"
                             onClick={() => handleToggleFieldIncludeInDescription(field.id)}
@@ -2117,12 +2370,60 @@ export default function CatalogAndModelsPage() {
                 </div>
               </div>
 
-              {/* Interactive Checklist Editor */}
+              {/* Section 3: Technical Verdicts / Resultados Personalizados por Categoria */}
               <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                    <CheckSquare className="w-4 h-4 text-emerald-600" />
-                    <span>3. Checklist de Conferência de Entrada</span>
+                    <FileCheck className="w-4 h-4 text-emerald-600" />
+                    <span>3. Pareceres Técnicos & Resultados Desta Categoria (Kanban)</span>
+                  </label>
+                  <span className="text-[11px] text-slate-400 font-bold">{catTechnicalVerdicts.length} opções</span>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  Configure os pareceres técnicos que o técnico poderá escolher na bancada para equipamentos desta categoria.
+                </p>
+
+                <div className="flex gap-2">
+                  <Input
+                    value={newVerdictInput}
+                    onChange={e => setNewVerdictInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddTechnicalVerdict();
+                      }
+                    }}
+                    placeholder="Ex: 100% OK / Concluído, Circuito Queimado, Sem Reparo..."
+                    className="text-xs h-8"
+                  />
+                  <Button type="button" size="sm" onClick={handleAddTechnicalVerdict} className="bg-emerald-600 text-white text-xs font-bold shrink-0 h-8">
+                    + Adicionar Parecer
+                  </Button>
+                </div>
+
+                <div className="space-y-1.5 max-h-36 overflow-y-auto bg-slate-50 dark:bg-slate-800/40 p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800">
+                  {catTechnicalVerdicts.map((verdict, idx) => (
+                    <div key={idx} className="flex items-center justify-between gap-2 bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-200 dark:border-slate-800 text-xs">
+                      <span className="text-slate-700 dark:text-slate-300 font-medium">📋 {verdict}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveTechnicalVerdict(idx)}
+                        className="text-slate-400 hover:text-rose-600 p-1"
+                        title="Remover parecer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Section 4: Interactive Checklist Editor */}
+              <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <CheckSquare className="w-4 h-4 text-blue-600" />
+                    <span>4. Checklist de Conferência de Entrada</span>
                   </label>
                   <span className="text-[11px] text-slate-400 font-bold">{catChecklistItems.length} itens</span>
                 </div>

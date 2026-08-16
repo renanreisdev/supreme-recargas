@@ -189,7 +189,8 @@ export interface Customer {
 export interface CategoryCustomField {
   id: string;
   name: string; // e.g. "Cor / Tinta", "Voltagem", "Potência", "Armazenamento", "Memória RAM"
-  type: 'select' | 'text' | 'number';
+  type: 'select' | 'text' | 'number' | 'checkbox';
+  unit?: string; // Unidade de medida para tipo number (ex: W, V, g, ml, GB, TB, HP, mm, kg)
   options?: string[]; // e.g. ["Preto", "Tricolor", "Ciano", "Magenta", "Amarelo"] or ["Bivolt", "110V", "220V", "Bateria"]
   include_in_description: boolean; // se essa opção deve compor a descrição do produto
   is_required?: boolean;
@@ -203,9 +204,11 @@ export interface ItemCategory {
   description?: string;
   icon?: string;
   identifier_label?: string; // e.g. "Final de Série", "IMEI / Serial", "Nº de Série", "Placa / Chassi", "Patrimônio"
-  inspection_type?: 'SCALE' | 'CHECKLIST' | 'STANDARD';
+  inspection_type?: 'SCALE' | 'CHECKLIST' | 'STANDARD' | string;
+  inspection_type_label?: string; // Rótulo customizado do tipo de inspeção
   checklist_items?: string[]; // Custom checklist items per category
   custom_fields?: CategoryCustomField[]; // Opcionais & Especificações Técnicas editáveis pelo usuário
+  technical_verdicts?: string[]; // Pareceres Técnicos / Resultados customizados por categoria
   is_system?: boolean;
   is_active: boolean;
   created_at?: string;
@@ -463,6 +466,7 @@ export interface ServiceOrderItem {
   tenant_id: string;
   service_order_id: string;
   customer_asset_id?: string;
+  category_id?: string;
   model_id: string;
   variant_id?: string;
   item_index: number;

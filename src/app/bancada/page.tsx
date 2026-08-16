@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { AppStore } from '@/lib/store';
-import { ServiceOrderItem, WorkflowState, CompanySettings, KanbanColumnColor, StageType } from '@/types';
+import { ServiceOrderItem, WorkflowState, CompanySettings, KanbanColumnColor, StageType, ItemCategory } from '@/types';
 import { formatCurrency, formatDate, cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -96,6 +96,7 @@ export default function TechnicianWorkbenchPage() {
   const { currentCompany, currentUser, hasPermission } = useAuth();
   const [items, setItems] = useState<ServiceOrderItem[]>([]);
   const [workflowStates, setWorkflowStates] = useState<WorkflowState[]>([]);
+  const [categories, setCategories] = useState<ItemCategory[]>([]);
   const [settings, setSettings] = useState<CompanySettings>(AppStore.getSettings(currentCompany.id));
   const [searchFilter, setSearchFilter] = useState('');
   const [selectedItem, setSelectedItem] = useState<ServiceOrderItem | null>(null);
@@ -103,7 +104,7 @@ export default function TechnicianWorkbenchPage() {
   // Technical Edit Modal State
   const [inputWeight, setInputWeight] = useState<string>('');
   const [outputWeight, setOutputWeight] = useState<string>('');
-  const [resultCode, setResultCode] = useState<string>('OK');
+  const [resultCode, setResultCode] = useState<string>('100% OK / Concluído');
   const [resultDesc, setResultDesc] = useState('');
   const [techNotes, setTechNotes] = useState('');
   const [targetStatus, setTargetStatus] = useState<string>('EM_RECARGA');
@@ -126,10 +127,12 @@ export default function TechnicianWorkbenchPage() {
   const loadData = () => {
     const allItems = AppStore.getCartridges(currentCompany.id);
     const states = AppStore.getWorkflowStates(currentCompany.id);
+    const cats = AppStore.getCategories(currentCompany.id);
     const stt = AppStore.getSettings(currentCompany.id);
 
     setItems(allItems);
     setWorkflowStates(states);
+    setCategories(cats);
     setSettings(stt);
   };
 
@@ -166,9 +169,17 @@ export default function TechnicianWorkbenchPage() {
       ? item.custom_field_values.output_weight_grams.toString() 
       : '';
 
+    const cat = categories.find(c => c.id === item.category_id || c.id === item.model?.category_id);
+    const isCart = cat?.slug?.includes('cartucho') || cat?.slug?.includes('toner') || cat?.inspection_type === 'SCALE';
+    const verdicts = (cat?.technical_verdicts && cat.technical_verdicts.length > 0)
+      ? cat.technical_verdicts
+      : isCart
+        ? ['100% OK / Concluído', 'CID / Circuito Queimado', 'Queimado / Sem Reparo', 'Entupido Irrecuperável', 'Recusado / Devolvido']
+        : ['100% OK / Concluído', 'Reparo Concluído com Sucesso', 'Reparado com Ressalvas', 'Sem Reparo / Placa Inviável', 'Aguardando Peça do Cliente', 'Orçamento Reprovado / Devolvido'];
+
     setInputWeight(inWeight);
     setOutputWeight(outWeight);
-    setResultCode(item.result_code || 'OK');
+    setResultCode(item.result_code || verdicts[0] || '100% OK / Concluído');
     setResultDesc(item.result_description || '');
     setTechNotes(item.technical_notes || '');
     setTargetStatus(item.status);
@@ -206,10 +217,19 @@ export default function TechnicianWorkbenchPage() {
   const handleQuickApprove = () => {
     if (!selectedItem || !canEditTech) return;
     const outNum = outputWeight ? parseFloat(outputWeight) : undefined;
+    const cat = categories.find(c => c.id === selectedItem.category_id || c.id === selectedItem.model?.category_id);
+    const isCart = cat?.slug?.includes('cartucho') || cat?.slug?.includes('toner') || cat?.inspection_type === 'SCALE';
+    const verdicts = (cat?.technical_verdicts && cat.technical_verdicts.length > 0)
+      ? cat.technical_verdicts
+      : isCart
+        ? ['100% OK / Concluído', 'CID / Circuito Queimado', 'Queimado / Sem Reparo', 'Entupido Irrecuperável', 'Recusado / Devolvido']
+        : ['100% OK / Concluído', 'Reparo Concluído com Sucesso', 'Reparado com Ressalvas', 'Sem Reparo / Placa Inviável', 'Aguardando Peça do Cliente', 'Orçamento Reprovado / Devolvido'];
+
+    const successVerdict = verdicts[0] || '100% OK / Concluído';
 
     AppStore.updateOrderItemStatus(selectedItem.id, {
       status: 'FINALIZADO',
-      result_code: 'OK',
+      result_code: successVerdict,
       technical_notes: techNotes || 'Testado, aprovado e finalizado na bancada técnica.',
       assigned_technician_id: currentUser.id,
       custom_field_values: {
@@ -459,163 +479,188 @@ export default function TechnicianWorkbenchPage() {
       {/* ========================================================================= */}
       {/* MODAL: EXECUÇÃO TÉCNICA DO ITEM */}
       {/* ========================================================================= */}
-      {selectedItem && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-xl overflow-hidden shadow-2xl animate-in zoom-in-95 my-8">
-            <div className="p-4 md:p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/40">
-              <div>
-                <span className="text-[10px] font-mono font-bold text-slate-400">OS #{selectedItem.order_number}</span>
-                <h3 className="font-black text-slate-900 dark:text-slate-100 text-base">
-                  {selectedItem.model?.name || 'Equipamento'}
-                </h3>
-              </div>
-              <button onClick={() => setSelectedItem(null)} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      {selectedItem && (() => {
+        const itemCat = categories.find(c => c.id === selectedItem.category_id || c.id === selectedItem.model?.category_id);
+        const isCartridgeCategory = itemCat?.slug?.includes('cartucho') || itemCat?.slug?.includes('toner') || itemCat?.inspection_type === 'SCALE';
+        const availableVerdicts: string[] = (itemCat?.technical_verdicts && itemCat.technical_verdicts.length > 0)
+          ? itemCat.technical_verdicts
+          : isCartridgeCategory
+            ? [
+                '100% OK / Concluído',
+                'CID / Circuito Queimado',
+                'Queimado / Sem Reparo',
+                'Entupido Irrecuperável',
+                'Recusado / Devolvido'
+              ]
+            : [
+                '100% OK / Concluído',
+                'Reparo Concluído com Sucesso',
+                'Reparado com Ressalvas',
+                'Sem Reparo / Placa Inviável',
+                'Aguardando Peça do Cliente',
+                'Orçamento Reprovado / Devolvido'
+              ];
 
-            <form onSubmit={handleSaveTechUpdate} className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
-              {/* Target Status Select */}
-              <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                  Mover para Situação / Etapa:
-                </label>
-                <Select
-                  value={targetStatus}
-                  onChange={e => setTargetStatus(e.target.value)}
-                  className="text-xs font-bold"
-                >
-                  {workflowStates.map(st => (
-                    <option key={st.code} value={st.code}>
-                      {st.name} ({st.code})
-                    </option>
-                  ))}
-                </Select>
-              </div>
-
-              {/* Weight Scale Inputs */}
-              <div className="grid grid-cols-2 gap-3 bg-amber-50/50 dark:bg-amber-950/20 p-3 rounded-xl border border-amber-200/60 dark:border-amber-900/40">
+        return (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-xl overflow-hidden shadow-2xl animate-in zoom-in-95 my-8">
+              <div className="p-4 md:p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/40">
                 <div>
-                  <label className="text-[11px] font-bold text-amber-900 dark:text-amber-300 block mb-1">
-                    ⚖️ Peso de Entrada (g)
-                  </label>
-                  <Input
-                    type="number"
-                    step="0.1"
-                    value={inputWeight}
-                    onChange={e => setInputWeight(e.target.value)}
-                    placeholder="Ex: 28.5"
-                    className="text-xs font-bold bg-white dark:bg-slate-900"
-                  />
+                  <span className="text-[10px] font-mono font-bold text-slate-400">OS #{selectedItem.order_number}</span>
+                  <h3 className="font-black text-slate-900 dark:text-slate-100 text-base">
+                    {selectedItem.model?.name || 'Equipamento'}
+                  </h3>
                 </div>
-
-                <div>
-                  <label className="text-[11px] font-bold text-amber-900 dark:text-amber-300 block mb-1">
-                    ⚖️ Peso de Saída (g)
-                  </label>
-                  <Input
-                    type="number"
-                    step="0.1"
-                    value={outputWeight}
-                    onChange={e => setOutputWeight(e.target.value)}
-                    placeholder="Ex: 38.0"
-                    className="text-xs font-bold bg-white dark:bg-slate-900"
-                  />
-                </div>
+                <button onClick={() => setSelectedItem(null)} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                  <X className="w-5 h-5" />
+                </button>
               </div>
 
-              {/* Checklist verification if present */}
-              {checklistState.length > 0 && (
-                <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
-                    Checklist de Inspeção do Equipamento:
+              <form onSubmit={handleSaveTechUpdate} className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
+                {/* Target Status Select */}
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Mover para Situação / Etapa:
                   </label>
-                  <div className="space-y-1.5 bg-slate-50 dark:bg-slate-800/40 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
-                    {checklistState.map((chk, cIdx) => (
-                      <label key={cIdx} className="flex items-center gap-2 text-xs cursor-pointer text-slate-700 dark:text-slate-300">
-                        <input
-                          type="checkbox"
-                          checked={chk.checked}
-                          onChange={() => handleToggleChecklist(cIdx)}
-                          className="w-3.5 h-3.5 text-emerald-600 rounded"
-                        />
-                        <span>{chk.item}</span>
-                      </label>
+                  <Select
+                    value={targetStatus}
+                    onChange={e => setTargetStatus(e.target.value)}
+                    className="text-xs font-bold"
+                  >
+                    {workflowStates.map(st => (
+                      <option key={st.code} value={st.code}>
+                        {st.name} ({st.code})
+                      </option>
                     ))}
-                  </div>
+                  </Select>
                 </div>
-              )}
 
-              {/* Result Code & Notes */}
-              <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                      Parecer Técnico / Resultado:
+                {/* Weight Scale Inputs ONLY FOR CARTRIDGES / SCALE CATEGORIES */}
+                {isCartridgeCategory && (
+                  <div className="grid grid-cols-2 gap-3 bg-amber-50/50 dark:bg-amber-950/20 p-3 rounded-xl border border-amber-200/60 dark:border-amber-900/40">
+                    <div>
+                      <label className="text-[11px] font-bold text-amber-900 dark:text-amber-300 block mb-1">
+                        ⚖️ Peso de Entrada (g)
+                      </label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        value={inputWeight}
+                        onChange={e => setInputWeight(e.target.value)}
+                        placeholder="Ex: 28.5"
+                        className="text-xs font-bold bg-white dark:bg-slate-900"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-amber-900 dark:text-amber-300 block mb-1">
+                        ⚖️ Peso de Saída (g)
+                      </label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        value={outputWeight}
+                        onChange={e => setOutputWeight(e.target.value)}
+                        placeholder="Ex: 38.0"
+                        className="text-xs font-bold bg-white dark:bg-slate-900"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Checklist verification if present */}
+                {checklistState.length > 0 && (
+                  <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                      Checklist de Inspeção do Equipamento:
                     </label>
-                    <Select
-                      value={resultCode}
-                      onChange={e => setResultCode(e.target.value)}
-                      className="text-xs"
-                    >
-                      <option value="OK">100% OK / Concluído</option>
-                      <option value="CID">CID / Circuito Queimado</option>
-                      <option value="QUEIMADO">Queimado / Sem Reparo</option>
-                      <option value="ENTUPIDO">Entupido Irrecuperável</option>
-                      <option value="DESISTENCIA">Recusado / Devolvido</option>
-                    </Select>
+                    <div className="space-y-1.5 bg-slate-50 dark:bg-slate-800/40 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
+                      {checklistState.map((chk, cIdx) => (
+                        <label key={cIdx} className="flex items-center gap-2 text-xs cursor-pointer text-slate-700 dark:text-slate-300">
+                          <input
+                            type="checkbox"
+                            checked={chk.checked}
+                            onChange={() => handleToggleChecklist(cIdx)}
+                            className="w-3.5 h-3.5 text-emerald-600 rounded"
+                          />
+                          <span>{chk.item}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Result Code & Notes */}
+                <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                        Parecer Técnico / Resultado:
+                      </label>
+                      <Select
+                        value={resultCode}
+                        onChange={e => setResultCode(e.target.value)}
+                        className="text-xs"
+                      >
+                        {availableVerdicts.map((verdict, vIdx) => (
+                          <option key={vIdx} value={verdict}>
+                            {verdict}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                        Detalhe do Parecer:
+                      </label>
+                      <Input
+                        value={resultDesc}
+                        onChange={e => setResultDesc(e.target.value)}
+                        placeholder="Ex: Teste padrão perfeito"
+                        className="text-xs"
+                      />
+                    </div>
                   </div>
 
                   <div>
                     <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                      Detalhe do Parecer:
+                      Observações Internas da Bancada:
                     </label>
                     <Input
-                      value={resultDesc}
-                      onChange={e => setResultDesc(e.target.value)}
-                      placeholder="Ex: Teste padrão perfeito"
+                      value={techNotes}
+                      onChange={e => setTechNotes(e.target.value)}
+                      placeholder="Anotações para controle interno..."
                       className="text-xs"
                     />
                   </div>
                 </div>
 
-                <div>
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                    Observações Internas da Bancada:
-                  </label>
-                  <Input
-                    value={techNotes}
-                    onChange={e => setTechNotes(e.target.value)}
-                    placeholder="Anotações para controle interno..."
-                    className="text-xs"
-                  />
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800">
-                <Button
-                  type="button"
-                  onClick={handleQuickApprove}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5"
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  Aprovação Rápida (100% OK)
-                </Button>
-
-                <div className="flex gap-2">
-                  <Button type="button" variant="outline" onClick={() => setSelectedItem(null)} className="text-xs">
-                    Fechar
+                {/* Actions */}
+                <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800">
+                  <Button
+                    type="button"
+                    onClick={handleQuickApprove}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    Aprovação Rápida (100% OK)
                   </Button>
-                  <Button type="submit" className="bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-bold text-xs">
-                    Salvar Alterações
-                  </Button>
+
+                  <div className="flex gap-2">
+                    <Button type="button" variant="outline" onClick={() => setSelectedItem(null)} className="text-xs">
+                      Fechar
+                    </Button>
+                    <Button type="submit" className="bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-bold text-xs">
+                      Salvar Alterações
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            </form>
+              </form>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ========================================================================= */}
       {/* MODAL: PERSONALIZAÇÃO GERAL DO KANBAN & ETAPAS */}
