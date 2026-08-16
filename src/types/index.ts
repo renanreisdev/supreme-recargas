@@ -191,14 +191,28 @@ export interface CartridgeModel {
   is_active: boolean;
 }
 
+export type KanbanColumnColor = 'amber' | 'purple' | 'blue' | 'emerald' | 'rose' | 'indigo' | 'slate' | 'teal';
+
+export interface KanbanColumnConfig {
+  id: string;
+  title: string;
+  color: KanbanColumnColor;
+  statuses: CartridgeStatus[];
+  description?: string;
+}
+
 export interface ServicePrice {
   id: string;
   tenant_id: string;
-  service_type: RequestedService;
+  service_type: RequestedService | string;
   title: string;
   description?: string;
   default_price: number;
+  estimated_time_minutes?: number;
+  category?: string;
   is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface CartridgeModelPrice {
@@ -348,5 +362,6 @@ export interface CompanySettings {
   require_customer_document: boolean; // Define se CPF/CNPJ é obrigatório no cadastro de clientes
   require_cartridge_serial: boolean;  // Define se o número/final de série do cartucho é obrigatório na entrada
   custom_checklist_items?: string[];
+  kanban_columns?: KanbanColumnConfig[];
 }
 

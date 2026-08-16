@@ -12,6 +12,7 @@ import {
   User, 
   FileText, 
   ArrowRight,
+  ArrowLeft,
   Sparkles,
   ChevronRight,
   Filter,
@@ -20,11 +21,19 @@ import {
   Droplets,
   AlertOctagon,
   CheckCircle,
-  ThumbsUp
+  ThumbsUp,
+  Sliders,
+  Settings2,
+  PlusCircle,
+  Trash2,
+  X,
+  RotateCcw,
+  Check,
+  Layers
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { AppStore } from '@/lib/store';
-import { Cartridge, CartridgeStatus, ResultClassification, CompanySettings, SegmentCustomization } from '@/types';
+import { Cartridge, CartridgeStatus, ResultClassification, CompanySettings, SegmentCustomization, KanbanColumnConfig, KanbanColumnColor } from '@/types';
 import { formatCurrency, formatWeight, getStatusBadgeConfig, getResultBadgeConfig } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -32,14 +41,93 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 
+const ALL_STATUSES: { key: CartridgeStatus; label: string }[] = [
+  { key: 'RECEBIDO', label: 'Recebido (Balcão)' },
+  { key: 'AGUARDANDO_VERIFICACAO', label: 'Aguardando Verificação' },
+  { key: 'EM_VERIFICACAO', label: 'Em Verificação' },
+  { key: 'AGUARDANDO_RECARGA', label: 'Aguardando Recarga/Manutenção' },
+  { key: 'EM_RECARGA', label: 'Em Recarga/Manutenção' },
+  { key: 'AGUARDANDO_TESTE', label: 'Aguardando Teste' },
+  { key: 'EM_TESTE', label: 'Em Teste' },
+  { key: 'FINALIZADO', label: 'Finalizado (Pronto)' },
+  { key: 'ENTREGUE', label: 'Entregue ao Cliente' },
+  { key: 'COM_PROBLEMA', label: 'Aguardando Peça / Atenção' },
+  { key: 'SEM_REPARO', label: 'Sem Reparo (Inviável)' }
+];
+
+const COLOR_MAP: Record<KanbanColumnColor, { bg: string; border: string; text: string; headerBg: string; badge: string }> = {
+  amber: {
+    bg: 'bg-amber-50/40 dark:bg-amber-950/20',
+    border: 'border-amber-200 dark:border-amber-900/60',
+    text: 'text-amber-800 dark:text-amber-300',
+    headerBg: 'bg-amber-100/70 dark:bg-amber-950/40',
+    badge: 'bg-amber-600 text-white'
+  },
+  purple: {
+    bg: 'bg-purple-50/40 dark:bg-purple-950/20',
+    border: 'border-purple-200 dark:border-purple-900/60',
+    text: 'text-purple-800 dark:text-purple-300',
+    headerBg: 'bg-purple-100/70 dark:bg-purple-950/40',
+    badge: 'bg-purple-600 text-white'
+  },
+  blue: {
+    bg: 'bg-blue-50/40 dark:bg-blue-950/20',
+    border: 'border-blue-200 dark:border-blue-900/60',
+    text: 'text-blue-800 dark:text-blue-300',
+    headerBg: 'bg-blue-100/70 dark:bg-blue-950/40',
+    badge: 'bg-blue-600 text-white'
+  },
+  emerald: {
+    bg: 'bg-emerald-50/40 dark:bg-emerald-950/20',
+    border: 'border-emerald-200 dark:border-emerald-900/60',
+    text: 'text-emerald-800 dark:text-emerald-300',
+    headerBg: 'bg-emerald-100/70 dark:bg-emerald-950/40',
+    badge: 'bg-emerald-600 text-white'
+  },
+  rose: {
+    bg: 'bg-rose-50/40 dark:bg-rose-950/20',
+    border: 'border-rose-200 dark:border-rose-900/60',
+    text: 'text-rose-800 dark:text-rose-300',
+    headerBg: 'bg-rose-100/70 dark:bg-rose-950/40',
+    badge: 'bg-rose-600 text-white'
+  },
+  indigo: {
+    bg: 'bg-indigo-50/40 dark:bg-indigo-950/20',
+    border: 'border-indigo-200 dark:border-indigo-900/60',
+    text: 'text-indigo-800 dark:text-indigo-300',
+    headerBg: 'bg-indigo-100/70 dark:bg-indigo-950/40',
+    badge: 'bg-indigo-600 text-white'
+  },
+  teal: {
+    bg: 'bg-teal-50/40 dark:bg-teal-950/20',
+    border: 'border-teal-200 dark:border-teal-900/60',
+    text: 'text-teal-800 dark:text-teal-300',
+    headerBg: 'bg-teal-100/70 dark:bg-teal-950/40',
+    badge: 'bg-teal-600 text-white'
+  },
+  slate: {
+    bg: 'bg-slate-100/60 dark:bg-slate-900/60',
+    border: 'border-slate-200 dark:border-slate-800',
+    text: 'text-slate-800 dark:text-slate-300',
+    headerBg: 'bg-slate-200/60 dark:bg-slate-800',
+    badge: 'bg-slate-700 text-white'
+  }
+};
+
 export default function TechnicianWorkbenchPage() {
   const { currentCompany, currentUser, hasPermission } = useAuth();
   const [cartridges, setCartridges] = useState<Cartridge[]>([]);
+  const [kanbanColumns, setKanbanColumns] = useState<KanbanColumnConfig[]>([]);
   const [settings, setSettings] = useState<CompanySettings>(AppStore.getSettings(currentCompany.id));
   const [segmentConfig, setSegmentConfig] = useState<SegmentCustomization>(AppStore.getSegmentConfig(currentCompany.id));
   const [searchFilter, setSearchFilter] = useState('');
-  const [mobileStageTab, setMobileStageTab] = useState<'ALL' | 'WAITING' | 'REFILL' | 'TESTING' | 'DONE'>('ALL');
+  const [activeMobileColumnId, setActiveMobileColumnId] = useState<string>('ALL');
   const [selectedCartridge, setSelectedCartridge] = useState<Cartridge | null>(null);
+
+  // Kanban Customization Modal State
+  const [showCustomizeModal, setShowCustomizeModal] = useState(false);
+  const [editedColumns, setEditedColumns] = useState<KanbanColumnConfig[]>([]);
+  const [dragOverColId, setDragOverColId] = useState<string | null>(null);
 
   // Modal Technical Edit State
   const [inputWeight, setInputWeight] = useState<string>('');
@@ -51,12 +139,15 @@ export default function TechnicianWorkbenchPage() {
   const [checklistState, setChecklistState] = useState<Array<{ item: string; checked: boolean; notes?: string }>>([]);
 
   const canEditTech = hasPermission('update_tech_status');
+  const canCustomizeKanban = hasPermission('customize_kanban') || hasPermission('manage_company') || currentUser?.role === 'ADMINISTRADOR';
 
   const loadData = () => {
     const carts = AppStore.getCartridges(currentCompany.id);
+    const cols = AppStore.getKanbanColumns(currentCompany.id);
     const stt = AppStore.getSettings(currentCompany.id);
     const seg = AppStore.getSegmentConfig(currentCompany.id);
     setCartridges(carts);
+    setKanbanColumns(cols);
     setSettings(stt);
     setSegmentConfig(seg);
   };
@@ -146,6 +237,51 @@ export default function TechnicianWorkbenchPage() {
     setSelectedCartridge(null);
   };
 
+  // 1-Click Quick Move between Kanban columns
+  const handleQuickMove = (cart: Cartridge, direction: -1 | 1) => {
+    if (!canEditTech) return;
+
+    const currentColIdx = kanbanColumns.findIndex(col => col.statuses.includes(cart.status));
+    if (currentColIdx === -1) return;
+
+    const targetColIdx = currentColIdx + direction;
+    if (targetColIdx < 0 || targetColIdx >= kanbanColumns.length) return;
+
+    const targetCol = kanbanColumns[targetColIdx];
+    const targetStatus = targetCol.statuses[0] || 'EM_RECARGA';
+
+    AppStore.moveCartridgeStatus(cart.id, targetStatus, currentUser.full_name, `Avançado via botão rápido para ${targetCol.title}`);
+    loadData();
+  };
+
+  // Drag and Drop
+  const handleDropOnColumn = (targetCol: KanbanColumnConfig, cartId: string) => {
+    if (!canEditTech || !cartId) return;
+    setDragOverColId(null);
+    const targetStatus = targetCol.statuses[0] || 'EM_RECARGA';
+    AppStore.moveCartridgeStatus(cartId, targetStatus, currentUser.full_name, `Movido via arrastar e soltar para ${targetCol.title}`);
+    loadData();
+  };
+
+  // Kanban Customization Handlers
+  const handleOpenCustomize = () => {
+    setEditedColumns(JSON.parse(JSON.stringify(kanbanColumns)));
+    setShowCustomizeModal(true);
+  };
+
+  const handleSaveCustomization = () => {
+    AppStore.saveKanbanColumns(currentCompany.id, editedColumns, currentUser.full_name);
+    loadData();
+    setShowCustomizeModal(false);
+  };
+
+  const handleResetToPreset = () => {
+    const seg = segmentConfig.segment || 'RECARGA_CARTUCHOS';
+    const defaults = AppStore.getSegmentConfig(currentCompany.id);
+    const presetCols = AppStore.getKanbanColumns();
+    setEditedColumns(presetCols);
+  };
+
   // Filtered cartridges
   const filtered = cartridges.filter(c => 
     !searchFilter ||
@@ -154,12 +290,6 @@ export default function TechnicianWorkbenchPage() {
     (c.customer_name && c.customer_name.toLowerCase().includes(searchFilter.toLowerCase())) ||
     (c.model?.model_name && c.model.model_name.toLowerCase().includes(searchFilter.toLowerCase()))
   );
-
-  // Group into Kanban Columns
-  const colWaiting = filtered.filter(c => ['RECEBIDO', 'AGUARDANDO_VERIFICACAO', 'EM_VERIFICACAO'].includes(c.status));
-  const colRefill = filtered.filter(c => ['AGUARDANDO_RECARGA', 'EM_RECARGA'].includes(c.status));
-  const colTesting = filtered.filter(c => ['AGUARDANDO_TESTE', 'EM_TESTE'].includes(c.status));
-  const colDone = filtered.filter(c => ['FINALIZADO', 'COM_PROBLEMA', 'SEM_REPARO', 'ENTREGUE'].includes(c.status));
 
   // Calculated Weight Diff Live Preview
   const inVal = Number(inputWeight) || 0;
@@ -173,79 +303,70 @@ export default function TechnicianWorkbenchPage() {
         <div>
           <h1 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
             <Wrench className="w-5 h-5 text-amber-600 shrink-0" />
-            <span>Bancada Técnica & Fila</span>
-            <Badge className="bg-amber-700 text-white font-bold text-[10px]">Oficina</Badge>
+            <span>Bancada Técnica & Fila Kanban</span>
+            <Badge className="bg-amber-700 text-white font-bold text-[10px]">{segmentConfig.segmentName}</Badge>
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Controle de fluxo técnico, pesagem de tinta, testes e diagnósticos
+            Fluxo operacional personalizável com arrastar e soltar, diagnósticos e controle de etapas
           </p>
         </div>
 
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          <div className="relative w-full sm:w-72">
+        <div className="flex items-center gap-2.5 w-full sm:w-auto flex-wrap">
+          <div className="relative w-full sm:w-64">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <Input
-              placeholder="Buscar por cliente, modelo ou série..."
+              placeholder={`Buscar por cliente, modelo ou ${segmentConfig.identifierLabel.toLowerCase()}...`}
               value={searchFilter}
               onChange={(e) => setSearchFilter(e.target.value)}
               className="pl-9 text-xs"
             />
           </div>
+
+          {canCustomizeKanban && (
+            <Button
+              onClick={handleOpenCustomize}
+              variant="outline"
+              size="sm"
+              className="gap-1.5 text-xs font-semibold h-9 border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+            >
+              <Settings2 className="w-4 h-4 text-amber-600" />
+              <span>Personalizar Colunas</span>
+            </Button>
+          )}
         </div>
       </div>
 
       {/* Mobile Stage Selector Tabs (Visible on < lg screens) */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:hidden">
         <button
-          onClick={() => setMobileStageTab('ALL')}
+          onClick={() => setActiveMobileColumnId('ALL')}
           className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors ${
-            mobileStageTab === 'ALL'
+            activeMobileColumnId === 'ALL'
               ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-sm'
               : 'bg-slate-100 text-slate-600 dark:bg-slate-850 dark:text-slate-400'
           }`}
         >
           Todos ({filtered.length})
         </button>
-        <button
-          onClick={() => setMobileStageTab('WAITING')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors ${
-            mobileStageTab === 'WAITING'
-              ? 'bg-amber-600 text-white shadow-sm'
-              : 'bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300'
-          }`}
-        >
-          Análise ({colWaiting.length})
-        </button>
-        <button
-          onClick={() => setMobileStageTab('REFILL')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors ${
-            mobileStageTab === 'REFILL'
-              ? 'bg-purple-600 text-white shadow-sm'
-              : 'bg-purple-50 text-purple-800 dark:bg-purple-950/40 dark:text-purple-300'
-          }`}
-        >
-          Recarga ({colRefill.length})
-        </button>
-        <button
-          onClick={() => setMobileStageTab('TESTING')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors ${
-            mobileStageTab === 'TESTING'
-              ? 'bg-blue-600 text-white shadow-sm'
-              : 'bg-blue-50 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300'
-          }`}
-        >
-          Teste ({colTesting.length})
-        </button>
-        <button
-          onClick={() => setMobileStageTab('DONE')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors ${
-            mobileStageTab === 'DONE'
-              ? 'bg-emerald-600 text-white shadow-sm'
-              : 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300'
-          }`}
-        >
-          Prontos ({colDone.length})
-        </button>
+        {kanbanColumns.map(col => {
+          const count = filtered.filter(c => col.statuses.includes(c.status)).length;
+          const styles = COLOR_MAP[col.color] || COLOR_MAP.amber;
+          const isActive = activeMobileColumnId === col.id;
+
+          return (
+            <button
+              key={col.id}
+              onClick={() => setActiveMobileColumnId(col.id)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors ${
+                isActive
+                  ? `${styles.badge} shadow-sm`
+                  : `${styles.bg} ${styles.text}`
+              }`}
+            >
+              {col.title} ({count})
+            </button>
+          );
+        })}
       </div>
 
       {/* Notice if Attendant is viewing Bancada */}
@@ -253,89 +374,231 @@ export default function TechnicianWorkbenchPage() {
         <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 rounded-xl flex items-center gap-2.5 text-xs text-amber-800 dark:text-amber-300">
           <Info className="w-4 h-4 text-amber-600 shrink-0" />
           <span>
-            <strong>Modo Somente Leitura (Atendente):</strong> Você pode acompanhar o andamento dos cartuchos na bancada, mas alterações técnicas e diagnósticos só podem ser gravados por Técnicos ou Administradores.
+            <strong>Modo Somente Leitura:</strong> Você pode acompanhar o andamento dos itens na bancada, mas alterações técnicas e diagnósticos só podem ser gravados por Técnicos ou Administradores.
           </span>
         </div>
       )}
 
-      {/* Kanban Board Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
-        {/* Column 1: Aguardando Análise */}
-        <div className={`bg-slate-100 dark:bg-slate-900/80 p-3 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2.5 ${
-          mobileStageTab !== 'ALL' && mobileStageTab !== 'WAITING' ? 'hidden lg:block' : 'block'
-        }`}>
-          <div className="flex items-center justify-between px-1.5 py-0.5">
-            <h3 className="font-bold text-xs uppercase tracking-wider text-amber-800 dark:text-amber-400 flex items-center gap-1.5">
-              <Clock className="w-4 h-4" />
-              <span>Aguardando Análise ({colWaiting.length})</span>
-            </h3>
-          </div>
+      {/* Dynamic Kanban Board Grid */}
+      <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-${Math.min(kanbanColumns.length, 5)} gap-4 items-start`}>
+        {kanbanColumns.map((col, colIdx) => {
+          const colItems = filtered.filter(c => col.statuses.includes(c.status));
+          const styles = COLOR_MAP[col.color] || COLOR_MAP.amber;
+          const isMobileVisible = activeMobileColumnId === 'ALL' || activeMobileColumnId === col.id;
+          const isDragOver = dragOverColId === col.id;
 
-          <div className="space-y-2">
-            {colWaiting.map(cart => (
-              <KanbanCard key={cart.id} cart={cart} onClick={() => handleOpenCartridge(cart)} />
-            ))}
-            {colWaiting.length === 0 && <EmptyColumn />}
-          </div>
-        </div>
+          return (
+            <div 
+              key={col.id}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragOverColId(col.id);
+              }}
+              onDragLeave={() => setDragOverColId(null)}
+              onDrop={(e) => {
+                e.preventDefault();
+                const cartId = e.dataTransfer.getData('text/plain');
+                handleDropOnColumn(col, cartId);
+              }}
+              className={`p-3 rounded-xl border transition-all space-y-2.5 ${styles.bg} ${styles.border} ${
+                isDragOver ? 'ring-2 ring-emerald-500 border-emerald-500 scale-[1.01]' : ''
+              } ${isMobileVisible ? 'block' : 'hidden lg:block'}`}
+            >
+              {/* Column Header */}
+              <div className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg ${styles.headerBg}`}>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className={`font-bold text-xs uppercase tracking-wider truncate ${styles.text}`}>
+                    {col.title}
+                  </span>
+                </div>
+                <Badge className={`${styles.badge} text-[10px] font-mono px-2 py-0`}>
+                  {colItems.length}
+                </Badge>
+              </div>
 
-        {/* Column 2: Em Recarga */}
-        <div className={`bg-slate-100 dark:bg-slate-900/80 p-3 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2.5 ${
-          mobileStageTab !== 'ALL' && mobileStageTab !== 'REFILL' ? 'hidden lg:block' : 'block'
-        }`}>
-          <div className="flex items-center justify-between px-1.5 py-0.5">
-            <h3 className="font-bold text-xs uppercase tracking-wider text-purple-800 dark:text-purple-400 flex items-center gap-1.5">
-              <Wrench className="w-4 h-4" />
-              <span>Em Recarga ({colRefill.length})</span>
-            </h3>
-          </div>
+              {col.description && (
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 px-1 leading-tight">
+                  {col.description}
+                </p>
+              )}
 
-          <div className="space-y-2">
-            {colRefill.map(cart => (
-              <KanbanCard key={cart.id} cart={cart} onClick={() => handleOpenCartridge(cart)} />
-            ))}
-            {colRefill.length === 0 && <EmptyColumn />}
-          </div>
-        </div>
-
-        {/* Column 3: Aguardando Teste */}
-        <div className={`bg-slate-100 dark:bg-slate-900/80 p-3 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2.5 ${
-          mobileStageTab !== 'ALL' && mobileStageTab !== 'TESTING' ? 'hidden lg:block' : 'block'
-        }`}>
-          <div className="flex items-center justify-between px-1.5 py-0.5">
-            <h3 className="font-bold text-xs uppercase tracking-wider text-blue-800 dark:text-blue-400 flex items-center gap-1.5">
-              <Scale className="w-4 h-4" />
-              <span>Em Teste ({colTesting.length})</span>
-            </h3>
-          </div>
-
-          <div className="space-y-2">
-            {colTesting.map(cart => (
-              <KanbanCard key={cart.id} cart={cart} onClick={() => handleOpenCartridge(cart)} />
-            ))}
-            {colTesting.length === 0 && <EmptyColumn />}
-          </div>
-        </div>
-
-        {/* Column 4: Finalizados / Defeitos */}
-        <div className={`bg-slate-100 dark:bg-slate-900/80 p-3 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2.5 ${
-          mobileStageTab !== 'ALL' && mobileStageTab !== 'DONE' ? 'hidden lg:block' : 'block'
-        }`}>
-          <div className="flex items-center justify-between px-1.5 py-0.5">
-            <h3 className="font-bold text-xs uppercase tracking-wider text-emerald-800 dark:text-emerald-400 flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4" />
-              <span>Concluídos / Defeitos ({colDone.length})</span>
-            </h3>
-          </div>
-
-          <div className="space-y-2">
-            {colDone.map(cart => (
-              <KanbanCard key={cart.id} cart={cart} onClick={() => handleOpenCartridge(cart)} />
-            ))}
-            {colDone.length === 0 && <EmptyColumn />}
-          </div>
-        </div>
+              {/* Cards List */}
+              <div className="space-y-2 min-h-[120px]">
+                {colItems.map(cart => (
+                  <KanbanCard 
+                    key={cart.id} 
+                    cart={cart} 
+                    segmentConfig={segmentConfig}
+                    canEdit={canEditTech}
+                    isFirstCol={colIdx === 0}
+                    isLastCol={colIdx === kanbanColumns.length - 1}
+                    onQuickMoveBack={() => handleQuickMove(cart, -1)}
+                    onQuickMoveForward={() => handleQuickMove(cart, 1)}
+                    onClick={() => handleOpenCartridge(cart)} 
+                  />
+                ))}
+                {colItems.length === 0 && <EmptyColumn />}
+              </div>
+            </div>
+          );
+        })}
       </div>
+
+      {/* Modal: Customize Kanban Columns */}
+      {showCustomizeModal && (
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 w-full max-w-2xl p-5 sm:p-6 shadow-2xl space-y-4 max-h-[92vh] flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 shrink-0">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <Sliders className="w-4 h-4 text-amber-600" />
+                  <span>Personalizar Colunas & Etapas do Kanban</span>
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Renomeie colunas, selecione cores e configure quais status pertencem a cada etapa
+                </p>
+              </div>
+              <Button size="sm" variant="ghost" onClick={() => setShowCustomizeModal(false)} className="h-8 w-8 p-0 text-slate-400">
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+
+            <div className="space-y-4 flex-1 overflow-y-auto pr-1">
+              {editedColumns.map((col, idx) => (
+                <div 
+                  key={col.id || idx}
+                  className="p-3.5 bg-slate-50 dark:bg-slate-850 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex-1">
+                      <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 block">
+                        Título da Coluna #{idx + 1}
+                      </label>
+                      <Input
+                        value={col.title}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setEditedColumns(prev => prev.map((c, i) => i === idx ? { ...c, title: val } : c));
+                        }}
+                        className="text-xs font-bold"
+                      />
+                    </div>
+
+                    <div className="w-36">
+                      <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 block">
+                        Cor de Destaque
+                      </label>
+                      <Select
+                        value={col.color}
+                        onChange={(e) => {
+                          const val = e.target.value as KanbanColumnColor;
+                          setEditedColumns(prev => prev.map((c, i) => i === idx ? { ...c, color: val } : c));
+                        }}
+                        className="text-xs font-semibold"
+                      >
+                        <option value="amber">Âmbar / Amarelo</option>
+                        <option value="purple">Roxo / Púrpura</option>
+                        <option value="blue">Azul</option>
+                        <option value="emerald">Verde Esmeralda</option>
+                        <option value="teal">Verde Azulado</option>
+                        <option value="indigo">Índigo</option>
+                        <option value="rose">Rosa / Vermelho</option>
+                        <option value="slate">Cinza Neutro</option>
+                      </Select>
+                    </div>
+
+                    {editedColumns.length > 2 && (
+                      <button
+                        type="button"
+                        onClick={() => setEditedColumns(prev => prev.filter((_, i) => i !== idx))}
+                        className="text-rose-600 hover:text-rose-700 p-1.5 mt-5"
+                        title="Remover coluna"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Statuses assigned to this column */}
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 block">
+                      Status que pertencem a esta coluna:
+                    </label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {ALL_STATUSES.map(st => {
+                        const isChecked = col.statuses.includes(st.key);
+                        return (
+                          <button
+                            key={st.key}
+                            type="button"
+                            onClick={() => {
+                              setEditedColumns(prev => prev.map((c, i) => {
+                                if (i !== idx) return c;
+                                const newStatuses = isChecked
+                                  ? c.statuses.filter(s => s !== st.key)
+                                  : [...c.statuses, st.key];
+                                return { ...c, statuses: newStatuses };
+                              }));
+                            }}
+                            className={`px-2 py-1 rounded text-[10px] font-semibold border transition-all ${
+                              isChecked
+                                ? 'bg-slate-900 text-white dark:bg-emerald-600 border-transparent shadow-sm'
+                                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-400'
+                            }`}
+                          >
+                            {isChecked ? '✓ ' : '+ '}{st.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              <div className="flex items-center justify-between pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const newId = `col-${Date.now()}`;
+                    setEditedColumns(prev => [
+                      ...prev,
+                      { id: newId, title: `Nova Etapa ${prev.length + 1}`, color: 'teal', statuses: ['EM_TESTE'] }
+                    ]);
+                  }}
+                  className="gap-1.5 text-xs font-semibold"
+                >
+                  <PlusCircle className="w-3.5 h-3.5" />
+                  <span>Adicionar Mais 1 Coluna</span>
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleResetToPreset}
+                  className="gap-1.5 text-xs text-slate-500 hover:text-slate-800"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Restaurar Padrão do Segmento</span>
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800 shrink-0">
+              <Button type="button" variant="outline" size="sm" onClick={() => setShowCustomizeModal(false)}>
+                Cancelar
+              </Button>
+              <Button type="button" size="sm" onClick={handleSaveCustomization} className="bg-amber-600 hover:bg-amber-700 font-bold text-white">
+                Salvar Configuração do Kanban
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Technician Action Modal / Drawer */}
 
       {/* Technician Action Modal / Drawer */}
       {selectedCartridge && (
@@ -614,21 +877,45 @@ export default function TechnicianWorkbenchPage() {
   );
 }
 
-function KanbanCard({ cart, onClick }: { cart: Cartridge; onClick: () => void }) {
+function KanbanCard({ 
+  cart, 
+  segmentConfig,
+  canEdit,
+  isFirstCol,
+  isLastCol,
+  onQuickMoveBack,
+  onQuickMoveForward,
+  onClick 
+}: { 
+  cart: Cartridge; 
+  segmentConfig: SegmentCustomization;
+  canEdit: boolean;
+  isFirstCol?: boolean;
+  isLastCol?: boolean;
+  onQuickMoveBack: () => void;
+  onQuickMoveForward: () => void;
+  onClick: () => void; 
+}) {
   const statusBadge = getStatusBadgeConfig(cart.status);
   const resultBadge = getResultBadgeConfig(cart.result_classification);
 
   return (
     <Card 
       onClick={onClick}
-      className="p-3 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-amber-400 dark:hover:border-amber-500 transition-all cursor-pointer shadow-sm hover:shadow group"
+      draggable={canEdit}
+      onDragStart={(e) => {
+        e.dataTransfer.setData('text/plain', cart.id);
+      }}
+      className={`p-3 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-amber-400 dark:hover:border-amber-500 transition-all cursor-pointer shadow-sm hover:shadow group ${
+        canEdit ? 'active:cursor-grabbing hover:translate-y-[-1px]' : ''
+      }`}
     >
       <div className="flex items-center justify-between mb-1.5">
         <span className="font-mono text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-amber-600 transition-colors">
           {cart.serial_number}
         </span>
         <span className="font-mono text-xs bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 px-1.5 py-0.5 rounded font-bold border border-amber-300">
-          {cart.final_serie}
+          {cart.final_serie || 'S/N'}
         </span>
       </div>
 
@@ -639,24 +926,74 @@ function KanbanCard({ cart, onClick }: { cart: Cartridge; onClick: () => void })
       </div>
 
       <div className="text-xs font-semibold text-slate-900 dark:text-slate-100 mb-1">
-        {cart.model?.model_name || 'Cartucho'} ({cart.color}) {cart.is_xl ? '[XL]' : ''}
+        {cart.model?.model_name || segmentConfig.itemLabelSingular} {cart.color ? `(${cart.color})` : ''} {cart.is_xl ? '[XL]' : ''}
       </div>
 
       <div className="text-[11px] text-slate-500 flex items-center justify-between mb-1.5">
-        <span>{cart.service_requested.replace('_E_', '+')}</span>
-        <span>Peso: {formatWeight(cart.input_weight_grams)}</span>
+        <span className="truncate max-w-[130px]">{cart.service_requested.replace(/_/g, ' ')}</span>
+        {segmentConfig.hasWeightInspection && cart.input_weight_grams ? (
+          <span>Peso: {formatWeight(cart.input_weight_grams)}</span>
+        ) : (
+          <span className={`text-[10px] px-1.5 py-0.2 rounded font-medium ${statusBadge.className}`}>
+            {statusBadge.label}
+          </span>
+        )}
       </div>
 
+      {/* Result badge or weight diff */}
       {cart.result_classification !== 'PENDENTE' && (
         <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
           <span className={`text-[10px] px-2 py-0.5 rounded ${resultBadge.className}`}>
             {resultBadge.label}
           </span>
-          {cart.weight_diff_grams && (
+          {cart.weight_diff_grams ? (
             <span className="text-[11px] font-bold text-emerald-600">
               +{cart.weight_diff_grams}g
             </span>
-          )}
+          ) : null}
+        </div>
+      )}
+
+      {/* Quick 1-Click Move Toolbar (Visible on hover or mobile) */}
+      {canEdit && (
+        <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-1.5 opacity-90 group-hover:opacity-100">
+          <button
+            type="button"
+            disabled={isFirstCol}
+            onClick={(e) => {
+              e.stopPropagation();
+              onQuickMoveBack();
+            }}
+            title="Voltar para etapa anterior"
+            className={`p-1 rounded text-xs flex items-center gap-1 transition-colors ${
+              isFirstCol
+                ? 'opacity-20 cursor-not-allowed text-slate-400'
+                : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold'
+            }`}
+          >
+            <ArrowLeft className="w-3 h-3" />
+            <span className="text-[10px]">Voltar</span>
+          </button>
+
+          <span className="text-[9px] text-slate-400 font-mono">Arrastar ⇄</span>
+
+          <button
+            type="button"
+            disabled={isLastCol}
+            onClick={(e) => {
+              e.stopPropagation();
+              onQuickMoveForward();
+            }}
+            title="Avançar para próxima etapa"
+            className={`p-1 rounded text-xs flex items-center gap-1 transition-colors ${
+              isLastCol
+                ? 'opacity-20 cursor-not-allowed text-slate-400'
+                : 'hover:bg-amber-100 dark:hover:bg-amber-950 text-amber-700 dark:text-amber-400 font-bold'
+            }`}
+          >
+            <span className="text-[10px]">Avançar</span>
+            <ArrowRight className="w-3 h-3" />
+          </button>
         </div>
       )}
     </Card>
@@ -666,7 +1003,7 @@ function KanbanCard({ cart, onClick }: { cart: Cartridge; onClick: () => void })
 function EmptyColumn() {
   return (
     <div className="p-6 text-center text-slate-400 text-xs border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
-      Nenhum cartucho nesta etapa.
+      Nenhum item nesta etapa.
     </div>
   );
 }

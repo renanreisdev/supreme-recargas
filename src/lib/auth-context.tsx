@@ -131,7 +131,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       case 'manage_company':
       case 'manage_users':
       case 'manage_models':
+      case 'manage_services':
       case 'manage_prices':
+      case 'customize_kanban':
       case 'view_financial_reports':
       case 'view_revenue_dashboard':
       case 'view_audit_logs':

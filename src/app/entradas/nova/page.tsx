@@ -22,7 +22,7 @@ import {
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { AppStore } from '@/lib/store';
-import { Customer, CartridgeModel, RequestedService, CartridgeEntry, PaymentMethod, PaymentStatus, CompanySettings, SegmentCustomization } from '@/types';
+import { Customer, CartridgeModel, RequestedService, CartridgeEntry, PaymentMethod, PaymentStatus, CompanySettings, SegmentCustomization, ServicePrice } from '@/types';
 import { formatCurrency, getPaymentMethodLabel } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -34,7 +34,7 @@ import { ModelCombobox } from '@/components/ModelCombobox';
 interface CartridgeItemInput {
   id: string;
   model_id: string;
-  service_requested: RequestedService;
+  service_requested: RequestedService | string;
   color: string;
   is_xl: boolean;
   final_serie: string;
@@ -54,6 +54,7 @@ export default function NewEntryPage() {
   // State
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [models, setModels] = useState<CartridgeModel[]>([]);
+  const [services, setServices] = useState<ServicePrice[]>([]);
   const [settings, setSettings] = useState<CompanySettings>(AppStore.getSettings(currentCompany.id));
   const [segmentConfig, setSegmentConfig] = useState<SegmentCustomization>(AppStore.getSegmentConfig(currentCompany.id));
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
@@ -76,10 +77,12 @@ export default function NewEntryPage() {
   useEffect(() => {
     const custs = AppStore.getCustomers(currentCompany.id);
     const mods = AppStore.getModels(currentCompany.id);
+    const srvs = AppStore.getServices(currentCompany.id);
     const stt = AppStore.getSettings(currentCompany.id);
     const seg = AppStore.getSegmentConfig(currentCompany.id);
     setCustomers(custs);
     setModels(mods);
+    setServices(srvs.filter(s => s.is_active));
     setSettings(stt);
     setSegmentConfig(seg);
 
@@ -90,13 +93,14 @@ export default function NewEntryPage() {
 
     if (mods.length > 0) {
       const defaultMod = mods[0];
-      const calc = AppStore.calculateItemPrice(currentCompany.id, defaultMod.id, 'VERIFICACAO_E_RECARGA');
+      const defaultServiceType = srvs.length > 0 ? (srvs[0].service_type || srvs[0].id) : 'VERIFICACAO_E_RECARGA';
+      const calc = AppStore.calculateItemPrice(currentCompany.id, defaultMod.id, defaultServiceType);
 
       setItems([
         {
           id: `item-${Date.now()}`,
           model_id: defaultMod.id,
-          service_requested: 'VERIFICACAO_E_RECARGA',
+          service_requested: defaultServiceType,
           color: defaultMod.color,
           is_xl: defaultMod.is_xl,
           final_serie: '',
@@ -146,8 +150,9 @@ export default function NewEntryPage() {
   // Add Item Line
   const handleAddItem = () => {
     const defaultModel = models[0];
+    const defaultServiceType = services.length > 0 ? (services[0].service_type || services[0].id) : 'VERIFICACAO_E_RECARGA';
     const calc = defaultModel 
-      ? AppStore.calculateItemPrice(currentCompany.id, defaultModel.id, 'VERIFICACAO_E_RECARGA')
+      ? AppStore.calculateItemPrice(currentCompany.id, defaultModel.id, defaultServiceType)
       : { finalPrice: 30.00, isVerificationWaived: true, explanation: 'Preço padrão' };
 
     const initialChecklist = (settings.custom_checklist_items || segmentConfig.defaultChecklistItems || []).map(item => ({
@@ -160,7 +165,7 @@ export default function NewEntryPage() {
       {
         id: `item-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
         model_id: defaultModel ? defaultModel.id : '',
-        service_requested: 'VERIFICACAO_E_RECARGA',
+        service_requested: defaultServiceType,
         color: defaultModel ? defaultModel.color : 'Preto',
         is_xl: defaultModel ? defaultModel.is_xl : false,
         final_serie: '',
@@ -537,14 +542,24 @@ export default function NewEntryPage() {
                   </label>
                   <Select
                     value={item.service_requested}
-                    onChange={(e) => handleUpdateItem(item.id, 'service_requested', e.target.value as RequestedService)}
+                    onChange={(e) => handleUpdateItem(item.id, 'service_requested', e.target.value)}
                     required
                     className="text-xs font-medium"
                   >
-                    <option value="VERIFICACAO_E_RECARGA">Diagnóstico + Serviço</option>
-                    <option value="RECARGA">Serviço Padrão</option>
-                    <option value="VERIFICACAO">Somente Diagnóstico / Orçamento</option>
-                    <option value="TESTE">Teste & Inspeção</option>
+                    {services.length > 0 ? (
+                      services.map(s => (
+                        <option key={s.id} value={s.service_type || s.id}>
+                          {s.title} — R$ {Number(s.default_price).toFixed(2)}
+                        </option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="VERIFICACAO_E_RECARGA">Diagnóstico + Serviço</option>
+                        <option value="RECARGA">Serviço Padrão</option>
+                        <option value="VERIFICACAO">Somente Diagnóstico / Orçamento</option>
+                        <option value="TESTE">Teste & Inspeção</option>
+                      </>
+                    )}
                   </Select>
                 </div>
 

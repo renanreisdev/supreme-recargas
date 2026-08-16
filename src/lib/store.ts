@@ -23,7 +23,8 @@ import {
   Plan,
   Subscription,
   BusinessSegment,
-  SegmentCustomization
+  SegmentCustomization,
+  KanbanColumnConfig
 } from '@/types';
 import { supabase } from '@/lib/supabase';
 
@@ -462,6 +463,32 @@ export const MOCK_CUSTOMERS: Customer[] = [
     company_name: 'Clínica Sorriso',
     notes: 'Solicita sempre recibo impresso',
     created_at: '2026-02-01T00:00:00.000Z'
+  },
+  {
+    id: 'ca000000-0000-0000-0000-000000000003',
+    tenant_id: MOCK_COMPANY_SUPREME.id,
+    internal_code: 1003,
+    name: 'Escritório Contábil Modelo',
+    document: '22.333.444/0001-55',
+    phone: '(11) 96666-3333',
+    whatsapp: '11966663333',
+    email: 'contato@contabilmodelo.com.br',
+    company_name: 'Contábil Modelo',
+    notes: 'Alto volume de toners',
+    created_at: '2026-02-10T00:00:00.000Z'
+  },
+  {
+    id: 'ca000000-0000-0000-0000-000000000004',
+    tenant_id: MOCK_COMPANY_SUPREME.id,
+    internal_code: 1004,
+    name: 'Auto Elétrica São Jorge',
+    document: '33.444.555/0001-66',
+    phone: '(11) 95555-4444',
+    whatsapp: '11955554444',
+    email: 'eletricasj@gmail.com',
+    company_name: 'São Jorge Auto Elétrica',
+    notes: 'Manutenção de ferramentas e alternadores',
+    created_at: '2026-02-15T00:00:00.000Z'
   }
 ];
 
@@ -670,23 +697,55 @@ export const MOCK_MODELS: CartridgeModel[] = [
   }
 ];
 
+export const DEFAULT_KANBAN_COLUMNS: Record<BusinessSegment, KanbanColumnConfig[]> = {
+  RECARGA_CARTUCHOS: [
+    { id: 'col-waiting', title: '1. Triagem & Balança', color: 'amber', statuses: ['RECEBIDO', 'AGUARDANDO_VERIFICACAO', 'EM_VERIFICACAO'], description: 'Recepção, identificação de série e pesagem inicial' },
+    { id: 'col-refill', title: '2. Em Recarga', color: 'purple', statuses: ['AGUARDANDO_RECARGA', 'EM_RECARGA'], description: 'Injeção de tinta, pressurização e câmara de vácuo' },
+    { id: 'col-testing', title: '3. Teste & Pesagem Final', color: 'blue', statuses: ['AGUARDANDO_TESTE', 'EM_TESTE'], description: 'Impressão de padrão de cores e pesagem de saída' },
+    { id: 'col-done', title: '4. Concluídos / Defeitos', color: 'emerald', statuses: ['FINALIZADO', 'ENTREGUE', 'COM_PROBLEMA', 'SEM_REPARO'], description: 'Itens finalizados ou com laudo técnico' }
+  ],
+  ASSISTENCIA_CELULARES_INFORMATICA: [
+    { id: 'col-waiting', title: '1. Triagem & Checklist', color: 'amber', statuses: ['RECEBIDO', 'AGUARDANDO_VERIFICACAO', 'EM_VERIFICACAO'], description: 'Checklist de entrada, IMEI e teste de toque' },
+    { id: 'col-refill', title: '2. Bancada & Reparo', color: 'purple', statuses: ['AGUARDANDO_RECARGA', 'EM_RECARGA'], description: 'Troca de componentes, microsolda e montagem' },
+    { id: 'col-testing', title: '3. Aguardando Peça / Teste', color: 'blue', statuses: ['AGUARDANDO_TESTE', 'EM_TESTE', 'COM_PROBLEMA'], description: 'Testes de estresse de bateria e câmeras' },
+    { id: 'col-done', title: '4. Pronto p/ Retirada', color: 'emerald', statuses: ['FINALIZADO', 'ENTREGUE', 'SEM_REPARO'], description: 'Equipamento limpo e pronto para entrega' }
+  ],
+  FERRAMENTAS_MOTORES: [
+    { id: 'col-waiting', title: '1. Recepção & Desmontagem', color: 'amber', statuses: ['RECEBIDO', 'AGUARDANDO_VERIFICACAO', 'EM_VERIFICACAO'], description: 'Desmontagem e análise do induzido e rolamentos' },
+    { id: 'col-refill', title: '2. Bobinagem & Peças', color: 'purple', statuses: ['AGUARDANDO_RECARGA', 'EM_RECARGA'], description: 'Troca de carvão, engrenagens e isolamento' },
+    { id: 'col-testing', title: '3. Montagem & Teste Elétrico', color: 'blue', statuses: ['AGUARDANDO_TESTE', 'EM_TESTE', 'COM_PROBLEMA'], description: 'Medição em carga e teste de fuga de corrente' },
+    { id: 'col-done', title: '4. Pronto / Entregue', color: 'emerald', statuses: ['FINALIZADO', 'ENTREGUE', 'SEM_REPARO'], description: 'Máquina lubrificada e liberada' }
+  ],
+  OFICINA_GERAL: [
+    { id: 'col-waiting', title: '1. Entrada / Avaliação', color: 'amber', statuses: ['RECEBIDO', 'AGUARDANDO_VERIFICACAO', 'EM_VERIFICACAO'], description: 'Inspeção física e levantamento de avarias' },
+    { id: 'col-refill', title: '2. Em Execução', color: 'purple', statuses: ['AGUARDANDO_RECARGA', 'EM_RECARGA'], description: 'Execução do serviço e substituição de peças' },
+    { id: 'col-testing', title: '3. Revisão & Testes', color: 'blue', statuses: ['AGUARDANDO_TESTE', 'EM_TESTE', 'COM_PROBLEMA'], description: 'Inspeção de qualidade final' },
+    { id: 'col-done', title: '4. Finalizado', color: 'emerald', statuses: ['FINALIZADO', 'ENTREGUE', 'SEM_REPARO'], description: 'Serviço concluído' }
+  ]
+};
+
 export const MOCK_SERVICE_PRICES: ServicePrice[] = [
+  // 1. Recarga de Cartuchos & Toners
   {
     id: 'f6000000-0000-0000-0000-000000000001',
     tenant_id: MOCK_COMPANY_SUPREME.id,
     service_type: 'VERIFICACAO',
     title: 'Verificação e Teste Eletrônico',
-    description: 'Diagnóstico no testador elétrico e balança',
+    description: 'Diagnóstico no testador elétrico e balança de precisão',
     default_price: 15.00,
+    estimated_time_minutes: 15,
+    category: 'Cartuchos',
     is_active: true
   },
   {
     id: 'f6000000-0000-0000-0000-000000000002',
     tenant_id: MOCK_COMPANY_SUPREME.id,
     service_type: 'RECARGA',
-    title: 'Recarga Padrão',
-    description: 'Carga completa de tinta de alta densidade',
+    title: 'Recarga Padrão de Tinta',
+    description: 'Carga completa de tinta pigmentada ou corante de alta densidade',
     default_price: 30.00,
+    estimated_time_minutes: 30,
+    category: 'Cartuchos',
     is_active: true
   },
   {
@@ -694,17 +753,102 @@ export const MOCK_SERVICE_PRICES: ServicePrice[] = [
     tenant_id: MOCK_COMPANY_SUPREME.id,
     service_type: 'VERIFICACAO_E_RECARGA',
     title: 'Verificação + Recarga Completa',
-    description: 'Desconto da taxa de teste ao realizar a recarga',
+    description: 'Isenção da taxa de teste ao realizar a recarga',
     default_price: 30.00,
+    estimated_time_minutes: 40,
+    category: 'Cartuchos',
     is_active: true
   },
   {
     id: 'f6000000-0000-0000-0000-000000000004',
     tenant_id: MOCK_COMPANY_SUPREME.id,
+    service_type: 'DESOBSTRUCAO',
+    title: 'Desobstrução Ultrassônica de Bicos',
+    description: 'Limpeza profunda em cuba ultrassônica com desentupidor químico',
+    default_price: 25.00,
+    estimated_time_minutes: 45,
+    category: 'Cartuchos',
+    is_active: true
+  },
+  {
+    id: 'f6000000-0000-0000-0000-000000000005',
+    tenant_id: MOCK_COMPANY_SUPREME.id,
     service_type: 'TESTE',
     title: 'Teste de Impressão em Bancada',
-    description: 'Teste de padrão de cores e bicos injetores',
+    description: 'Teste de padrão de cores e alinhamento de bicos injetores',
     default_price: 10.00,
+    estimated_time_minutes: 10,
+    category: 'Cartuchos',
+    is_active: true
+  },
+
+  // 2. Assistência de Celulares & Informática
+  {
+    id: 'f6000000-0000-0000-0000-000000000010',
+    tenant_id: MOCK_COMPANY_SUPREME.id,
+    service_type: 'TROCA_TELA',
+    title: 'Troca de Tela / Display Frontal',
+    description: 'Substituição completa do módulo display touch + blindagem',
+    default_price: 180.00,
+    estimated_time_minutes: 60,
+    category: 'Smartphones & Tablets',
+    is_active: true
+  },
+  {
+    id: 'f6000000-0000-0000-0000-000000000011',
+    tenant_id: MOCK_COMPANY_SUPREME.id,
+    service_type: 'TROCA_BATERIA',
+    title: 'Troca de Bateria Premium',
+    description: 'Substituição de bateria com calibração de ciclos',
+    default_price: 120.00,
+    estimated_time_minutes: 45,
+    category: 'Smartphones & Tablets',
+    is_active: true
+  },
+  {
+    id: 'f6000000-0000-0000-0000-000000000012',
+    tenant_id: MOCK_COMPANY_SUPREME.id,
+    service_type: 'CONECTOR_CARGA',
+    title: 'Reparo de Conector / Dock de Carga',
+    description: 'Substituição ou ressolda do conector USB Type-C / Lightning',
+    default_price: 90.00,
+    estimated_time_minutes: 50,
+    category: 'Smartphones & Tablets',
+    is_active: true
+  },
+  {
+    id: 'f6000000-0000-0000-0000-000000000013',
+    tenant_id: MOCK_COMPANY_SUPREME.id,
+    service_type: 'FORMATACAO_BACKUP',
+    title: 'Formatação, Limpeza & Backup',
+    description: 'Instalação limpa de sistema operacional, drivers e cópia de segurança',
+    default_price: 130.00,
+    estimated_time_minutes: 90,
+    category: 'Notebooks & Computadores',
+    is_active: true
+  },
+
+  // 3. Ferramentas & Motores
+  {
+    id: 'f6000000-0000-0000-0000-000000000020',
+    tenant_id: MOCK_COMPANY_SUPREME.id,
+    service_type: 'TROCA_CARVAO',
+    title: 'Troca de Escovas de Carvão',
+    description: 'Substituição do par de carvões e lixamento do coletor',
+    default_price: 45.00,
+    estimated_time_minutes: 30,
+    category: 'Ferramentas Elétricas',
+    is_active: true
+  },
+  {
+    id: 'f6000000-0000-0000-0000-000000000021',
+    tenant_id: MOCK_COMPANY_SUPREME.id,
+    service_type: 'REVISAO_MOTOR',
+    title: 'Revisão e Lubrificação Geral',
+    description: 'Desmontagem, desengraxe, troca de graxa de alta temperatura e rolamentos',
+    default_price: 80.00,
+    estimated_time_minutes: 60,
+    category: 'Ferramentas Elétricas',
     is_active: true
   }
 ];
@@ -712,6 +856,7 @@ export const MOCK_SERVICE_PRICES: ServicePrice[] = [
 export const MOCK_COMPANY_SETTINGS: CompanySettings = {
   id: 'e5000000-0000-0000-0000-000000000001',
   tenant_id: MOCK_COMPANY_SUPREME.id,
+  business_segment: 'RECARGA_CARTUCHOS',
   show_prices_on_receipt: true,
   receipt_header_note: 'SUPREME RECARGAS & INFORMÁTICA\nEspecialistas em Recarga e Manutenção',
   receipt_footer_note: 'Garantia de 30 dias para recargas. Apresente este comprovante para retirada.\nObrigado pela preferência!',
@@ -724,7 +869,8 @@ export const MOCK_COMPANY_SETTINGS: CompanySettings = {
   input_weight_responsibility: 'AMBOS',
   thermal_paper_width_mm: 80,
   require_customer_document: false,
-  require_cartridge_serial: true
+  require_cartridge_serial: true,
+  kanban_columns: DEFAULT_KANBAN_COLUMNS.RECARGA_CARTUCHOS
 };
 
 export const INITIAL_AUDIT_LOGS: AuditLog[] = [
@@ -766,13 +912,27 @@ export const INITIAL_ENTRIES: CartridgeEntry[] = [
     discount_amount: 5.00,
     surcharge_amount: 0,
     total_amount: 60.00,
-    payment_status: 'PENDENTE',
+    payment_status: 'PAGO',
     payment_method: 'PIX',
     payments: [{ method: 'PIX', amount: 60.00 }],
-    general_notes: 'Cliente deixou os 2 cartuchos no balcão de manhã',
+    amount_paid: 60.00,
+    paid_at: new Date(Date.now() - 86400000).toISOString(),
+    general_notes: 'Cliente VIP - Retirou no mesmo dia',
     tracking_token: 'trk-2026000001-abc1',
     customer: MOCK_CUSTOMERS[0],
     attendant: MOCK_PROFILES[1],
+    delivery_info: {
+      delivered_at: new Date(Date.now() - 86400000).toISOString(),
+      delivered_by: MOCK_PROFILES[1].id,
+      receiver_name: 'João Silva',
+      receiver_document: '11.222.333/0001-44',
+      receiver_relation: 'Próprio Cliente',
+      payment_method: 'PIX',
+      payment_status: 'PAGO',
+      amount_paid: 60.00,
+      paid_at: new Date(Date.now() - 86400000).toISOString(),
+      attendant_name: 'Mariana Santos'
+    },
     created_at: new Date(Date.now() - 86400000 * 2).toISOString()
   },
   {
@@ -787,15 +947,85 @@ export const INITIAL_ENTRIES: CartridgeEntry[] = [
     subtotal_amount: 45.00,
     discount_amount: 0,
     surcharge_amount: 0,
-    total_amount: 45.00,
-    payment_status: 'PENDENTE',
-    payment_method: 'CARTAO_DEBITO',
-    payments: [{ method: 'CARTAO_DEBITO', amount: 45.00 }],
-    general_notes: 'Cartucho falhando cor preta',
+    total_amount: 15.00,
+    payment_status: 'PAGO',
+    payment_method: 'DINHEIRO',
+    payments: [{ method: 'DINHEIRO', amount: 15.00 }],
+    amount_paid: 15.00,
+    paid_at: new Date(Date.now() - 43200000).toISOString(),
+    general_notes: 'Cartucho com circuito queimado - Cobrada taxa de verificação',
     tracking_token: 'trk-2026000002-xyz2',
     customer: MOCK_CUSTOMERS[1],
     attendant: MOCK_PROFILES[1],
+    delivery_info: {
+      delivered_at: new Date(Date.now() - 43200000).toISOString(),
+      delivered_by: MOCK_PROFILES[1].id,
+      receiver_name: 'Dra. Ana Paula Mendes',
+      receiver_relation: 'Próprio Cliente',
+      payment_method: 'DINHEIRO',
+      payment_status: 'PAGO',
+      amount_paid: 15.00,
+      paid_at: new Date(Date.now() - 43200000).toISOString(),
+      attendant_name: 'Mariana Santos'
+    },
     created_at: new Date(Date.now() - 86400000).toISOString()
+  },
+  {
+    id: 'ea000000-0000-0000-0000-000000000003',
+    tenant_id: MOCK_COMPANY_SUPREME.id,
+    entry_number: '2026-000003',
+    entry_sequence: 3,
+    entry_year: 2026,
+    customer_id: MOCK_CUSTOMERS[2].id,
+    attendant_id: MOCK_PROFILES[1].id,
+    entry_date: new Date(Date.now() - 21600000).toISOString(),
+    subtotal_amount: 120.00,
+    discount_amount: 0,
+    surcharge_amount: 0,
+    total_amount: 120.00,
+    payment_status: 'PAGO',
+    payment_method: 'CARTAO_CREDITO',
+    payments: [{ method: 'CARTAO_CREDITO', amount: 120.00 }],
+    amount_paid: 120.00,
+    paid_at: new Date(Date.now() - 10800000).toISOString(),
+    general_notes: 'Recargas toner escritório contábil',
+    tracking_token: 'trk-2026000003-mod3',
+    customer: MOCK_CUSTOMERS[2],
+    attendant: MOCK_PROFILES[1],
+    delivery_info: {
+      delivered_at: new Date(Date.now() - 10800000).toISOString(),
+      delivered_by: MOCK_PROFILES[1].id,
+      receiver_name: 'Pedro Motoboy',
+      receiver_relation: 'Portador / Motoboy',
+      payment_method: 'CARTAO_CREDITO',
+      payment_status: 'PAGO',
+      amount_paid: 120.00,
+      paid_at: new Date(Date.now() - 10800000).toISOString(),
+      attendant_name: 'Mariana Santos'
+    },
+    created_at: new Date(Date.now() - 21600000).toISOString()
+  },
+  {
+    id: 'ea000000-0000-0000-0000-000000000004',
+    tenant_id: MOCK_COMPANY_SUPREME.id,
+    entry_number: '2026-000004',
+    entry_sequence: 4,
+    entry_year: 2026,
+    customer_id: MOCK_CUSTOMERS[0].id,
+    attendant_id: MOCK_PROFILES[1].id,
+    entry_date: new Date().toISOString(),
+    subtotal_amount: 80.00,
+    discount_amount: 0,
+    surcharge_amount: 0,
+    total_amount: 80.00,
+    payment_status: 'PENDENTE',
+    payment_method: 'A_PRAZO',
+    payments: [{ method: 'A_PRAZO', amount: 80.00 }],
+    general_notes: 'Faturamento quinzenal para empresa',
+    tracking_token: 'trk-2026000004-pen4',
+    customer: MOCK_CUSTOMERS[0],
+    attendant: MOCK_PROFILES[1],
+    created_at: new Date().toISOString()
   }
 ];
 
@@ -811,20 +1041,25 @@ export const INITIAL_CARTRIDGES: Cartridge[] = [
     color: 'Preto',
     is_xl: false,
     final_serie: '94A1',
-    status: 'AGUARDANDO_VERIFICACAO',
-    result_classification: 'PENDENTE',
+    status: 'ENTREGUE',
+    result_classification: 'OK',
+    technician_id: MOCK_PROFILES[2].id,
     input_weight_grams: 27.8,
-    reception_notes: 'Cartucho leve na recepção',
+    output_weight_grams: 36.5,
+    weight_diff_grams: 8.7,
+    reception_notes: 'Cartucho entregue ao cliente',
+    technical_notes: 'Recarga 100% OK e aprovada.',
     original_price: 30.00,
     applied_price: 30.00,
     discount_amount: 0,
     surcharge_amount: 0,
     final_price: 30.00,
     model: MOCK_MODELS[0],
+    technician: MOCK_PROFILES[2],
     entry_number: '2026-000001',
     customer_name: 'João Silva Advogados',
     created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
-    updated_at: new Date(Date.now() - 86400000 * 2).toISOString()
+    updated_at: new Date(Date.now() - 86400000).toISOString()
   },
   {
     id: '02000000-0000-0000-0000-000000000002',
@@ -837,7 +1072,7 @@ export const INITIAL_CARTRIDGES: Cartridge[] = [
     color: 'Colorido',
     is_xl: false,
     final_serie: '88C2',
-    status: 'FINALIZADO',
+    status: 'ENTREGUE',
     result_classification: 'OK',
     technician_id: MOCK_PROFILES[2].id,
     input_weight_grams: 29.2,
@@ -855,7 +1090,7 @@ export const INITIAL_CARTRIDGES: Cartridge[] = [
     entry_number: '2026-000001',
     customer_name: 'João Silva Advogados',
     created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
-    updated_at: new Date(Date.now() - 86400000 * 2).toISOString()
+    updated_at: new Date(Date.now() - 86400000).toISOString()
   },
   {
     id: '02000000-0000-0000-0000-000000000003',
@@ -868,7 +1103,7 @@ export const INITIAL_CARTRIDGES: Cartridge[] = [
     color: 'Preto',
     is_xl: true,
     final_serie: 'XL77',
-    status: 'COM_PROBLEMA',
+    status: 'ENTREGUE',
     result_classification: 'QUEIMADO',
     technician_id: MOCK_PROFILES[2].id,
     input_weight_grams: 28.1,
@@ -884,7 +1119,62 @@ export const INITIAL_CARTRIDGES: Cartridge[] = [
     entry_number: '2026-000002',
     customer_name: 'Dra. Ana Paula Mendes',
     created_at: new Date(Date.now() - 86400000).toISOString(),
-    updated_at: new Date(Date.now() - 86400000).toISOString()
+    updated_at: new Date(Date.now() - 43200000).toISOString()
+  },
+  {
+    id: '02000000-0000-0000-0000-000000000004',
+    tenant_id: MOCK_COMPANY_SUPREME.id,
+    entry_id: INITIAL_ENTRIES[2].id,
+    serial_number: '2026-000003-01',
+    item_index: 1,
+    model_id: MOCK_MODELS[3].id,
+    service_requested: 'RECARGA',
+    color: 'Preto',
+    is_xl: false,
+    final_serie: 'PG88',
+    status: 'ENTREGUE',
+    result_classification: 'OK',
+    technician_id: MOCK_PROFILES[2].id,
+    input_weight_grams: 32.0,
+    output_weight_grams: 45.0,
+    weight_diff_grams: 13.0,
+    original_price: 60.00,
+    applied_price: 60.00,
+    discount_amount: 0,
+    surcharge_amount: 0,
+    final_price: 60.00,
+    model: MOCK_MODELS[3],
+    technician: MOCK_PROFILES[2],
+    entry_number: '2026-000003',
+    customer_name: 'Contabilidade Modelo',
+    created_at: new Date(Date.now() - 21600000).toISOString(),
+    updated_at: new Date(Date.now() - 10800000).toISOString()
+  },
+  {
+    id: '02000000-0000-0000-0000-000000000005',
+    tenant_id: MOCK_COMPANY_SUPREME.id,
+    entry_id: INITIAL_ENTRIES[3].id,
+    serial_number: '2026-000004-01',
+    item_index: 1,
+    model_id: MOCK_MODELS[0].id,
+    service_requested: 'VERIFICACAO_E_RECARGA',
+    color: 'Preto',
+    is_xl: false,
+    final_serie: '55Z1',
+    status: 'EM_RECARGA',
+    result_classification: 'PENDENTE',
+    input_weight_grams: 28.0,
+    original_price: 40.00,
+    applied_price: 40.00,
+    discount_amount: 0,
+    surcharge_amount: 0,
+    final_price: 40.00,
+    model: MOCK_MODELS[0],
+    technician: MOCK_PROFILES[2],
+    entry_number: '2026-000004',
+    customer_name: 'João Silva Advogados',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
   }
 ];
 
@@ -893,24 +1183,28 @@ let isRealtimeInitialized = false;
 
 export class AppStore {
   private static isSyncing = false;
+  private static memoryStore: any = null;
 
   private static getStoreData() {
     if (typeof window === 'undefined') {
-      return {
-        profiles: MOCK_PROFILES,
-        entries: INITIAL_ENTRIES,
-        cartridges: INITIAL_CARTRIDGES,
-        customers: MOCK_CUSTOMERS,
-        models: MOCK_MODELS,
-        servicePrices: MOCK_SERVICE_PRICES,
-        settings: MOCK_COMPANY_SETTINGS,
-        company: MOCK_COMPANY_SUPREME,
-        companies: MOCK_COMPANIES,
-        plans: MOCK_PLANS,
-        subscriptions: MOCK_SUBSCRIPTIONS,
-        demoSandbox: INITIAL_DEMO_SANDBOX,
-        auditLogs: INITIAL_AUDIT_LOGS
-      };
+      if (!this.memoryStore) {
+        this.memoryStore = {
+          profiles: [...MOCK_PROFILES],
+          entries: [...INITIAL_ENTRIES],
+          cartridges: [...INITIAL_CARTRIDGES],
+          customers: [...MOCK_CUSTOMERS],
+          models: [...MOCK_MODELS],
+          servicePrices: [...MOCK_SERVICE_PRICES],
+          settings: { ...MOCK_COMPANY_SETTINGS },
+          company: { ...MOCK_COMPANY_SUPREME },
+          companies: [...MOCK_COMPANIES],
+          plans: [...MOCK_PLANS],
+          subscriptions: [...MOCK_SUBSCRIPTIONS],
+          demoSandbox: { ...INITIAL_DEMO_SANDBOX },
+          auditLogs: [...INITIAL_AUDIT_LOGS]
+        };
+      }
+      return this.memoryStore;
     }
 
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
@@ -990,6 +1284,8 @@ export class AppStore {
       if (emitEvent) {
         window.dispatchEvent(new CustomEvent('supreme_store_updated'));
       }
+    } else {
+      this.memoryStore = data;
     }
   }
 
@@ -2055,7 +2351,7 @@ export class AppStore {
   }
 
   // Company Settings & Segment Customization
-  static getSettings(tenantId: string): CompanySettings {
+  static getSettings(tenantId?: string): CompanySettings {
     const data = this.getStoreData();
     return data.settings || MOCK_COMPANY_SETTINGS;
   }
@@ -2148,7 +2444,7 @@ export class AppStore {
   static calculateItemPrice(
     tenantId: string,
     modelId: string,
-    serviceRequested: RequestedService,
+    serviceRequested: RequestedService | string,
     overrideIsXl?: boolean
   ): {
     finalPrice: number;
@@ -2175,7 +2471,15 @@ export class AppStore {
     let isVerificationWaived = false;
     let explanation = '';
 
-    if (serviceRequested === 'VERIFICACAO_E_RECARGA') {
+    // Check custom registered services in company catalog
+    const customService = (data.servicePrices || []).find((s: ServicePrice) => 
+      s.tenant_id === tenantId && (s.id === serviceRequested || s.service_type === serviceRequested || s.title === serviceRequested)
+    );
+
+    if (customService) {
+      finalPrice = customService.default_price;
+      explanation = `${customService.title} (R$ ${finalPrice.toFixed(2)})`;
+    } else if (serviceRequested === 'VERIFICACAO_E_RECARGA') {
       if (settings.waive_verification_if_refilled) {
         finalPrice = refillPrice;
         isVerificationWaived = true;
@@ -2335,10 +2639,202 @@ export class AppStore {
     return updated;
   }
 
-  // Service Prices
+  // ==========================================
+  // Custom Services CRUD
+  // ==========================================
   static getServicePrices(tenantId: string): ServicePrice[] {
+    return this.getServices(tenantId);
+  }
+
+  static getServices(tenantId?: string): ServicePrice[] {
     const data = this.getStoreData();
-    return (data.servicePrices || []).filter((sp: ServicePrice) => sp.tenant_id === tenantId);
+    const list = data.servicePrices || MOCK_SERVICE_PRICES;
+    if (!tenantId) return list;
+    return list.filter((sp: ServicePrice) => sp.tenant_id === tenantId);
+  }
+
+  static addService(
+    tenantId: string, 
+    serviceData: {
+      title: string;
+      description?: string;
+      default_price: number;
+      service_type?: string;
+      estimated_time_minutes?: number;
+      category?: string;
+      is_active?: boolean;
+    }, 
+    performedByName?: string
+  ): ServicePrice {
+    const data = this.getStoreData();
+    if (!Array.isArray(data.servicePrices)) data.servicePrices = [];
+
+    const newService: ServicePrice = {
+      id: generateUUID(),
+      tenant_id: tenantId,
+      service_type: (serviceData.service_type || serviceData.title.toUpperCase().replace(/[^A-Z0-9]/g, '_')) as any,
+      title: serviceData.title,
+      description: serviceData.description || '',
+      default_price: Number(serviceData.default_price) || 0,
+      estimated_time_minutes: serviceData.estimated_time_minutes ? Number(serviceData.estimated_time_minutes) : undefined,
+      category: serviceData.category || 'Geral',
+      is_active: serviceData.is_active !== false,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    data.servicePrices.push(newService);
+    this.saveStoreData(data);
+
+    this.logAudit({
+      tenant_id: tenantId,
+      user_name: performedByName || 'Administrador',
+      action: 'CRIACAO_SERVICO',
+      resource: 'service_prices',
+      resource_id: newService.id,
+      details: `Cadastrado novo serviço "${newService.title}" (R$ ${newService.default_price.toFixed(2)})`
+    });
+
+    return newService;
+  }
+
+  static updateService(
+    serviceId: string, 
+    updates: Partial<ServicePrice>, 
+    performedByName?: string
+  ): ServicePrice {
+    const data = this.getStoreData();
+    if (!Array.isArray(data.servicePrices)) data.servicePrices = [];
+    const idx = data.servicePrices.findIndex((s: ServicePrice) => s.id === serviceId);
+    if (idx === -1) throw new Error('Serviço não encontrado');
+
+    const updated: ServicePrice = {
+      ...data.servicePrices[idx],
+      ...updates,
+      updated_at: new Date().toISOString()
+    };
+
+    data.servicePrices[idx] = updated;
+    this.saveStoreData(data);
+
+    this.logAudit({
+      tenant_id: updated.tenant_id,
+      user_name: performedByName || 'Administrador',
+      action: 'EDICAO_SERVICO',
+      resource: 'service_prices',
+      resource_id: serviceId,
+      details: `Serviço "${updated.title}" atualizado (R$ ${Number(updated.default_price).toFixed(2)})`
+    });
+
+    return updated;
+  }
+
+  static deleteService(serviceId: string, performedByName?: string): boolean {
+    const data = this.getStoreData();
+    if (!Array.isArray(data.servicePrices)) return false;
+    const found = data.servicePrices.find((s: ServicePrice) => s.id === serviceId);
+    if (!found) return false;
+
+    data.servicePrices = data.servicePrices.filter((s: ServicePrice) => s.id !== serviceId);
+    this.saveStoreData(data);
+
+    this.logAudit({
+      tenant_id: found.tenant_id,
+      user_name: performedByName || 'Administrador',
+      action: 'EXCLUSAO_SERVICO',
+      resource: 'service_prices',
+      resource_id: serviceId,
+      details: `Serviço "${found.title}" excluído do catálogo`
+    });
+
+    return true;
+  }
+
+  static toggleServiceStatus(serviceId: string, performedByName?: string): ServicePrice {
+    const data = this.getStoreData();
+    if (!Array.isArray(data.servicePrices)) data.servicePrices = [];
+    const idx = data.servicePrices.findIndex((s: ServicePrice) => s.id === serviceId);
+    if (idx === -1) throw new Error('Serviço não encontrado');
+
+    const current = data.servicePrices[idx];
+    const updated = { ...current, is_active: !current.is_active, updated_at: new Date().toISOString() };
+    data.servicePrices[idx] = updated;
+    this.saveStoreData(data);
+
+    this.logAudit({
+      tenant_id: updated.tenant_id,
+      user_name: performedByName || 'Administrador',
+      action: 'STATUS_SERVICO',
+      resource: 'service_prices',
+      resource_id: serviceId,
+      details: `Status do serviço "${updated.title}" alterado para ${updated.is_active ? 'ATIVO' : 'INATIVO'}`
+    });
+
+    return updated;
+  }
+
+  // ==========================================
+  // Customizable Kanban Columns
+  // ==========================================
+  static getKanbanColumns(tenantId?: string): KanbanColumnConfig[] {
+    const stt = this.getSettings(tenantId);
+    if (stt?.kanban_columns && Array.isArray(stt.kanban_columns) && stt.kanban_columns.length > 0) {
+      return stt.kanban_columns;
+    }
+
+    const segConfig = this.getSegmentConfig(tenantId);
+    const seg = segConfig.segment || 'RECARGA_CARTUCHOS';
+    return DEFAULT_KANBAN_COLUMNS[seg] || DEFAULT_KANBAN_COLUMNS.RECARGA_CARTUCHOS;
+  }
+
+  static saveKanbanColumns(tenantId: string, columns: KanbanColumnConfig[], performedByName?: string): CompanySettings {
+    const data = this.getStoreData();
+    if (!data.settings) data.settings = { ...MOCK_COMPANY_SETTINGS };
+    data.settings.kanban_columns = columns;
+    this.saveStoreData(data);
+
+    this.logAudit({
+      tenant_id: tenantId,
+      user_name: performedByName || 'Administrador',
+      action: 'CUSTOMIZACAO_KANBAN',
+      resource: 'company_settings',
+      details: `Colunas do Kanban personalizadas (${columns.map(c => c.title).join(' | ')})`
+    });
+
+    return data.settings;
+  }
+
+  static moveCartridgeStatus(
+    cartridgeId: string, 
+    newStatus: CartridgeStatus, 
+    performedByName?: string, 
+    notes?: string
+  ): Cartridge {
+    const data = this.getStoreData();
+    const idx = (data.cartridges || []).findIndex((c: Cartridge) => c.id === cartridgeId);
+    if (idx === -1) throw new Error('Cartucho não encontrado');
+
+    const previous = data.cartridges[idx];
+    const prevStatus = previous.status;
+    const updated: Cartridge = {
+      ...previous,
+      status: newStatus,
+      updated_at: new Date().toISOString()
+    };
+
+    data.cartridges[idx] = updated;
+    this.saveStoreData(data);
+
+    this.logAudit({
+      tenant_id: updated.tenant_id,
+      user_name: performedByName || 'Técnico',
+      action: 'MOVIMENTACAO_KANBAN',
+      resource: 'cartridges',
+      resource_id: cartridgeId,
+      details: `Item ${updated.serial_number} movido de ${prevStatus} para ${newStatus}${notes ? ` (${notes})` : ''}`
+    });
+
+    return updated;
   }
 
   // Entries & Cartridges Query
