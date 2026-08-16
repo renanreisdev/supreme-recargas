@@ -136,17 +136,17 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       {/* Top Banner & Quick Action Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-gradient-to-r from-slate-900 via-slate-900 to-slate-950 p-6 rounded-2xl border border-slate-800 shadow-lg text-white">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white dark:bg-[#0e1626] p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm text-slate-900 dark:text-white transition-colors duration-150">
         <div>
           <div className="flex items-center gap-2.5">
-            <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight">
+            <h1 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white">
               Visão Geral & Painel de Controle
             </h1>
-            <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2.5 py-0.5 rounded-full font-bold border border-emerald-500/30 font-mono">
+            <span className="text-[10px] bg-emerald-50 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300 px-2.5 py-0.5 rounded-full font-bold border border-emerald-200 dark:border-emerald-500/30 font-mono">
               {currentCompany.trade_name}
             </span>
           </div>
-          <p className="text-xs text-slate-400 mt-1 max-w-xl">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-xl">
             Acompanhe a recepção no balcão, fluxo na bancada técnica e entregas em tempo real com agilidade.
           </p>
         </div>
@@ -155,7 +155,7 @@ export default function DashboardPage() {
         <div className="flex flex-wrap items-center gap-2">
           {hasPermission('create_entry') && (
             <Link href="/entradas/nova">
-              <Button className="bg-emerald-600 hover:bg-emerald-700 font-bold text-xs gap-2 shadow-md shadow-emerald-950/40 text-white h-9 rounded-xl px-4 transition-all hover:scale-105">
+              <Button className="bg-emerald-600 hover:bg-emerald-700 font-bold text-xs gap-2 shadow-xs text-white h-9 rounded-xl px-4 transition-all hover:scale-105">
                 <PlusCircle className="w-4 h-4" />
                 <span>+ Nova Entrada / OS</span>
               </Button>
@@ -164,8 +164,8 @@ export default function DashboardPage() {
 
           {hasPermission('technical_workbench') && (
             <Link href="/bancada">
-              <Button variant="outline" className="bg-slate-800 hover:bg-slate-700 font-bold text-xs gap-2 border-slate-700 text-slate-200 h-9 rounded-xl px-3.5 shadow-xs">
-                <Wrench className="w-4 h-4 text-amber-400" />
+              <Button variant="outline" className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 font-bold text-xs gap-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 h-9 rounded-xl px-3.5 shadow-xs">
+                <Wrench className="w-4 h-4 text-amber-500" />
                 <span>Bancada Técnica</span>
               </Button>
             </Link>
@@ -173,8 +173,8 @@ export default function DashboardPage() {
 
           {hasPermission('view_customers') && (
             <Link href="/clientes">
-              <Button variant="outline" className="bg-slate-800 hover:bg-slate-700 font-semibold text-xs gap-2 border-slate-700 text-slate-300 h-9 rounded-xl px-3 shadow-xs">
-                <Users className="w-4 h-4 text-blue-400" />
+              <Button variant="outline" className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 font-semibold text-xs gap-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 h-9 rounded-xl px-3 shadow-xs">
+                <Users className="w-4 h-4 text-blue-500" />
                 <span>Clientes</span>
               </Button>
             </Link>
@@ -303,17 +303,17 @@ export default function DashboardPage() {
 
       {/* Financial Quick Overview (Admin Access) */}
       {hasPermission('view_financial_reports') && (
-        <div className="p-5 rounded-2xl bg-gradient-to-br from-slate-900 to-[#0c1424] text-white border border-slate-800 shadow-md">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-800/80 gap-2">
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#0e1626] text-slate-900 dark:text-white border border-slate-200 dark:border-slate-800 shadow-sm transition-colors duration-150">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800/80 gap-2">
             <div>
               <div className="flex items-center gap-2">
-                <DollarSign className="w-4 h-4 text-emerald-400" />
-                <h3 className="text-sm font-bold text-white">Resumo Financeiro & Caixa Operacional</h3>
+                <DollarSign className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">Resumo Financeiro & Caixa Operacional</h3>
               </div>
-              <p className="text-xs text-slate-400 mt-0.5">Valores liquidados no balcão e saldo pendente a faturar</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Valores liquidados no balcão e saldo pendente a faturar</p>
             </div>
             <Link href="/relatorios">
-              <Button variant="outline" size="sm" className="text-xs h-8 bg-slate-800/90 hover:bg-slate-700 text-slate-200 border-slate-700 gap-1.5 rounded-xl">
+              <Button variant="outline" size="sm" className="text-xs h-8 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/90 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 gap-1.5 rounded-xl shadow-xs">
                 <span>Relatório Completo</span>
                 <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
               </Button>
@@ -321,27 +321,27 @@ export default function DashboardPage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 pt-4">
-            <div className="p-3.5 rounded-xl bg-slate-800/60 border border-slate-700/60">
-              <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Total Recebido (Caixa)</span>
-              <p className="text-2xl font-black text-emerald-400 mt-1">{formatCurrency(paidRevenue)}</p>
+            <div className="p-4 rounded-xl bg-slate-50/70 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/60 shadow-xs">
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold tracking-wider">Total Recebido (Caixa)</span>
+              <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1 font-mono">{formatCurrency(paidRevenue)}</p>
               <p className="text-[10px] text-slate-400 mt-0.5">PIX, Dinheiro e Cartões</p>
             </div>
 
-            <div className="p-3.5 rounded-xl bg-slate-800/60 border border-slate-700/60">
-              <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">A Receber / Pendente</span>
-              <p className="text-2xl font-black text-amber-400 mt-1">{formatCurrency(pendingRevenue)}</p>
+            <div className="p-4 rounded-xl bg-slate-50/70 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/60 shadow-xs">
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold tracking-wider">A Receber / Pendente</span>
+              <p className="text-2xl font-black text-amber-600 dark:text-amber-400 mt-1 font-mono">{formatCurrency(pendingRevenue)}</p>
               <p className="text-[10px] text-slate-400 mt-0.5">Comandas a liquidar na entrega</p>
             </div>
 
-            <div className="p-3.5 rounded-xl bg-slate-800/60 border border-slate-700/60">
-              <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Faturamento Total</span>
-              <p className="text-2xl font-black text-teal-300 mt-1">{formatCurrency(totalRevenue)}</p>
+            <div className="p-4 rounded-xl bg-slate-50/70 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/60 shadow-xs">
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold tracking-wider">Faturamento Total</span>
+              <p className="text-2xl font-black text-teal-600 dark:text-teal-300 mt-1 font-mono">{formatCurrency(totalRevenue)}</p>
               <p className="text-[10px] text-slate-400 mt-0.5">Total de {entries.length} atendimentos</p>
             </div>
 
-            <div className="p-3.5 rounded-xl bg-slate-800/60 border border-slate-700/60">
-              <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Ticket Médio</span>
-              <p className="text-2xl font-black text-white mt-1">{formatCurrency(ticketPerEntry)}</p>
+            <div className="p-4 rounded-xl bg-slate-50/70 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/60 shadow-xs">
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold tracking-wider">Ticket Médio</span>
+              <p className="text-2xl font-black text-slate-800 dark:text-white mt-1 font-mono">{formatCurrency(ticketPerEntry)}</p>
               <p className="text-[10px] text-slate-400 mt-0.5">Média por comanda</p>
             </div>
           </div>

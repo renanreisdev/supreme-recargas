@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Search, PlusCircle, ExternalLink, QrCode, LogOut, Menu, Zap, Cloud, Sparkles } from 'lucide-react';
+import { Search, PlusCircle, ExternalLink, QrCode, LogOut, Menu, Zap, Cloud, Sparkles, Sun, Moon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
+import { useTheme } from '@/lib/theme-context';
 import { AppStore } from '@/lib/store';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -18,6 +19,7 @@ export function Header({ onToggleMobileMenu }: HeaderProps) {
   const [isSyncing, setIsSyncing] = useState(false);
   const router = useRouter();
   const { currentUser, currentCompany, logout, hasPermission } = useAuth();
+  const { theme, toggleTheme } = useTheme();
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,7 +36,7 @@ export function Header({ onToggleMobileMenu }: HeaderProps) {
   const roleConfig = currentUser ? getRoleBadgeConfig(currentUser.role) : null;
 
   return (
-    <header className="h-16 bg-white/90 dark:bg-[#0c1222]/90 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 px-3 sm:px-6 flex items-center justify-between sticky top-0 z-20 shadow-xs gap-3 print:hidden">
+    <header className="h-16 bg-white/95 dark:bg-[#0c1222]/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 px-3 sm:px-6 flex items-center justify-between sticky top-0 z-20 shadow-xs gap-3 print:hidden transition-colors duration-150">
       {/* Mobile Hamburger Menu & Logo (Visible only on < lg) */}
       <div className="flex items-center gap-2 lg:hidden">
         <button
@@ -72,6 +74,20 @@ export function Header({ onToggleMobileMenu }: HeaderProps) {
 
       {/* Header Actions */}
       <div className="flex items-center gap-2 sm:gap-3">
+        {/* Light / Dark Mode Toggle Button */}
+        <button
+          type="button"
+          onClick={toggleTheme}
+          className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700/80 flex items-center justify-center transition-all shadow-xs"
+          title={theme === 'dark' ? 'Mudar para Modo Claro' : 'Mudar para Modo Escuro'}
+        >
+          {theme === 'dark' ? (
+            <Sun className="w-4 h-4 text-amber-400 animate-in spin-in-180 duration-200" />
+          ) : (
+            <Moon className="w-4 h-4 text-slate-600 animate-in spin-in-180 duration-200" />
+          )}
+        </button>
+
         {/* Cloud Sync Status Indicator */}
         <button
           type="button"

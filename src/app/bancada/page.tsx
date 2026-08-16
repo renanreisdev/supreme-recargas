@@ -58,59 +58,59 @@ const ALL_STATUSES: { key: CartridgeStatus; label: string }[] = [
 
 const COLOR_MAP: Record<KanbanColumnColor, { bg: string; border: string; text: string; headerBg: string; badge: string }> = {
   amber: {
-    bg: 'bg-amber-50/40 dark:bg-[#13171f]',
-    border: 'border-amber-200/80 dark:border-amber-900/50',
+    bg: 'bg-slate-50/70 dark:bg-[#0e1626]/70',
+    border: 'border-slate-200 dark:border-slate-800',
     text: 'text-amber-800 dark:text-amber-300',
-    headerBg: 'bg-amber-100/70 dark:bg-amber-950/50',
+    headerBg: 'bg-amber-50 dark:bg-amber-950/40 border-b border-amber-200/60 dark:border-amber-900/40',
     badge: 'bg-amber-600 text-white'
   },
   purple: {
-    bg: 'bg-purple-50/40 dark:bg-[#131522]',
-    border: 'border-purple-200/80 dark:border-purple-900/50',
+    bg: 'bg-slate-50/70 dark:bg-[#0e1626]/70',
+    border: 'border-slate-200 dark:border-slate-800',
     text: 'text-purple-800 dark:text-purple-300',
-    headerBg: 'bg-purple-100/70 dark:bg-purple-950/50',
+    headerBg: 'bg-purple-50 dark:bg-purple-950/40 border-b border-purple-200/60 dark:border-purple-900/40',
     badge: 'bg-purple-600 text-white'
   },
   blue: {
-    bg: 'bg-blue-50/40 dark:bg-[#0f1826]',
-    border: 'border-blue-200/80 dark:border-blue-900/50',
+    bg: 'bg-slate-50/70 dark:bg-[#0e1626]/70',
+    border: 'border-slate-200 dark:border-slate-800',
     text: 'text-blue-800 dark:text-blue-300',
-    headerBg: 'bg-blue-100/70 dark:bg-blue-950/50',
+    headerBg: 'bg-blue-50 dark:bg-blue-950/40 border-b border-blue-200/60 dark:border-blue-900/40',
     badge: 'bg-blue-600 text-white'
   },
   emerald: {
-    bg: 'bg-emerald-50/40 dark:bg-[#0d1c1a]',
-    border: 'border-emerald-200/80 dark:border-emerald-900/50',
+    bg: 'bg-slate-50/70 dark:bg-[#0e1626]/70',
+    border: 'border-slate-200 dark:border-slate-800',
     text: 'text-emerald-800 dark:text-emerald-300',
-    headerBg: 'bg-emerald-100/70 dark:bg-emerald-950/50',
+    headerBg: 'bg-emerald-50 dark:bg-emerald-950/40 border-b border-emerald-200/60 dark:border-emerald-900/40',
     badge: 'bg-emerald-600 text-white'
   },
   rose: {
-    bg: 'bg-rose-50/40 dark:bg-[#1c1216]',
-    border: 'border-rose-200/80 dark:border-rose-900/50',
+    bg: 'bg-slate-50/70 dark:bg-[#0e1626]/70',
+    border: 'border-slate-200 dark:border-slate-800',
     text: 'text-rose-800 dark:text-rose-300',
-    headerBg: 'bg-rose-100/70 dark:bg-rose-950/50',
+    headerBg: 'bg-rose-50 dark:bg-rose-950/40 border-b border-rose-200/60 dark:border-rose-900/40',
     badge: 'bg-rose-600 text-white'
   },
   indigo: {
-    bg: 'bg-indigo-50/40 dark:bg-[#121626]',
-    border: 'border-indigo-200/80 dark:border-indigo-900/50',
+    bg: 'bg-slate-50/70 dark:bg-[#0e1626]/70',
+    border: 'border-slate-200 dark:border-slate-800',
     text: 'text-indigo-800 dark:text-indigo-300',
-    headerBg: 'bg-indigo-100/70 dark:bg-indigo-950/50',
+    headerBg: 'bg-indigo-50 dark:bg-indigo-950/40 border-b border-indigo-200/60 dark:border-indigo-900/40',
     badge: 'bg-indigo-600 text-white'
   },
   teal: {
-    bg: 'bg-teal-50/40 dark:bg-[#0e1c1e]',
-    border: 'border-teal-200/80 dark:border-teal-900/50',
+    bg: 'bg-slate-50/70 dark:bg-[#0e1626]/70',
+    border: 'border-slate-200 dark:border-slate-800',
     text: 'text-teal-800 dark:text-teal-300',
-    headerBg: 'bg-teal-100/70 dark:bg-teal-950/50',
+    headerBg: 'bg-teal-50 dark:bg-teal-950/40 border-b border-teal-200/60 dark:border-teal-900/40',
     badge: 'bg-teal-600 text-white'
   },
   slate: {
-    bg: 'bg-slate-100/50 dark:bg-[#0f1420]',
+    bg: 'bg-slate-50/70 dark:bg-[#0e1626]/70',
     border: 'border-slate-200 dark:border-slate-800',
     text: 'text-slate-800 dark:text-slate-300',
-    headerBg: 'bg-slate-200/60 dark:bg-slate-800',
+    headerBg: 'bg-slate-100 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700',
     badge: 'bg-slate-700 text-white'
   }
 };
