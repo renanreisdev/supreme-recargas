@@ -65,6 +65,10 @@ function EntriesListContent() {
   const [deliveryNotes, setDeliveryNotes] = useState('');
   const [discountOption, setDiscountOption] = useState<'SALDO_PENDENTE' | 'CONCEDER_DESCONTO'>('SALDO_PENDENTE');
 
+  // Zero Value Delivery Justification Modal State
+  const [showZeroValueModal, setShowZeroValueModal] = useState(false);
+  const [zeroValueReason, setZeroValueReason] = useState('');
+
   // Reopen Modal State
   const [orderToReopen, setOrderToReopen] = useState<ServiceOrder | null>(null);
   const [reopenReason, setReopenReason] = useState('Cliente solicitou reteste/retrabalho');
@@ -186,41 +190,27 @@ function EntriesListContent() {
   const diff = totalPaidSum - modalRemainingToPay;
   const liveChange = diff > 0 ? diff : 0;
   const liveRemaining = diff < 0 ? Math.abs(diff) : 0;
-  const isUnderpaid = liveRemaining > 0;
 
-  const handleRegisterDelivery = (e: React.FormEvent) => {
-    e.preventDefault();
+  const executeDelivery = (options: { applyDiscount: number; customNotes?: string }) => {
     if (!selectedOrderForDelivery) return;
-
-    if (isUnderpaid && discountOption === 'CONCEDER_DESCONTO' && !canApplyDiscount) {
-      setDialogModal({
-        isOpen: true,
-        type: 'warning',
-        title: 'Permissão Insuficiente',
-        subtitle: 'Concessão de desconto bloqueada',
-        message: 'Você não possui permissão para conceder descontos na baixa. O administrador precisa liberar esta permissão nas configurações de perfil.',
-        isAlertOnly: true,
-        confirmLabel: 'Entendido',
-        onConfirm: () => setDialogModal(null)
-      });
-      return;
-    }
 
     try {
       AppStore.deliverServiceOrder(selectedOrderForDelivery.id, {
         receiver_name: receiverName.trim(),
         receiver_document: receiverDoc.trim(),
         receiver_relation: receiverRelation,
-        notes: deliveryNotes,
-        payments: payments.map(p => ({ payment_method: p.method, amount: p.amount })),
-        apply_discount: isUnderpaid && discountOption === 'CONCEDER_DESCONTO' ? liveRemaining : 0
-      }, currentUser.full_name);
+        notes: options.customNotes || deliveryNotes,
+        payments: payments.filter(p => Number(p.amount) > 0).map(p => ({ payment_method: p.method, amount: Number(p.amount) })),
+        apply_discount: options.applyDiscount
+      }, currentUser?.full_name || 'Atendente');
 
       loadData();
       setSelectedOrderForDelivery(null);
+      setShowZeroValueModal(false);
+      setZeroValueReason('');
       setActionAlert({ 
         type: 'success', 
-        message: `Baixa e entrega da OS concluída com sucesso!` 
+        message: `Baixa e entrega da OS #${selectedOrderForDelivery.order_number} concluída com sucesso!` 
       });
       setTimeout(() => setActionAlert(null), 4000);
     } catch (err: any) {
@@ -234,6 +224,103 @@ function EntriesListContent() {
         onConfirm: () => setDialogModal(null)
       });
     }
+  };
+
+  const handleRegisterDelivery = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedOrderForDelivery) return;
+
+    // Cenário 1: Valor Zerado (totalPaidSum === 0) e ainda existe saldo a pagar
+    if (modalRemainingToPay > 0 && totalPaidSum === 0) {
+      if (!canApplyDiscount) {
+        setDialogModal({
+          isOpen: true,
+          type: 'warning',
+          title: 'Permissão Insuficiente',
+          subtitle: 'Baixa sem pagamento não autorizada',
+          message: 'Você não possui permissão para dar baixa com valor zerado (isenção/cortesia). Solicite autorização a um administrador do sistema.',
+          isAlertOnly: true,
+          confirmLabel: 'Entendido',
+          onConfirm: () => setDialogModal(null)
+        });
+        return;
+      }
+
+      // Exigir motivo escrito com no mínimo 10 caracteres
+      setZeroValueReason('');
+      setShowZeroValueModal(true);
+      return;
+    }
+
+    // Cenário 2: Valor Pago Menor que o Total (0 < totalPaidSum < modalRemainingToPay)
+    if (modalRemainingToPay > 0 && totalPaidSum > 0 && totalPaidSum < modalRemainingToPay) {
+      const discountAmount = modalRemainingToPay - totalPaidSum;
+
+      if (!canApplyDiscount) {
+        setDialogModal({
+          isOpen: true,
+          type: 'warning',
+          title: 'Permissão Insuficiente',
+          subtitle: 'Concessão de desconto não autorizada',
+          message: `O valor pago (${formatCurrency(totalPaidSum)}) é menor que o saldo (${formatCurrency(modalRemainingToPay)}). Seu perfil não possui permissão para conceder descontos na baixa.`,
+          isAlertOnly: true,
+          confirmLabel: 'Entendido',
+          onConfirm: () => setDialogModal(null)
+        });
+        return;
+      }
+
+      // Perguntar se deseja conceder o desconto
+      setDialogModal({
+        isOpen: true,
+        type: 'warning',
+        title: `Conceder Desconto de ${formatCurrency(discountAmount)}?`,
+        subtitle: `Valor pago: ${formatCurrency(totalPaidSum)} • Saldo: ${formatCurrency(modalRemainingToPay)}`,
+        message: `O valor pago (${formatCurrency(totalPaidSum)}) é menor que o total da comanda (${formatCurrency(modalRemainingToPay)}). Deseja aplicar a diferença de ${formatCurrency(discountAmount)} como desconto financeiro e liquidar a comanda?`,
+        confirmLabel: 'Sim, Conceder Desconto e Liquidar',
+        cancelLabel: 'Cancelar',
+        onCancel: () => setDialogModal(null),
+        onConfirm: () => {
+          setDialogModal(null);
+          executeDelivery({
+            applyDiscount: discountAmount,
+            customNotes: deliveryNotes
+          });
+        }
+      });
+      return;
+    }
+
+    // Cenário 3: Pagamento integral ou superior
+    executeDelivery({
+      applyDiscount: 0,
+      customNotes: deliveryNotes
+    });
+  };
+
+  const handleConfirmZeroValueDelivery = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedOrderForDelivery) return;
+
+    if (zeroValueReason.trim().length < 10) {
+      setDialogModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Motivo Insuficiente',
+        subtitle: 'Mínimo de 10 caracteres obrigatório',
+        message: 'Por favor, escreva uma justificativa com no mínimo 10 caracteres explicando o motivo da baixa com valor zerado.',
+        isAlertOnly: true,
+        confirmLabel: 'Entendido',
+        onConfirm: () => setDialogModal(null)
+      });
+      return;
+    }
+
+    const combinedNotes = `[BAIXA ZERADA / CORTESIA]: ${zeroValueReason.trim()}${deliveryNotes.trim() ? ` | ${deliveryNotes.trim()}` : ''}`;
+    executeDelivery({
+      applyDiscount: modalRemainingToPay,
+      customNotes: combinedNotes
+    });
   };
 
   const handleOpenReopenModal = (order: ServiceOrder) => {
@@ -709,6 +796,75 @@ function EntriesListContent() {
                   className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs h-9 px-4"
                 >
                   Confirmar Baixa & Entregar
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Zero Value Delivery Justification Modal (Mínimo 10 caracteres) */}
+      {showZeroValueModal && selectedOrderForDelivery && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in-0 duration-150">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-md w-full p-6 space-y-4 animate-in zoom-in-95">
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 rounded-2xl bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 shrink-0">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-base text-slate-900 dark:text-white">
+                  Baixa com Valor Zerado
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Ordem nº <strong className="font-mono">{selectedOrderForDelivery.order_number}</strong> • Saldo a liquidar: <strong className="text-amber-600">{formatCurrency(modalRemainingToPay)}</strong>
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 rounded-2xl text-[11px] text-amber-800 dark:text-amber-300 leading-relaxed">
+              Você está concluindo a entrega sem nenhum pagamento informado. É obrigatório registrar o motivo formal (cortesia, garantia de serviço, retrabalho ou acordo comercial).
+            </div>
+
+            <form onSubmit={handleConfirmZeroValueDelivery} className="space-y-4">
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Motivo da Baixa Sem Cobrança *
+                  </label>
+                  <span className={`text-[10px] font-bold ${
+                    zeroValueReason.trim().length >= 10 ? 'text-emerald-600' : 'text-rose-500'
+                  }`}>
+                    {zeroValueReason.trim().length}/10 caracteres (mínimo 10)
+                  </span>
+                </div>
+                <textarea
+                  required
+                  rows={3}
+                  placeholder="Descreva detalhadamente o motivo (ex: Cortesia concedida pela gerência, retrabalho em garantia...)"
+                  value={zeroValueReason}
+                  onChange={e => setZeroValueReason(e.target.value)}
+                  className="w-full text-xs p-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 resize-none font-medium"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowZeroValueModal(false)}
+                  className="rounded-xl text-xs h-9"
+                >
+                  Voltar
+                </Button>
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={zeroValueReason.trim().length < 10}
+                  className="bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs h-9 px-4 gap-1.5 shadow-md shadow-amber-600/20"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Confirmar Baixa Zerada</span>
                 </Button>
               </div>
             </form>

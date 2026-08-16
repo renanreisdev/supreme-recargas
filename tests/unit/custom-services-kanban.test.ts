@@ -394,5 +394,87 @@ describe('Custom Services, Kanban & Financial Report Suite', () => {
       expect(updatedTests.status).toBe('TESTES');
     });
   });
+
+  describe('14. Partial Payment Discount on Delivery', () => {
+    it('applies discount difference when authorized user confirms partial payment liquidation', () => {
+      const order = AppStore.addServiceOrder({
+        tenant_id: tenantId,
+        customer_id: 'cust-001',
+        opened_by: 'usr-admin',
+        opened_by_name: 'Admin',
+        items: [
+          {
+            model_id: 'mod-hp664-black',
+            internal_identifier: 'ID-DISC-01',
+            services: [
+              {
+                service_id: 'srv-refill',
+                quantity: 1,
+                unit_price: 100.0
+              }
+            ]
+          }
+        ]
+      });
+
+      expect(order.total_amount).toBe(100.0);
+      expect(order.remaining_amount).toBe(100.0);
+
+      // Customer pays R$ 80.00 and R$ 20.00 is applied as discount
+      const delivered = AppStore.deliverServiceOrder(order.id, {
+        receiver_name: 'Juliana Ferreira',
+        payments: [{ payment_method: 'PIX', amount: 80.0 }],
+        apply_discount: 20.0
+      }, 'Atendente');
+
+      expect(delivered.status).toBe('ENTREGUE');
+      expect(delivered.total_amount).toBe(80.0);
+      expect(delivered.paid_amount).toBe(80.0);
+      expect(delivered.discount_amount).toBe(20.0);
+      expect(delivered.remaining_amount).toBe(0);
+      expect(delivered.financial_status).toBe('PAGO');
+    });
+  });
+
+  describe('15. Zero-Value Delivery with Mandatory Justification', () => {
+    it('delivers with 100% discount and records mandatory justification notes', () => {
+      const order = AppStore.addServiceOrder({
+        tenant_id: tenantId,
+        customer_id: 'cust-001',
+        opened_by: 'usr-admin',
+        opened_by_name: 'Admin',
+        items: [
+          {
+            model_id: 'mod-hp664-black',
+            internal_identifier: 'ID-ZERO-01',
+            services: [
+              {
+                service_id: 'srv-refill',
+                quantity: 1,
+                unit_price: 50.0
+              }
+            ]
+          }
+        ]
+      });
+
+      const justification = '[BAIXA ZERADA / CORTESIA]: Retrabalho em garantia autorizado pela gerência';
+      expect(justification.length).toBeGreaterThanOrEqual(10);
+
+      const delivered = AppStore.deliverServiceOrder(order.id, {
+        receiver_name: 'Carlos Alberto',
+        payments: [],
+        apply_discount: 50.0,
+        notes: justification
+      }, 'Gerente');
+
+      expect(delivered.status).toBe('ENTREGUE');
+      expect(delivered.total_amount).toBe(0);
+      expect(delivered.remaining_amount).toBe(0);
+      expect(delivered.discount_amount).toBe(50.0);
+      expect(delivered.financial_status).toBe('PAGO');
+      expect(delivered.delivery_info?.notes).toContain('Retrabalho em garantia');
+    });
+  });
 });
 
