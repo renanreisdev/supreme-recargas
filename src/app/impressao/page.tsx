@@ -79,6 +79,25 @@ function ThermalPrintContent() {
     window.print();
   };
 
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [isLocalhost, setIsLocalhost] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setIsLocalhost(window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+    }
+  }, []);
+
+  const handleCopyLink = () => {
+    if (typeof window !== 'undefined' && currentEntry) {
+      const trackingPath = `/acompanhar/${encodeURIComponent(currentEntry.tracking_token || currentEntry.entry_number)}`;
+      const url = `${window.location.origin}${trackingPath}`;
+      navigator.clipboard.writeText(url);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+    }
+  };
+
   const trackingLink = currentEntry ? `/acompanhar/${currentEntry.tracking_token || currentEntry.entry_number}` : '/acompanhar';
 
   return (
@@ -97,12 +116,24 @@ function ThermalPrintContent() {
 
         <div className="flex items-center gap-2.5 flex-wrap">
           {currentEntry && (
-            <Link href={trackingLink} target="_blank">
-              <Button variant="outline" size="sm" className="gap-1.5 text-xs font-semibold h-9 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700">
-                <ExternalLink className="w-3.5 h-3.5" />
-                <span>Testar Portal do Cliente</span>
+            <>
+              <Button
+                onClick={handleCopyLink}
+                variant="outline"
+                size="sm"
+                className="gap-1.5 text-xs font-semibold h-9 text-slate-700 dark:text-slate-300"
+              >
+                {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedLink ? 'Link Copiado!' : 'Copiar Link de Rastreio'}</span>
               </Button>
-            </Link>
+
+              <Link href={trackingLink} target="_blank">
+                <Button variant="outline" size="sm" className="gap-1.5 text-xs font-semibold h-9 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700">
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Testar Portal do Cliente</span>
+                </Button>
+              </Link>
+            </>
           )}
 
           <Button

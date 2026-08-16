@@ -2110,6 +2110,94 @@ export class AppStore {
     };
   }
 
+  // Cloud-connected async retrieval (checks local cache first, then Supabase cloud)
+  static async getEntryByTokenAsync(tokenOrNumber: string): Promise<CartridgeEntry | undefined> {
+    // 1. Check local cache first
+    const cached = this.getEntryByToken(tokenOrNumber);
+    if (cached) return cached;
+
+    // 2. Fetch directly from Supabase Cloud
+    try {
+      const clean = tokenOrNumber.trim();
+      
+      // Look up entry in Supabase by tracking_token, entry_number, or id
+      let query = supabase.from('cartridge_entries').select('*');
+      if (clean.includes('-') && clean.length > 20) {
+        query = query.or(`tracking_token.eq.${clean},id.eq.${clean},entry_number.eq.${clean}`);
+      } else {
+        query = query.or(`entry_number.eq.${clean},tracking_token.eq.${clean}`);
+      }
+
+      const { data: entries, error } = await query.limit(1);
+
+      let matchedEntry = entries && entries.length > 0 ? entries[0] : null;
+
+      if (!matchedEntry) {
+        // Case-insensitive fallback lookup for entry_number
+        const { data: ilikeEntries } = await supabase
+          .from('cartridge_entries')
+          .select('*')
+          .ilike('entry_number', clean)
+          .limit(1);
+
+        if (ilikeEntries && ilikeEntries.length > 0) {
+          matchedEntry = ilikeEntries[0];
+        }
+      }
+
+      if (!matchedEntry) return undefined;
+
+      const entry = matchedEntry as CartridgeEntry;
+
+      // Fetch Customer, Cartridges, Models and Company in parallel
+      const [custRes, cartsRes, modelsRes, compRes] = await Promise.all([
+        entry.customer_id ? supabase.from('customers').select('*').eq('id', entry.customer_id).maybeSingle() : Promise.resolve({ data: null }),
+        supabase.from('cartridges').select('*').eq('entry_id', entry.id),
+        supabase.from('cartridge_models').select('*').eq('tenant_id', entry.tenant_id),
+        supabase.from('companies').select('*').eq('id', entry.tenant_id).maybeSingle()
+      ]);
+
+      const customer = custRes.data || undefined;
+      const models = modelsRes.data || [];
+      const company = compRes.data || undefined;
+      const cartridges: Cartridge[] = (cartsRes.data || []).map((c: any) => ({
+        ...c,
+        model: models.find((m: any) => m.id === c.model_id),
+        customer_name: customer?.name || 'Cliente',
+        entry_number: entry.entry_number
+      }));
+
+      const fullEntry: CartridgeEntry = {
+        ...entry,
+        customer,
+        cartridges
+      };
+
+      // Cache into local store for subsequent fast access
+      const data = this.getStoreData();
+      if (!data.entries.some((e: CartridgeEntry) => e.id === entry.id)) {
+        data.entries.unshift(entry);
+      }
+      if (customer && !data.customers.some((c: Customer) => c.id === customer.id)) {
+        data.customers.unshift(customer);
+      }
+      if (company && !data.companies.some((c: Company) => c.id === company.id)) {
+        data.companies.unshift(company);
+      }
+      cartridges.forEach(cart => {
+        if (!data.cartridges.some((c: Cartridge) => c.id === cart.id)) {
+          data.cartridges.unshift(cart);
+        }
+      });
+      this.saveStoreData(data, false);
+
+      return fullEntry;
+    } catch (err) {
+      console.warn('Supabase cloud fetch error for entry:', err);
+      return undefined;
+    }
+  }
+
   static getCartridges(tenantId: string): Cartridge[] {
     const data = this.getStoreData();
     const tenantCartridges = (data.cartridges || []).filter((c: Cartridge) => c.tenant_id === tenantId);
@@ -2217,9 +2305,57 @@ export class AppStore {
     data.cartridges.unshift(...newCartridges);
     this.saveStoreData(data);
 
-    // Push entry and cartridges to Supabase
-    supabase.from('cartridge_entries').insert(newEntry).then(() => {
-      supabase.from('cartridges').insert(newCartridges).then();
+    // Sanitize and push entry and cartridges to Supabase Cloud
+    const supabaseEntry = {
+      id: newEntry.id,
+      tenant_id: newEntry.tenant_id,
+      entry_number: newEntry.entry_number,
+      entry_sequence: newEntry.entry_sequence,
+      entry_year: newEntry.entry_year,
+      customer_id: newEntry.customer_id,
+      attendant_id: newEntry.attendant_id,
+      entry_date: newEntry.entry_date,
+      subtotal_amount: newEntry.subtotal_amount,
+      discount_amount: newEntry.discount_amount,
+      surcharge_amount: newEntry.surcharge_amount || 0,
+      total_amount: newEntry.total_amount,
+      general_notes: newEntry.general_notes || null,
+      tracking_token: newEntry.tracking_token,
+      created_at: newEntry.created_at
+    };
+
+    const supabaseCartridges = newCartridges.map(c => ({
+      id: c.id,
+      tenant_id: c.tenant_id,
+      entry_id: c.entry_id,
+      serial_number: c.serial_number,
+      item_index: c.item_index,
+      model_id: c.model_id,
+      service_requested: c.service_requested,
+      color: c.color,
+      is_xl: c.is_xl,
+      final_serie: c.final_serie,
+      status: c.status,
+      result_classification: c.result_classification,
+      input_weight_grams: c.input_weight_grams || null,
+      reception_notes: c.reception_notes || null,
+      original_price: c.original_price,
+      applied_price: c.applied_price,
+      discount_amount: c.discount_amount || 0,
+      surcharge_amount: c.surcharge_amount || 0,
+      final_price: c.final_price,
+      created_at: c.created_at,
+      updated_at: c.updated_at
+    }));
+
+    supabase.from('cartridge_entries').insert(supabaseEntry).then(({ error: entryErr }) => {
+      if (entryErr) {
+        console.warn('Erro ao sincronizar cartridge_entries com Supabase:', entryErr);
+      } else {
+        supabase.from('cartridges').insert(supabaseCartridges).then(({ error: cartErr }) => {
+          if (cartErr) console.warn('Erro ao sincronizar cartridges com Supabase:', cartErr);
+        });
+      }
     });
 
     this.logAudit({

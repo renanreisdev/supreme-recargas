@@ -34,19 +34,32 @@ export default function PublicTrackingPage() {
   const token = rawToken ? decodeURIComponent(rawToken) : '';
   const [entry, setEntry] = useState<CartridgeEntry | null>(null);
   const [company, setCompany] = useState<Company>(MOCK_COMPANY_SUPREME);
+  const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const loadData = () => {
-    if (token) {
-      const found = AppStore.getEntryByToken(token);
+  const loadData = async (forceRefresh = false) => {
+    if (!token) {
+      setIsLoading(false);
+      return;
+    }
+    if (!forceRefresh) {
+      setIsLoading(true);
+    }
+    try {
+      const found = await AppStore.getEntryByTokenAsync(token);
       if (found) {
         setEntry(found);
         const st = AppStore.getCompany(found.tenant_id);
         if (st) setCompany(st);
       } else {
+        setEntry(null);
         const st = AppStore.getCompany();
         if (st) setCompany(st);
       }
+    } catch (err) {
+      console.warn('Erro ao carregar dados do atendimento:', err);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -54,11 +67,27 @@ export default function PublicTrackingPage() {
     loadData();
   }, [token]);
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     setIsRefreshing(true);
-    loadData();
-    setTimeout(() => setIsRefreshing(false), 600);
+    await loadData(true);
+    setTimeout(() => setIsRefreshing(false), 500);
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4">
+        <div className="text-center space-y-4 max-w-sm">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-emerald-500/10 text-emerald-400 mx-auto border border-emerald-500/30">
+            <RefreshCw className="w-7 h-7 animate-spin text-emerald-400" />
+          </div>
+          <h2 className="text-lg font-bold text-white">Localizando atendimento...</h2>
+          <p className="text-xs text-slate-400">
+            Consultando comanda <strong className="text-emerald-400 font-mono">{token}</strong> na nuvem em tempo real.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (!entry) {
     return (
@@ -72,6 +101,14 @@ export default function PublicTrackingPage() {
             Não encontramos nenhuma comanda com o código <strong className="text-amber-400 font-mono">{token}</strong>. Verifique o número digitado ou escaneie novamente o QR Code da comanda.
           </p>
           <div className="pt-3 flex flex-col gap-2">
+            <Button
+              onClick={() => loadData(false)}
+              variant="outline"
+              className="w-full border-slate-700 text-slate-300 hover:text-white font-bold text-xs h-10 gap-2"
+            >
+              <RefreshCw className="w-4 h-4" />
+              <span>Tentar Novamente</span>
+            </Button>
             <Link href="/acompanhar">
               <Button className="w-full bg-emerald-600 hover:bg-emerald-700 font-bold text-xs h-10 gap-2 text-white">
                 <Search className="w-4 h-4" />
