@@ -17,7 +17,10 @@ import {
   Sparkles,
   Info,
   ShieldAlert,
-  ArrowLeft
+  ArrowLeft,
+  User,
+  Phone,
+  X
 } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
@@ -30,6 +33,7 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { ModelCombobox } from '@/components/ModelCombobox';
+import { CustomerCombobox } from '@/components/CustomerCombobox';
 
 interface CartridgeItemInput {
   id: string;
@@ -58,7 +62,6 @@ export default function NewEntryPage() {
   const [settings, setSettings] = useState<CompanySettings>(AppStore.getSettings(currentCompany.id));
   const [segmentConfig, setSegmentConfig] = useState<SegmentCustomization>(AppStore.getSegmentConfig(currentCompany.id));
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
-  const [customerSearch, setCustomerSearch] = useState<string>('');
   
   // Quick Customer Registration Modal state
   const [showQuickCustomerModal, setShowQuickCustomerModal] = useState(false);
@@ -91,27 +94,24 @@ export default function NewEntryPage() {
       checked: false
     }));
 
-    if (mods.length > 0) {
-      const defaultMod = mods[0];
-      const defaultServiceType = srvs.length > 0 ? (srvs[0].service_type || srvs[0].id) : 'VERIFICACAO_E_RECARGA';
-      const calc = AppStore.calculateItemPrice(currentCompany.id, defaultMod.id, defaultServiceType);
+    const defaultServiceType = srvs.length > 0 ? (srvs[0].service_type || srvs[0].id) : 'VERIFICACAO_E_RECARGA';
 
-      setItems([
-        {
-          id: `item-${Date.now()}`,
-          model_id: defaultMod.id,
-          service_requested: defaultServiceType,
-          color: defaultMod.color,
-          is_xl: defaultMod.is_xl,
-          final_serie: '',
-          accessories: '',
-          checklist: initialChecklist,
-          price: calc.finalPrice,
-          isVerificationWaived: calc.isVerificationWaived,
-          priceExplanation: calc.explanation
-        }
-      ]);
-    }
+    // Start with 1 empty item (no pre-selected model, ready for searching)
+    setItems([
+      {
+        id: `item-${Date.now()}`,
+        model_id: '',
+        service_requested: defaultServiceType,
+        color: '',
+        is_xl: false,
+        final_serie: '',
+        accessories: '',
+        checklist: initialChecklist,
+        price: 0,
+        isVerificationWaived: false,
+        priceExplanation: ''
+      }
+    ]);
   }, [currentCompany.id]);
 
   if (!currentUser) return null;
@@ -138,22 +138,11 @@ export default function NewEntryPage() {
     );
   }
 
-  // Filtered Customers by Search
-  const filteredCustomers = customers.filter(c => 
-    c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
-    c.phone.includes(customerSearch) ||
-    (c.document && c.document.includes(customerSearch))
-  );
-
   const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
 
-  // Add Item Line
+  // Add Item Line (Starts with empty model for quick typing)
   const handleAddItem = () => {
-    const defaultModel = models[0];
     const defaultServiceType = services.length > 0 ? (services[0].service_type || services[0].id) : 'VERIFICACAO_E_RECARGA';
-    const calc = defaultModel 
-      ? AppStore.calculateItemPrice(currentCompany.id, defaultModel.id, defaultServiceType)
-      : { finalPrice: 30.00, isVerificationWaived: true, explanation: 'Preço padrão' };
 
     const initialChecklist = (settings.custom_checklist_items || segmentConfig.defaultChecklistItems || []).map(item => ({
       item,
@@ -164,16 +153,16 @@ export default function NewEntryPage() {
       ...prev,
       {
         id: `item-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
-        model_id: defaultModel ? defaultModel.id : '',
+        model_id: '',
         service_requested: defaultServiceType,
-        color: defaultModel ? defaultModel.color : 'Preto',
-        is_xl: defaultModel ? defaultModel.is_xl : false,
+        color: '',
+        is_xl: false,
         final_serie: '',
         accessories: '',
         checklist: initialChecklist,
-        price: calc.finalPrice,
-        isVerificationWaived: calc.isVerificationWaived,
-        priceExplanation: calc.explanation
+        price: 0,
+        isVerificationWaived: false,
+        priceExplanation: ''
       }
     ]);
   };
@@ -212,13 +201,22 @@ export default function NewEntryPage() {
           if (foundModel) {
             updated.color = foundModel.color;
             updated.is_xl = foundModel.is_xl;
+          } else {
+            updated.color = '';
+            updated.is_xl = false;
           }
         }
 
-        const calc = AppStore.calculateItemPrice(currentCompany.id, targetModelId, targetService);
-        updated.price = calc.finalPrice;
-        updated.isVerificationWaived = calc.isVerificationWaived;
-        updated.priceExplanation = calc.explanation;
+        if (targetModelId) {
+          const calc = AppStore.calculateItemPrice(currentCompany.id, targetModelId, targetService);
+          updated.price = calc.finalPrice;
+          updated.isVerificationWaived = calc.isVerificationWaived;
+          updated.priceExplanation = calc.explanation;
+        } else {
+          updated.price = 0;
+          updated.isVerificationWaived = false;
+          updated.priceExplanation = 'Aguardando seleção do modelo';
+        }
       }
 
       return updated;
@@ -260,7 +258,13 @@ export default function NewEntryPage() {
   const handleSubmitEntry = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCustomerId) {
-      alert('Por favor, selecione ou cadastre um cliente.');
+      alert('Por favor, pesquise e selecione um cliente antes de gerar a comanda.');
+      return;
+    }
+
+    const missingModel = items.find(i => !i.model_id);
+    if (missingModel) {
+      alert(`Por favor, selecione ou pesquise o modelo/equipamento para todos os ${segmentConfig.itemLabelPlural.toLowerCase()} recebidos.`);
       return;
     }
 
@@ -268,7 +272,7 @@ export default function NewEntryPage() {
     if (isSerialRequired) {
       const invalidItem = items.find(i => !i.final_serie.trim());
       if (invalidItem) {
-        alert('Por favor, preencha o campo "Final da Série" de todos os cartuchos (exigido pelas configurações da empresa).');
+        alert(`Por favor, preencha o campo "${segmentConfig.identifierLabel}" de todos os itens.`);
         return;
       }
     }
@@ -403,68 +407,90 @@ export default function NewEntryPage() {
       <Card className="shadow-sm border-slate-200 dark:border-slate-800">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-bold text-slate-800 dark:text-slate-200">
-              1. Identificação do Cliente
-            </CardTitle>
+            <div>
+              <CardTitle className="text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                <User className="w-4 h-4 text-emerald-600" />
+                <span>1. Identificação do Cliente</span>
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Pesquise por nome, telefone, CPF/CNPJ ou selecione o cliente cadastrado
+              </CardDescription>
+            </div>
             <Button
               type="button"
               variant="outline"
               size="sm"
               onClick={() => setShowQuickCustomerModal(true)}
-              className="text-xs gap-1.5 text-emerald-700 border-emerald-300 hover:bg-emerald-50 h-8"
+              className="text-xs gap-1.5 text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 h-8"
             >
               <UserPlus className="w-3.5 h-3.5" />
               <span>Cadastrar Novo Cliente</span>
             </Button>
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 block">
-                Buscar por Nome, Telefone ou CPF
-              </label>
-              <div className="relative">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <Input
-                  placeholder="Digite para filtrar..."
-                  value={customerSearch}
-                  onChange={(e) => setCustomerSearch(e.target.value)}
-                  className="pl-9 text-xs"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 block">
-                Selecionar Cliente *
-              </label>
-              <Select
-                value={selectedCustomerId}
-                onChange={(e) => setSelectedCustomerId(e.target.value)}
-                required
-                className="text-xs font-medium"
-              >
-                <option value="">-- Selecione o cliente cadastrado --</option>
-                {filteredCustomers.map(c => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} — Tel: {c.phone} {c.company_name ? `(${c.company_name})` : ''}
-                  </option>
-                ))}
-              </Select>
-            </div>
+        <CardContent className="space-y-3">
+          <div>
+            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+              <span>Cliente *</span>
+              <span className="text-[10px] text-slate-400 font-normal">Inicia vazio — Digite para pesquisar</span>
+            </label>
+            <CustomerCombobox
+              customers={customers}
+              selectedCustomerId={selectedCustomerId}
+              onSelect={(id) => setSelectedCustomerId(id)}
+              onQuickRegister={() => setShowQuickCustomerModal(true)}
+              required
+              placeholder="Buscar cliente por nome, telefone, CPF/CNPJ ou código..."
+            />
           </div>
 
           {selectedCustomer && (
-            <div className="mt-3 p-3 bg-emerald-50/60 dark:bg-emerald-950/20 rounded-lg text-xs flex items-center justify-between border border-emerald-200 dark:border-emerald-800/60">
-              <div>
-                <span className="font-bold text-slate-800 dark:text-slate-100">{selectedCustomer.name}</span>
-                <span className="text-slate-600 dark:text-slate-300 ml-3">Tel: <strong>{selectedCustomer.phone}</strong></span>
-                {selectedCustomer.document && <span className="text-slate-500 ml-3">Doc: {selectedCustomer.document}</span>}
+            <div className="p-3 bg-emerald-50/70 dark:bg-emerald-950/30 rounded-xl text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 border border-emerald-200 dark:border-emerald-800/60 animate-in fade-in">
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
+                  {selectedCustomer.name.slice(0, 2).toUpperCase()}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-slate-900 dark:text-slate-100 text-sm">{selectedCustomer.name}</span>
+                    {selectedCustomer.internal_code && (
+                      <Badge variant="outline" className="font-mono text-[9px] px-1.5 py-0 bg-white dark:bg-slate-900 border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-300 font-bold">
+                        #{selectedCustomer.internal_code}
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 text-[11px] text-slate-600 dark:text-slate-300 mt-0.5 flex-wrap">
+                    <span>Tel: <strong className="text-emerald-700 dark:text-emerald-400">{selectedCustomer.phone}</strong></span>
+                    {selectedCustomer.document && <span>Doc: <strong>{selectedCustomer.document}</strong></span>}
+                    {selectedCustomer.company_name && <span>Empresa: <strong>{selectedCustomer.company_name}</strong></span>}
+                  </div>
+                </div>
               </div>
-              <Badge variant="outline" className="bg-white dark:bg-slate-900 text-emerald-700 border-emerald-300 font-semibold text-[10px]">
-                Cliente Selecionado
-              </Badge>
+
+              <div className="flex items-center gap-2 shrink-0">
+                {selectedCustomer.whatsapp && (
+                  <a
+                    href={`https://wa.me/55${selectedCustomer.whatsapp.replace(/\D/g, '')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-1.5 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold rounded-md flex items-center gap-1 transition-colors"
+                  >
+                    <Phone className="w-3 h-3" />
+                    <span>WhatsApp</span>
+                  </a>
+                )}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedCustomerId('')}
+                  className="text-xs text-slate-400 hover:text-rose-600 h-8 px-2"
+                  title="Trocar cliente"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  <span>Trocar</span>
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>

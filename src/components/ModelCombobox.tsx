@@ -152,6 +152,7 @@ export function ModelCombobox({
 
   const handleClear = (e: React.MouseEvent) => {
     e.stopPropagation();
+    onSelect('');
     setSearchQuery('');
     setIsOpen(true);
     inputRef.current?.focus();
