@@ -47,6 +47,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { DialogModal, DialogModalProps } from '@/components/ui/dialog-modal';
 import { CustomerCombobox } from '@/components/CustomerCombobox';
 import { ModelCombobox } from '@/components/ModelCombobox';
 
@@ -105,6 +106,9 @@ export default function NovaEntradaPage() {
 
   // Created Order Result (for thermal printing modal)
   const [createdOrder, setCreatedOrder] = useState<ServiceOrder | null>(null);
+
+  // Global Dialog Modal (Replaces standard browser alerts)
+  const [dialogModal, setDialogModal] = useState<DialogModalProps | null>(null);
 
   const loadData = () => {
     const custs = AppStore.getCustomers(currentCompany.id);
@@ -274,7 +278,16 @@ export default function NovaEntradaPage() {
     if (!newCustName || !newCustPhone) return;
 
     if (settings.require_customer_document && !newCustDoc.trim()) {
-      alert('Pela política da empresa, o CPF ou CNPJ é obrigatório para cadastrar clientes.');
+      setDialogModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Documento Obrigatório',
+        subtitle: 'Política cadastral da empresa',
+        message: 'Pela política da empresa, o CPF ou CNPJ é obrigatório para cadastrar novos clientes.',
+        isAlertOnly: true,
+        confirmLabel: 'Entendido',
+        onConfirm: () => setDialogModal(null)
+      });
       return;
     }
 
@@ -324,25 +337,57 @@ export default function NovaEntradaPage() {
     e.preventDefault();
 
     if (!selectedCustomerId) {
-      alert('Por favor, selecione ou cadastre o cliente antes de prosseguir.');
+      setDialogModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Cliente Não Selecionado',
+        message: 'Por favor, selecione ou cadastre o cliente antes de prosseguir com a emissão da Ordem de Serviço.',
+        isAlertOnly: true,
+        confirmLabel: 'Entendido',
+        onConfirm: () => setDialogModal(null)
+      });
       return;
     }
 
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       if (!item.model_id) {
-        alert(`O Item #${i + 1} está sem modelo selecionado. Por favor, escolha um modelo.`);
+        setDialogModal({
+          isOpen: true,
+          type: 'warning',
+          title: 'Modelo Não Selecionado',
+          message: `O Item #${i + 1} está sem modelo selecionado. Por favor, escolha um modelo para continuar.`,
+          isAlertOnly: true,
+          confirmLabel: 'Entendido',
+          onConfirm: () => setDialogModal(null)
+        });
         return;
       }
       if (settings.require_item_serial && !item.internal_identifier.trim()) {
         const cat = categories.find(c => c.id === item.category_id);
         const label = cat?.identifier_label || 'Nº de Série / Identificador';
-        alert(`O ${label} é obrigatório no Item #${i + 1}.`);
+        setDialogModal({
+          isOpen: true,
+          type: 'warning',
+          title: 'Identificador Obrigatório',
+          message: `O campo ${label} é obrigatório no Item #${i + 1} pelas configurações da empresa.`,
+          isAlertOnly: true,
+          confirmLabel: 'Entendido',
+          onConfirm: () => setDialogModal(null)
+        });
         return;
       }
       const hasAnyService = item.services.some(s => s.selected);
       if (!hasAnyService) {
-        alert(`Por favor, selecione ao menos 1 serviço a ser executado no Item #${i + 1}.`);
+        setDialogModal({
+          isOpen: true,
+          type: 'warning',
+          title: 'Nenhum Serviço Selecionado',
+          message: `Por favor, selecione ao menos 1 serviço a ser executado no Item #${i + 1}.`,
+          isAlertOnly: true,
+          confirmLabel: 'Entendido',
+          onConfirm: () => setDialogModal(null)
+        });
         return;
       }
     }
@@ -384,7 +429,15 @@ export default function NovaEntradaPage() {
       const created = AppStore.addServiceOrder(orderPayload, currentUser.full_name);
       setCreatedOrder(created);
     } catch (err: any) {
-      alert(err?.message || 'Erro ao gerar ordem de serviço.');
+      setDialogModal({
+        isOpen: true,
+        type: 'danger',
+        title: 'Erro ao Gerar OS',
+        message: err?.message || 'Ocorreu um erro ao gerar a ordem de serviço.',
+        isAlertOnly: true,
+        confirmLabel: 'Entendido',
+        onConfirm: () => setDialogModal(null)
+      });
     }
   };
 
@@ -400,6 +453,9 @@ export default function NovaEntradaPage() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-20">
+      {/* Global Dialog Modal */}
+      {dialogModal && <DialogModal {...dialogModal} />}
+
       {/* Header Breadcrumb */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-4">
         <div>

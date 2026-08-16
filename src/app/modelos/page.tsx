@@ -52,6 +52,19 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 
+interface DialogModalState {
+  isOpen: boolean;
+  type?: 'danger' | 'warning' | 'info' | 'success';
+  title: string;
+  subtitle?: string;
+  message: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  isAlertOnly?: boolean;
+  onConfirm?: () => void;
+  onCancel?: () => void;
+}
+
 export default function CatalogAndModelsPage() {
   const { currentCompany, currentUser, hasPermission } = useAuth();
   const [activeTab, setActiveTab] = useState<'MODELS' | 'SERVICES' | 'CATEGORIES' | 'BRANDS' | 'WORKFLOW'>('MODELS');
@@ -67,13 +80,8 @@ export default function CatalogAndModelsPage() {
   const [brandFilter, setBrandFilter] = useState('ALL');
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
-  // Unsaved Changes Confirmation Modal State
-  const [unsavedConfirmModal, setUnsavedConfirmModal] = useState<{
-    isOpen: boolean;
-    onConfirm: () => void;
-    title?: string;
-    message?: string;
-  } | null>(null);
+  // Global Dialog Modal (Replaces standard browser alert & confirm)
+  const [dialogModal, setDialogModal] = useState<DialogModalState | null>(null);
 
   // ==========================================
   // MODEL MODAL STATE & OPTIONALS
@@ -166,6 +174,53 @@ export default function CatalogAndModelsPage() {
     setTimeout(() => setNotification(null), 3500);
   };
 
+  // Helper to open Informative Modal
+  const showAlert = (title: string, message: string, subtitle?: string, type: 'warning' | 'info' | 'danger' = 'warning') => {
+    setDialogModal({
+      isOpen: true,
+      type,
+      title,
+      subtitle,
+      message,
+      isAlertOnly: true,
+      confirmLabel: 'Entendido'
+    });
+  };
+
+  // Helper to open Confirmation Modal
+  const showConfirm = ({
+    title,
+    subtitle,
+    message,
+    confirmLabel = 'Confirmar',
+    cancelLabel = 'Cancelar',
+    type = 'warning',
+    onConfirm,
+    onCancel
+  }: {
+    title: string;
+    subtitle?: string;
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    type?: 'danger' | 'warning' | 'info' | 'success';
+    onConfirm: () => void;
+    onCancel?: () => void;
+  }) => {
+    setDialogModal({
+      isOpen: true,
+      type,
+      title,
+      subtitle,
+      message,
+      confirmLabel,
+      cancelLabel,
+      isAlertOnly: false,
+      onConfirm,
+      onCancel
+    });
+  };
+
   const loadData = () => {
     const mods = AppStore.getModels(currentCompany.id);
     const cats = AppStore.getCategories(currentCompany.id);
@@ -209,10 +264,13 @@ export default function CatalogAndModelsPage() {
     );
 
     if (isDirty) {
-      setUnsavedConfirmModal({
-        isOpen: true,
+      showConfirm({
         title: 'Descartar Alterações do Modelo?',
+        subtitle: 'Alterações não salvas serão perdidas.',
         message: 'Você possui dados preenchidos ou modificados neste formulário. Tem certeza de que deseja sair sem salvar?',
+        confirmLabel: 'Sim, Descartar e Sair',
+        cancelLabel: 'Continuar Editando',
+        type: 'danger',
         onConfirm: () => setShowModelModal(false)
       });
     } else {
@@ -233,10 +291,13 @@ export default function CatalogAndModelsPage() {
     );
 
     if (isDirty) {
-      setUnsavedConfirmModal({
-        isOpen: true,
+      showConfirm({
         title: 'Descartar Alterações da Categoria?',
+        subtitle: 'Alterações não salvas serão perdidas.',
         message: 'As alterações feitas nesta categoria (opcionais, especificações, pareceres ou checklists) serão perdidas. Deseja realmente sair sem salvar?',
+        confirmLabel: 'Sim, Descartar e Sair',
+        cancelLabel: 'Continuar Editando',
+        type: 'danger',
         onConfirm: () => setShowCategoryModal(false)
       });
     } else {
@@ -247,10 +308,13 @@ export default function CatalogAndModelsPage() {
   const handleRequestCloseServiceModal = () => {
     const isDirty = Boolean(serviceName.trim() || serviceDesc.trim() || serviceCode.trim());
     if (isDirty) {
-      setUnsavedConfirmModal({
-        isOpen: true,
+      showConfirm({
         title: 'Descartar Alterações do Serviço?',
+        subtitle: 'Alterações não salvas serão perdidas.',
         message: 'Você tem informações não salvas neste serviço. Tem certeza de que deseja sair sem salvar?',
+        confirmLabel: 'Sim, Descartar e Sair',
+        cancelLabel: 'Continuar Editando',
+        type: 'danger',
         onConfirm: () => setShowServiceModal(false)
       });
     } else {
@@ -261,10 +325,13 @@ export default function CatalogAndModelsPage() {
   const handleRequestCloseBrandModal = () => {
     const isDirty = Boolean(brandName.trim() || brandSlug.trim());
     if (isDirty) {
-      setUnsavedConfirmModal({
-        isOpen: true,
+      showConfirm({
         title: 'Descartar Alterações da Marca?',
+        subtitle: 'Alterações não salvas serão perdidas.',
         message: 'Você preencheu dados para esta marca. Deseja sair sem salvar?',
+        confirmLabel: 'Sim, Descartar e Sair',
+        cancelLabel: 'Continuar Editando',
+        type: 'danger',
         onConfirm: () => setShowBrandModal(false)
       });
     } else {
@@ -275,10 +342,13 @@ export default function CatalogAndModelsPage() {
   const handleRequestCloseStateModal = () => {
     const isDirty = Boolean(stateName.trim() || stateCode.trim());
     if (isDirty) {
-      setUnsavedConfirmModal({
-        isOpen: true,
+      showConfirm({
         title: 'Descartar Alterações da Etapa?',
+        subtitle: 'Alterações não salvas serão perdidas.',
         message: 'Você preencheu dados para esta etapa do Kanban. Deseja sair sem salvar?',
+        confirmLabel: 'Sim, Descartar e Sair',
+        cancelLabel: 'Continuar Editando',
+        type: 'danger',
         onConfirm: () => setShowStateModal(false)
       });
     } else {
@@ -416,14 +486,22 @@ export default function CatalogAndModelsPage() {
   };
 
   const handleDeleteModel = (id: string, name: string) => {
-    if (!confirm(`Deseja realmente excluir o modelo "${name}"?`)) return;
-    try {
-      AppStore.deleteModel(id, currentUser.full_name);
-      showToast(`Modelo "${name}" excluído.`);
-      loadData();
-    } catch (err: any) {
-      showToast(err?.message || 'Erro ao excluir modelo.', 'error');
-    }
+    showConfirm({
+      title: 'Excluir Modelo?',
+      subtitle: 'Esta ação não poderá ser desfeita',
+      message: `Deseja realmente excluir o modelo "${name}" do catálogo?`,
+      confirmLabel: 'Sim, Excluir Modelo',
+      type: 'danger',
+      onConfirm: () => {
+        try {
+          AppStore.deleteModel(id, currentUser.full_name);
+          showToast(`Modelo "${name}" excluído.`);
+          loadData();
+        } catch (err: any) {
+          showToast(err?.message || 'Erro ao excluir modelo.', 'error');
+        }
+      }
+    });
   };
 
   // ==========================================
@@ -485,14 +563,22 @@ export default function CatalogAndModelsPage() {
   };
 
   const handleDeleteService = (id: string, name: string) => {
-    if (!confirm(`Deseja realmente excluir o serviço "${name}"?`)) return;
-    try {
-      AppStore.deleteService(id, currentUser.full_name);
-      showToast(`Serviço "${name}" excluído.`);
-      loadData();
-    } catch (err: any) {
-      showToast(err?.message || 'Erro ao excluir serviço.', 'error');
-    }
+    showConfirm({
+      title: 'Excluir Serviço?',
+      subtitle: 'Esta ação não poderá ser desfeita',
+      message: `Deseja realmente excluir o serviço "${name}"?`,
+      confirmLabel: 'Sim, Excluir Serviço',
+      type: 'danger',
+      onConfirm: () => {
+        try {
+          AppStore.deleteService(id, currentUser.full_name);
+          showToast(`Serviço "${name}" excluído.`);
+          loadData();
+        } catch (err: any) {
+          showToast(err?.message || 'Erro ao excluir serviço.', 'error');
+        }
+      }
+    });
   };
 
   const toggleServiceCategory = (catId: string) => {
@@ -640,7 +726,7 @@ export default function CatalogAndModelsPage() {
     setCatChecklistItems(catChecklistItems.filter((_, i) => i !== index));
   };
 
-  // Technical verdicts handlers (Editing, Reordering, Usage checks)
+  // Technical verdicts handlers (Editing, Reordering, Usage checks with Rich Modals)
   const handleStartEditTechnicalVerdict = (index: number) => {
     setEditingVerdictIndex(index);
     setEditingVerdictOldText(catTechnicalVerdicts[index]);
@@ -660,6 +746,16 @@ export default function CatalogAndModelsPage() {
     if (editingVerdictIndex !== null) {
       const oldVal = editingVerdictOldText || catTechnicalVerdicts[editingVerdictIndex];
 
+      const proceedUpdate = () => {
+        const updated = [...catTechnicalVerdicts];
+        updated[editingVerdictIndex] = newVal;
+        setCatTechnicalVerdicts(updated);
+        setEditingVerdictIndex(null);
+        setEditingVerdictOldText(null);
+        setNewVerdictInput('');
+        showToast(`Parecer técnico atualizado para "${newVal}"!`);
+      };
+
       // If name changed, check if it is being used in any Kanban/OS item
       if (newVal !== oldVal) {
         const orders = AppStore.getServiceOrders(currentCompany.id);
@@ -673,20 +769,19 @@ export default function CatalogAndModelsPage() {
         });
 
         if (usedCount > 0) {
-          const confirmed = confirm(
-            `Atenção: O parecer técnico "${oldVal}" está sendo utilizado em ${usedCount} item(ns) no Kanban/Ordens de Serviço.\n\nDeseja realmente salvar a alteração para "${newVal}"?`
-          );
-          if (!confirmed) return;
+          showConfirm({
+            title: 'Alterar Parecer em Uso?',
+            subtitle: `${usedCount} item(ns) vinculado(s) no Kanban`,
+            message: `O parecer técnico "${oldVal}" está sendo utilizado em ${usedCount} item(ns) no Kanban/Ordens de Serviço. Deseja realmente salvar a alteração para "${newVal}"?`,
+            confirmLabel: 'Sim, Salvar Alteração',
+            type: 'warning',
+            onConfirm: proceedUpdate
+          });
+          return;
         }
       }
 
-      const updated = [...catTechnicalVerdicts];
-      updated[editingVerdictIndex] = newVal;
-      setCatTechnicalVerdicts(updated);
-      setEditingVerdictIndex(null);
-      setEditingVerdictOldText(null);
-      setNewVerdictInput('');
-      showToast(`Parecer técnico atualizado para "${newVal}"!`);
+      proceedUpdate();
     } else {
       if (catTechnicalVerdicts.includes(newVal)) {
         showToast('Este parecer técnico já está cadastrado nesta categoria.', 'error');
@@ -700,7 +795,12 @@ export default function CatalogAndModelsPage() {
 
   const handleRemoveTechnicalVerdict = (index: number) => {
     if (catTechnicalVerdicts.length <= 1) {
-      showToast('A categoria deve ter pelo menos 1 parecer técnico cadastrado.', 'error');
+      showAlert(
+        'Limite Mínimo',
+        'A categoria deve ter pelo menos 1 parecer técnico cadastrado para seleção na bancada.',
+        'Configuração obrigatória',
+        'warning'
+      );
       return;
     }
 
@@ -716,7 +816,12 @@ export default function CatalogAndModelsPage() {
     });
 
     if (usedCount > 0) {
-      alert(`Não é possível excluir o parecer técnico "${verdictText}" pois ele está registrado em ${usedCount} item(ns) no Kanban/Ordens de Serviço.`);
+      showAlert(
+        'Exclusão Bloqueada',
+        `Não é possível excluir o parecer técnico "${verdictText}" pois ele está registrado em ${usedCount} item(ns) no Kanban/Ordens de Serviço.`,
+        'Parecer já utilizado em ordens de serviço',
+        'danger'
+      );
       return;
     }
 
@@ -807,7 +912,12 @@ export default function CatalogAndModelsPage() {
       });
 
       if (usedModels.length > 0) {
-        alert(`Não é possível excluir o opcional "${fieldObj.name}" pois existem ${usedModels.length} modelo(s) cadastrado(s) utilizando-o.`);
+        showAlert(
+          'Exclusão de Opcional Bloqueada',
+          `Não é possível excluir o opcional "${fieldObj.name}" pois existem ${usedModels.length} modelo(s) cadastrado(s) utilizando este campo no catálogo.`,
+          'Campo em uso por produtos',
+          'danger'
+        );
         return;
       }
     }
@@ -845,34 +955,38 @@ export default function CatalogAndModelsPage() {
       return;
     }
 
-    const confirmed = confirm(
-      `Deseja atualizar a Descrição Completa de todos os ${linkedModels.length} produtos desta categoria de acordo com a ordem atual dos opcionais?`
-    );
-    if (!confirmed) return;
+    showConfirm({
+      title: 'Atualizar Descrições em Lote?',
+      subtitle: `${linkedModels.length} produto(s) serão atualizados`,
+      message: `Deseja atualizar a Descrição Completa de todos os ${linkedModels.length} produtos desta categoria de acordo com a ordem atual dos opcionais?`,
+      confirmLabel: 'Sim, Atualizar Todos',
+      type: 'info',
+      onConfirm: () => {
+        let updatedCount = 0;
+        linkedModels.forEach(m => {
+          const parts: string[] = [m.name.trim()];
+          const attrs = m.custom_attributes || (m as any).attributes || {};
 
-    let updatedCount = 0;
-    linkedModels.forEach(m => {
-      const parts: string[] = [m.name.trim()];
-      const attrs = m.custom_attributes || (m as any).attributes || {};
+          catCustomFields.forEach(f => {
+            if (f.include_in_description && attrs[f.name] !== undefined && attrs[f.name] !== '' && attrs[f.name] !== null) {
+              const val = attrs[f.name];
+              if (typeof val === 'boolean') {
+                if (val) parts.push(f.name);
+              } else {
+                parts.push(f.unit ? `${val}${f.unit}` : String(val));
+              }
+            }
+          });
 
-      catCustomFields.forEach(f => {
-        if (f.include_in_description && attrs[f.name] !== undefined && attrs[f.name] !== '' && attrs[f.name] !== null) {
-          const val = attrs[f.name];
-          if (typeof val === 'boolean') {
-            if (val) parts.push(f.name);
-          } else {
-            parts.push(f.unit ? `${val}${f.unit}` : String(val));
-          }
-        }
-      });
+          const newDesc = parts.join(' ').replace(/\s+/g, ' ').trim();
+          AppStore.updateModel(m.id, { description: newDesc }, currentUser.full_name);
+          updatedCount++;
+        });
 
-      const newDesc = parts.join(' ').replace(/\s+/g, ' ').trim();
-      AppStore.updateModel(m.id, { description: newDesc }, currentUser.full_name);
-      updatedCount++;
+        loadData();
+        showToast(`Descrição de ${updatedCount} produto(s) atualizada com sucesso!`);
+      }
     });
-
-    loadData();
-    showToast(`Descrição de ${updatedCount} produto(s) atualizada com sucesso!`);
   };
 
   const handleSaveCategory = (e: React.FormEvent) => {
@@ -915,17 +1029,31 @@ export default function CatalogAndModelsPage() {
   const handleDeleteCategory = (id: string, name: string) => {
     const linkedModels = models.filter(m => m.category_id === id);
     if (linkedModels.length > 0) {
-      alert(`Não é possível excluir a categoria "${name}" pois existem ${linkedModels.length} modelo(s) cadastrado(s) nela. Realoque os modelos primeiro.`);
+      showAlert(
+        'Exclusão Bloqueada',
+        `Não é possível excluir a categoria "${name}" pois existem ${linkedModels.length} modelo(s) cadastrado(s) nela. Realoque os modelos primeiro.`,
+        'Existem modelos vinculados a esta categoria',
+        'danger'
+      );
       return;
     }
-    if (!confirm(`Deseja realmente excluir a categoria "${name}"?`)) return;
-    try {
-      AppStore.deleteCategory(id, currentUser.full_name);
-      showToast(`Categoria "${name}" excluída.`);
-      loadData();
-    } catch (err: any) {
-      showToast(err?.message || 'Erro ao excluir categoria.', 'error');
-    }
+
+    showConfirm({
+      title: 'Excluir Categoria?',
+      subtitle: 'Esta ação não poderá ser desfeita',
+      message: `Deseja realmente excluir a categoria "${name}"?`,
+      confirmLabel: 'Sim, Excluir Categoria',
+      type: 'danger',
+      onConfirm: () => {
+        try {
+          AppStore.deleteCategory(id, currentUser.full_name);
+          showToast(`Categoria "${name}" excluída.`);
+          loadData();
+        } catch (err: any) {
+          showToast(err?.message || 'Erro ao excluir categoria.', 'error');
+        }
+      }
+    });
   };
 
   // ==========================================
@@ -977,17 +1105,31 @@ export default function CatalogAndModelsPage() {
   const handleDeleteBrand = (id: string, name: string) => {
     const linkedModels = models.filter(m => m.brand_id === id);
     if (linkedModels.length > 0) {
-      alert(`Não é possível excluir a marca "${name}" pois existem ${linkedModels.length} modelo(s) cadastrado(s) nela. Realoque os modelos primeiro.`);
+      showAlert(
+        'Exclusão Bloqueada',
+        `Não é possível excluir a marca "${name}" pois existem ${linkedModels.length} modelo(s) cadastrado(s) nela. Realoque os modelos primeiro.`,
+        'Existem modelos vinculados a esta marca',
+        'danger'
+      );
       return;
     }
-    if (!confirm(`Deseja realmente excluir a marca "${name}"?`)) return;
-    try {
-      AppStore.deleteBrand(id, currentUser.full_name);
-      showToast(`Marca "${name}" excluída.`);
-      loadData();
-    } catch (err: any) {
-      showToast(err?.message || 'Erro ao excluir marca.', 'error');
-    }
+
+    showConfirm({
+      title: 'Excluir Marca?',
+      subtitle: 'Esta ação não poderá ser desfeita',
+      message: `Deseja realmente excluir a marca "${name}"?`,
+      confirmLabel: 'Sim, Excluir Marca',
+      type: 'danger',
+      onConfirm: () => {
+        try {
+          AppStore.deleteBrand(id, currentUser.full_name);
+          showToast(`Marca "${name}" excluída.`);
+          loadData();
+        } catch (err: any) {
+          showToast(err?.message || 'Erro ao excluir marca.', 'error');
+        }
+      }
+    });
   };
 
   // ==========================================
@@ -1049,17 +1191,31 @@ export default function CatalogAndModelsPage() {
 
   const handleDeleteState = (id: string, name: string) => {
     if (workflowStates.length <= 2) {
-      alert('O Kanban precisa ter pelo menos 2 etapas operacionais.');
+      showAlert(
+        'Operação Não Permitida',
+        'O Kanban da bancada técnica precisa ter pelo menos 2 etapas operacionais.',
+        'Limite mínimo atingido',
+        'warning'
+      );
       return;
     }
-    if (!confirm(`Deseja realmente remover a coluna "${name}" do Kanban?`)) return;
-    try {
-      AppStore.deleteWorkflowState(id, currentUser.full_name);
-      showToast(`Etapa "${name}" removida.`);
-      loadData();
-    } catch (err: any) {
-      showToast(err?.message || 'Erro ao excluir etapa.', 'error');
-    }
+
+    showConfirm({
+      title: 'Remover Etapa do Kanban?',
+      subtitle: 'Esta etapa será removida das colunas da bancada',
+      message: `Deseja realmente remover a coluna "${name}" do fluxo Kanban?`,
+      confirmLabel: 'Sim, Remover Etapa',
+      type: 'danger',
+      onConfirm: () => {
+        try {
+          AppStore.deleteWorkflowState(id, currentUser.full_name);
+          showToast(`Etapa "${name}" removida.`);
+          loadData();
+        } catch (err: any) {
+          showToast(err?.message || 'Erro ao excluir etapa.', 'error');
+        }
+      }
+    });
   };
 
   const handleMoveState = (index: number, direction: 'UP' | 'DOWN') => {
@@ -1119,44 +1275,75 @@ export default function CatalogAndModelsPage() {
         </div>
       )}
 
-      {/* Unsaved Changes Confirmation Modal */}
-      {unsavedConfirmModal && unsavedConfirmModal.isOpen && (
-        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4 animate-in zoom-in-95">
-            <div className="flex items-center gap-3 text-amber-600 dark:text-amber-400">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center border border-amber-500/20">
-                <AlertCircle className="w-6 h-6" />
+      {/* Global Dialog Modal (Replaces browser alert & confirm with styled modal) */}
+      {dialogModal && dialogModal.isOpen && (
+        <div className="fixed inset-0 z-[110] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-md p-6 shadow-2xl space-y-4 animate-in zoom-in-95">
+            <div className="flex items-center gap-3.5">
+              <div className={cn(
+                "w-12 h-12 rounded-2xl flex items-center justify-center border shrink-0",
+                dialogModal.type === 'danger'
+                  ? "bg-rose-500/10 text-rose-600 border-rose-500/20"
+                  : dialogModal.type === 'info'
+                    ? "bg-blue-500/10 text-blue-600 border-blue-500/20"
+                    : "bg-amber-500/10 text-amber-600 border-amber-500/20"
+              )}>
+                {dialogModal.type === 'danger' ? (
+                  <Trash2 className="w-6 h-6" />
+                ) : dialogModal.type === 'info' ? (
+                  <Info className="w-6 h-6" />
+                ) : (
+                  <AlertCircle className="w-6 h-6" />
+                )}
               </div>
               <div>
                 <h3 className="text-base font-black text-slate-900 dark:text-slate-100">
-                  {unsavedConfirmModal.title || 'Sair sem Salvar?'}
+                  {dialogModal.title}
                 </h3>
-                <p className="text-xs text-slate-500">Alterações não salvas serão perdidas.</p>
+                {dialogModal.subtitle && (
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                    {dialogModal.subtitle}
+                  </p>
+                )}
               </div>
             </div>
-            <p className="text-xs text-slate-600 dark:text-slate-300">
-              {unsavedConfirmModal.message || 'Você realizou edições neste formulário. Tem certeza de que deseja fechar sem salvar as alterações?'}
+
+            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+              {dialogModal.message}
             </p>
+
             <div className="flex items-center justify-end gap-2 pt-2">
+              {!dialogModal.isAlertOnly && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const onCancel = dialogModal.onCancel;
+                    setDialogModal(null);
+                    if (onCancel) onCancel();
+                  }}
+                  className="text-xs font-semibold"
+                >
+                  {dialogModal.cancelLabel || 'Cancelar'}
+                </Button>
+              )}
               <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setUnsavedConfirmModal(null)}
-                className="text-xs font-semibold"
-              >
-                Continuar Editando
-              </Button>
-              <Button
-                variant="destructive"
                 size="sm"
                 onClick={() => {
-                  const cb = unsavedConfirmModal.onConfirm;
-                  setUnsavedConfirmModal(null);
-                  cb();
+                  const onConfirm = dialogModal.onConfirm;
+                  setDialogModal(null);
+                  if (onConfirm) onConfirm();
                 }}
-                className="text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white"
+                className={cn(
+                  "text-xs font-bold text-white",
+                  dialogModal.type === 'danger'
+                    ? "bg-rose-600 hover:bg-rose-700"
+                    : dialogModal.type === 'info'
+                      ? "bg-blue-600 hover:bg-blue-700"
+                      : "bg-emerald-600 hover:bg-emerald-700"
+                )}
               >
-                Sim, Descartar e Sair
+                {dialogModal.confirmLabel || (dialogModal.isAlertOnly ? 'Entendido' : 'Confirmar')}
               </Button>
             </div>
           </div>

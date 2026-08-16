@@ -43,6 +43,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { DialogModal, DialogModalProps } from '@/components/ui/dialog-modal';
 import { Company, Plan, Subscription, Profile, UserRole, BusinessSegment } from '@/types';
 
 export default function SuperAdminPage() {
@@ -74,6 +75,9 @@ export default function SuperAdminPage() {
   const [showResetUserPassModal, setShowResetUserPassModal] = useState(false);
   const [userToReset, setUserToReset] = useState<Profile | null>(null);
   const [newAdminPassword, setNewAdminPassword] = useState('');
+
+  // Global Dialog Modal (Replaces browser alert & confirm)
+  const [dialogModal, setDialogModal] = useState<DialogModalProps | null>(null);
 
   // Toast / Feedback
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -333,15 +337,27 @@ Olá! Conforme solicitado, aqui estão os dados para você testar nosso sistema 
   };
 
   const handleDeleteTenant = (companyId: string, companyName: string) => {
-    if (!confirm(`Deseja realmente EXCLUIR a empresa "${companyName}" e todas as suas configurações da plataforma?`)) return;
-
-    try {
-      AppStore.deleteCompany(companyId, currentUser.full_name);
-      loadPlatformData();
-      showToast(`Empresa "${companyName}" excluída.`);
-    } catch (err: any) {
-      showToast(err?.message || 'Erro ao excluir empresa.', 'error');
-    }
+    setDialogModal({
+      isOpen: true,
+      type: 'danger',
+      title: 'Excluir Empresa Permanentemente?',
+      subtitle: 'Esta ação não poderá ser desfeita',
+      message: `Deseja realmente EXCLUIR a empresa "${companyName}" e todas as suas configurações, usuários e dados da plataforma?`,
+      confirmLabel: 'Sim, Excluir Empresa',
+      cancelLabel: 'Cancelar',
+      onCancel: () => setDialogModal(null),
+      onConfirm: () => {
+        try {
+          AppStore.deleteCompany(companyId, currentUser.full_name);
+          setDialogModal(null);
+          loadPlatformData();
+          showToast(`Empresa "${companyName}" excluída.`);
+        } catch (err: any) {
+          setDialogModal(null);
+          showToast(err?.message || 'Erro ao excluir empresa.', 'error');
+        }
+      }
+    });
   };
 
   // Handlers: Manage Plan & Extras for Company
@@ -451,18 +467,39 @@ Olá! Conforme solicitado, aqui estão os dados para você testar nosso sistema 
 
   const handleDeletePlan = (planId: string, name: string) => {
     if (plans.length <= 1) {
-      showToast('É necessário manter ao menos um plano ativo no sistema.', 'error');
+      setDialogModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Operação Não Permitida',
+        message: 'É necessário manter ao menos um plano ativo no sistema.',
+        isAlertOnly: true,
+        confirmLabel: 'Entendido',
+        onConfirm: () => setDialogModal(null)
+      });
       return;
     }
-    if (!confirm(`Deseja realmente excluir o plano "${name}"?`)) return;
 
-    try {
-      AppStore.deletePlan(planId, currentUser.full_name);
-      loadPlatformData();
-      showToast(`Plano "${name}" excluído.`);
-    } catch (err: any) {
-      showToast(err?.message || 'Erro ao excluir plano.', 'error');
-    }
+    setDialogModal({
+      isOpen: true,
+      type: 'danger',
+      title: 'Excluir Plano de Assinatura?',
+      subtitle: 'Esta ação não poderá ser desfeita',
+      message: `Deseja realmente excluir o plano "${name}"? Empresas vinculadas a este plano precisarão ser migradas.`,
+      confirmLabel: 'Sim, Excluir Plano',
+      cancelLabel: 'Cancelar',
+      onCancel: () => setDialogModal(null),
+      onConfirm: () => {
+        try {
+          AppStore.deletePlan(planId, currentUser.full_name);
+          setDialogModal(null);
+          loadPlatformData();
+          showToast(`Plano "${name}" excluído.`);
+        } catch (err: any) {
+          setDialogModal(null);
+          showToast(err?.message || 'Erro ao excluir plano.', 'error');
+        }
+      }
+    });
   };
 
   // Handlers: Users Password Reset
@@ -527,6 +564,9 @@ Incluso: Emissão de Comandas, Bancada Técnica Kanban, Rastreio e Impressão T�
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
+      {/* Global Dialog Modal */}
+      {dialogModal && <DialogModal {...dialogModal} />}
+
       {/* Toast Notification */}
       {notification && (
         <div className={cn(

@@ -27,6 +27,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { DialogModal, DialogModalProps } from '@/components/ui/dialog-modal';
 import { Profile, UserRole, CompanySettings, PermissionGroup, Company } from '@/types';
 
 interface PermissionOption {
@@ -123,6 +124,9 @@ export default function CompanySettingsPage() {
   const [adminNewPass, setAdminNewPass] = useState('');
   const [resetSuccess, setResetSuccess] = useState(false);
 
+  // Global Dialog Modal (Replaces standard browser alerts & confirms)
+  const [dialogModal, setDialogModal] = useState<DialogModalProps | null>(null);
+
   const limits = AppStore.getEffectiveLimits(currentCompany.id);
   const currentPlan = limits.plan;
 
@@ -186,7 +190,15 @@ export default function CompanySettingsPage() {
   const handleSaveCompanyData = (e: React.FormEvent) => {
     e.preventDefault();
     if (!tradeName.trim()) {
-      alert('Nome Fantasia é obrigatório.');
+      setDialogModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Nome Obrigatório',
+        message: 'O Nome Fantasia da empresa é obrigatório.',
+        isAlertOnly: true,
+        confirmLabel: 'Entendido',
+        onConfirm: () => setDialogModal(null)
+      });
       return;
     }
 
@@ -239,7 +251,15 @@ export default function CompanySettingsPage() {
       setPhone('');
       setPassword('123456');
     } catch (err: any) {
-      alert(err?.message || 'Erro ao cadastrar usuário.');
+      setDialogModal({
+        isOpen: true,
+        type: 'danger',
+        title: 'Erro ao Cadastrar Usuário',
+        message: err?.message || 'Ocorreu um erro ao cadastrar o usuário.',
+        isAlertOnly: true,
+        confirmLabel: 'Entendido',
+        onConfirm: () => setDialogModal(null)
+      });
     }
   };
 
@@ -298,18 +318,46 @@ export default function CompanySettingsPage() {
       loadData();
       setShowGroupModal(false);
     } catch (err: any) {
-      alert(err?.message || 'Erro ao salvar grupo.');
+      setDialogModal({
+        isOpen: true,
+        type: 'danger',
+        title: 'Erro ao Salvar Grupo',
+        message: err?.message || 'Ocorreu um erro ao salvar o grupo de permissões.',
+        isAlertOnly: true,
+        confirmLabel: 'Entendido',
+        onConfirm: () => setDialogModal(null)
+      });
     }
   };
 
   const handleDeleteGroup = (groupId: string) => {
-    if (!confirm('Tem certeza que deseja excluir este grupo de permissões?')) return;
-    try {
-      AppStore.deletePermissionGroup(groupId, currentUser.full_name);
-      loadData();
-    } catch (err: any) {
-      alert(err?.message || 'Erro ao excluir grupo.');
-    }
+    setDialogModal({
+      isOpen: true,
+      type: 'danger',
+      title: 'Excluir Grupo de Permissões?',
+      subtitle: 'Esta ação não poderá ser desfeita',
+      message: 'Tem certeza que deseja excluir este grupo de permissões? Usuários associados a este grupo perderão esses acessos específicos.',
+      confirmLabel: 'Sim, Excluir Grupo',
+      cancelLabel: 'Cancelar',
+      onCancel: () => setDialogModal(null),
+      onConfirm: () => {
+        try {
+          AppStore.deletePermissionGroup(groupId, currentUser.full_name);
+          setDialogModal(null);
+          loadData();
+        } catch (err: any) {
+          setDialogModal({
+            isOpen: true,
+            type: 'danger',
+            title: 'Erro ao Excluir Grupo',
+            message: err?.message || 'Não foi possível excluir o grupo.',
+            isAlertOnly: true,
+            confirmLabel: 'Entendido',
+            onConfirm: () => setDialogModal(null)
+          });
+        }
+      }
+    });
   };
 
   const toggleGroupPermission = (key: string) => {
@@ -396,6 +444,9 @@ export default function CompanySettingsPage() {
 
   return (
     <div className="space-y-6 pb-20">
+      {/* Global Dialog Modal */}
+      {dialogModal && <DialogModal {...dialogModal} />}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 gap-3">
         <div>

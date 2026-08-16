@@ -32,6 +32,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select } from '@/components/ui/select';
+import { DialogModal, DialogModalProps } from '@/components/ui/dialog-modal';
 
 const COLOR_MAP: Record<string, { bg: string; border: string; text: string; headerBg: string; badge: string }> = {
   amber: {
@@ -120,6 +121,9 @@ export default function TechnicianWorkbenchPage() {
   const [formStateStageType, setFormStateStageType] = useState<StageType>('EM_ANDAMENTO');
   const [formStateIsInitial, setFormStateIsInitial] = useState(false);
   const [formStateIsFinal, setFormStateIsFinal] = useState(false);
+
+  // Global Dialog Modal (Replaces standard browser alert & confirm)
+  const [dialogModal, setDialogModal] = useState<DialogModalProps | null>(null);
 
   const canEditTech = hasPermission('update_tech_status') || hasPermission('technical_update') || currentUser?.role === 'ADMINISTRADOR';
   const canManageKanban = hasPermission('customize_kanban') || currentUser?.role === 'ADMINISTRADOR';
@@ -293,12 +297,34 @@ export default function TechnicianWorkbenchPage() {
 
   const handleDeleteState = (id: string, name: string) => {
     if (workflowStates.length <= 2) {
-      alert('O Kanban precisa ter pelo menos 2 etapas operacionais.');
+      setDialogModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Operação Não Permitida',
+        subtitle: 'Limite mínimo atingido',
+        message: 'O Kanban da bancada técnica precisa ter pelo menos 2 etapas operacionais.',
+        isAlertOnly: true,
+        confirmLabel: 'Entendido',
+        onConfirm: () => setDialogModal(null)
+      });
       return;
     }
-    if (!confirm(`Deseja realmente remover a coluna "${name}" do Kanban?`)) return;
-    AppStore.deleteWorkflowState(id, currentUser.full_name);
-    loadData();
+
+    setDialogModal({
+      isOpen: true,
+      type: 'danger',
+      title: 'Remover Coluna do Kanban?',
+      subtitle: 'Esta ação não poderá ser desfeita',
+      message: `Deseja realmente remover a coluna "${name}" do Kanban?`,
+      confirmLabel: 'Sim, Remover Coluna',
+      cancelLabel: 'Cancelar',
+      onCancel: () => setDialogModal(null),
+      onConfirm: () => {
+        setDialogModal(null);
+        AppStore.deleteWorkflowState(id, currentUser.full_name);
+        loadData();
+      }
+    });
   };
 
   const handleMoveState = (index: number, direction: 'UP' | 'DOWN') => {
@@ -334,6 +360,9 @@ export default function TechnicianWorkbenchPage() {
 
   return (
     <div className="space-y-6 pb-20">
+      {/* Global Dialog Modal */}
+      {dialogModal && <DialogModal {...dialogModal} />}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-4">
         <div>

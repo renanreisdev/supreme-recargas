@@ -25,6 +25,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { DialogModal, DialogModalProps } from '@/components/ui/dialog-modal';
 
 export default function CustomersPage() {
   const { currentCompany, currentUser, hasPermission } = useAuth();
@@ -34,6 +35,7 @@ export default function CustomersPage() {
   const [editingCustomerId, setEditingCustomerId] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState('');
   const [settings, setSettings] = useState(AppStore.getSettings(currentCompany.id));
+  const [dialogModal, setDialogModal] = useState<DialogModalProps | null>(null);
 
   // Form State
   const [name, setName] = useState('');
@@ -90,7 +92,15 @@ export default function CustomersPage() {
 
   const handleOpenEdit = (customer: Customer) => {
     if (!canEdit) {
-      alert('Seu perfil não possui permissão para editar dados de clientes. Solicite ao administrador.');
+      setDialogModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Permissão Insuficiente',
+        message: 'Seu perfil não possui permissão para editar dados de clientes. Solicite ao administrador.',
+        isAlertOnly: true,
+        confirmLabel: 'Entendido',
+        onConfirm: () => setDialogModal(null)
+      });
       return;
     }
     setEditingCustomerId(customer.id);
@@ -109,12 +119,29 @@ export default function CustomersPage() {
   const handleSaveCustomer = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !phone.trim()) {
-      alert('Por favor, informe ao menos o Nome e o Telefone Principal do cliente.');
+      setDialogModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Campos Obrigatórios',
+        message: 'Por favor, informe ao menos o Nome e o Telefone Principal do cliente.',
+        isAlertOnly: true,
+        confirmLabel: 'Entendido',
+        onConfirm: () => setDialogModal(null)
+      });
       return;
     }
 
     if (isDocRequired && !document.trim()) {
-      alert('Pela política da empresa, o campo CPF ou CNPJ é obrigatório para cadastrar ou editar clientes.');
+      setDialogModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Documento Obrigatório',
+        subtitle: 'Política cadastral da empresa',
+        message: 'Pela política da empresa, o campo CPF ou CNPJ é obrigatório para cadastrar ou editar clientes.',
+        isAlertOnly: true,
+        confirmLabel: 'Entendido',
+        onConfirm: () => setDialogModal(null)
+      });
       return;
     }
 
@@ -127,7 +154,15 @@ export default function CustomersPage() {
     try {
       if (editingCustomerId) {
         if (!canEdit) {
-          alert('Você não tem permissão para editar clientes.');
+          setDialogModal({
+            isOpen: true,
+            type: 'warning',
+            title: 'Permissão Insuficiente',
+            message: 'Você não tem permissão para editar clientes.',
+            isAlertOnly: true,
+            confirmLabel: 'Entendido',
+            onConfirm: () => setDialogModal(null)
+          });
           return;
         }
 
@@ -147,7 +182,15 @@ export default function CustomersPage() {
         setSuccessMessage('Dados do cliente atualizados com sucesso!');
       } else {
         if (!canCreate) {
-          alert('Você não tem permissão para cadastrar novos clientes.');
+          setDialogModal({
+            isOpen: true,
+            type: 'warning',
+            title: 'Permissão Insuficiente',
+            message: 'Você não tem permissão para cadastrar novos clientes.',
+            isAlertOnly: true,
+            confirmLabel: 'Entendido',
+            onConfirm: () => setDialogModal(null)
+          });
           return;
         }
 
@@ -182,7 +225,15 @@ export default function CustomersPage() {
       setEditingCustomerId(null);
       setTimeout(() => setSuccessMessage(''), 4000);
     } catch (err: any) {
-      alert(`Erro ao salvar cliente: ${err?.message || 'Verifique os dados informados.'}`);
+      setDialogModal({
+        isOpen: true,
+        type: 'danger',
+        title: 'Erro ao Salvar Cliente',
+        message: `Erro ao salvar cliente: ${err?.message || 'Verifique os dados informados.'}`,
+        isAlertOnly: true,
+        confirmLabel: 'Entendido',
+        onConfirm: () => setDialogModal(null)
+      });
     }
   };
 
@@ -191,6 +242,9 @@ export default function CustomersPage() {
 
   return (
     <div className="space-y-6">
+      {/* Global Dialog Modal */}
+      {dialogModal && <DialogModal {...dialogModal} />}
+
       {/* Success Notification Banner */}
       {successMessage && (
         <div className="p-4 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 rounded-2xl flex items-center justify-between text-emerald-800 dark:text-emerald-200 text-xs font-semibold shadow-sm animate-in fade-in slide-in-from-top-2">

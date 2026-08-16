@@ -44,6 +44,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { DialogModal, DialogModalProps } from '@/components/ui/dialog-modal';
 
 function EntriesListContent() {
   const searchParams = useSearchParams();
@@ -74,6 +75,9 @@ function EntriesListContent() {
 
   // Notification
   const [actionAlert, setActionAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Global Dialog Modal (Replaces browser alert)
+  const [dialogModal, setDialogModal] = useState<DialogModalProps | null>(null);
 
   const canRegisterDelivery = hasPermission('register_delivery') || hasPermission('orders_deliver') || currentUser?.role === 'ADMINISTRADOR';
   const canApplyDiscount = hasPermission('apply_discount_on_delivery') || hasPermission('orders_discount') || currentUser?.role === 'ADMINISTRADOR';
@@ -186,7 +190,16 @@ function EntriesListContent() {
     if (!selectedOrderForDelivery) return;
 
     if (isUnderpaid && discountOption === 'CONCEDER_DESCONTO' && !canApplyDiscount) {
-      alert('Você não possui permissão para conceder descontos na baixa. O administrador precisa liberar esta permissão nas configurações.');
+      setDialogModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Permissão Insuficiente',
+        subtitle: 'Concessão de desconto bloqueada',
+        message: 'Você não possui permissão para conceder descontos na baixa. O administrador precisa liberar esta permissão nas configurações de perfil.',
+        isAlertOnly: true,
+        confirmLabel: 'Entendido',
+        onConfirm: () => setDialogModal(null)
+      });
       return;
     }
 
@@ -208,7 +221,15 @@ function EntriesListContent() {
       });
       setTimeout(() => setActionAlert(null), 4000);
     } catch (err: any) {
-      alert(`Erro ao registrar baixa: ${err?.message || 'Erro inesperado'}`);
+      setDialogModal({
+        isOpen: true,
+        type: 'danger',
+        title: 'Erro ao Registrar Baixa',
+        message: err?.message || 'Ocorreu um erro inesperado ao salvar a entrega.',
+        isAlertOnly: true,
+        confirmLabel: 'Entendido',
+        onConfirm: () => setDialogModal(null)
+      });
     }
   };
 
@@ -230,7 +251,15 @@ function EntriesListContent() {
       setActionAlert({ type: 'success', message: 'Ordem de serviço reaberta com sucesso e enviada de volta à bancada!' });
       setTimeout(() => setActionAlert(null), 4000);
     } catch (err: any) {
-      alert(`Erro ao reabrir: ${err?.message || 'Erro inesperado'}`);
+      setDialogModal({
+        isOpen: true,
+        type: 'danger',
+        title: 'Erro ao Reabrir OS',
+        message: err?.message || 'Não foi possível reabrir a ordem de serviço.',
+        isAlertOnly: true,
+        confirmLabel: 'Entendido',
+        onConfirm: () => setDialogModal(null)
+      });
     }
   };
 
@@ -249,7 +278,15 @@ function EntriesListContent() {
       setActionAlert({ type: 'success', message: 'Ordem de serviço excluída com sucesso.' });
       setTimeout(() => setActionAlert(null), 4000);
     } catch (err: any) {
-      alert(`Erro ao excluir: ${err?.message || 'Erro inesperado'}`);
+      setDialogModal({
+        isOpen: true,
+        type: 'danger',
+        title: 'Erro ao Excluir OS',
+        message: err?.message || 'Não foi possível excluir a ordem de serviço.',
+        isAlertOnly: true,
+        confirmLabel: 'Entendido',
+        onConfirm: () => setDialogModal(null)
+      });
     }
   };
 
@@ -279,6 +316,9 @@ function EntriesListContent() {
 
   return (
     <div className="space-y-6 pb-20">
+      {/* Global Dialog Modal */}
+      {dialogModal && <DialogModal {...dialogModal} />}
+
       {/* Alert banner */}
       {actionAlert && (
         <div className={`p-4 rounded-2xl border text-xs font-bold flex items-center justify-between animate-in fade-in-0 duration-150 ${
