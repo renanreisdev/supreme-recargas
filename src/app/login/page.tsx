@@ -190,23 +190,34 @@ export default function LoginPage() {
             <span className="text-[10px] text-slate-400 font-mono">1-Clique</span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => handleFillCredentials('super@supreme-recargas.com', 'super123')}
+              className="p-2 bg-purple-950/40 hover:bg-purple-900/60 border border-purple-800/60 hover:border-purple-600 rounded-lg text-left transition-all"
+            >
+              <span className="font-bold text-amber-300 block text-[11px] flex items-center gap-1">
+                <Crown className="w-3 h-3 text-amber-400" /> Super Admin
+              </span>
+              <span className="text-[10px] text-purple-200 truncate block">super@supreme...</span>
+            </button>
+
             <button
               type="button"
               onClick={() => handleFillCredentials('admin@supreme.com.br', 'admin123')}
               className="p-2 bg-slate-950 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 rounded-lg text-left transition-all"
             >
-              <span className="font-bold text-emerald-400 block text-[11px]">👑 Admin</span>
-              <span className="text-[10px] text-slate-400 truncate block">admin@supreme.com.br</span>
+              <span className="font-bold text-emerald-400 block text-[11px]">🏢 Admin Loja</span>
+              <span className="text-[10px] text-slate-400 truncate block">admin@supreme...</span>
             </button>
 
             <button
               type="button"
-              onClick={() => handleFillCredentials('atendimento@supreme.com.br', 'atendente123')}
+              onClick={() => handleFillCredentials('atendente@supreme.com.br', 'atendente123')}
               className="p-2 bg-slate-950 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 rounded-lg text-left transition-all"
             >
               <span className="font-bold text-teal-400 block text-[11px]">📥 Atendente</span>
-              <span className="text-[10px] text-slate-400 truncate block">atendimento@supreme.com.br</span>
+              <span className="text-[10px] text-slate-400 truncate block">atendente@...</span>
             </button>
 
             <button
@@ -215,7 +226,7 @@ export default function LoginPage() {
               className="p-2 bg-slate-950 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 rounded-lg text-left transition-all"
             >
               <span className="font-bold text-amber-400 block text-[11px]">🛠️ Técnico</span>
-              <span className="text-[10px] text-slate-400 truncate block">tecnico@supreme.com.br</span>
+              <span className="text-[10px] text-slate-400 truncate block">tecnico@...</span>
             </button>
           </div>
         </div>
