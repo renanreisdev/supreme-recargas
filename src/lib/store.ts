@@ -1532,6 +1532,62 @@ export class AppStore {
     return states.filter(st => !st.tenant_id || st.tenant_id === tenantId).sort((a, b) => a.sort_order - b.sort_order);
   }
 
+  static addWorkflowState(tenantId: string, state: Omit<WorkflowState, 'id'>, performedByName?: string): WorkflowState {
+    const data = this.getStoreData();
+    if (!Array.isArray(data.workflowStates)) data.workflowStates = [...INITIAL_WORKFLOW_STATES];
+    const tenantStates = data.workflowStates.filter((s: WorkflowState) => !s.tenant_id || s.tenant_id === tenantId);
+    const newState: WorkflowState = {
+      ...state,
+      id: generateUUID(),
+      tenant_id: tenantId,
+      workflow_id: state.workflow_id || 'default-workflow',
+      code: (state.code || state.name.toUpperCase().replace(/\s+/g, '_')).trim(),
+      sort_order: state.sort_order || (tenantStates.length + 1)
+    };
+    data.workflowStates.push(newState);
+    this.saveStoreData(data);
+    return newState;
+  }
+
+  static updateWorkflowState(id: string, updates: Partial<WorkflowState>, performedByName?: string): WorkflowState {
+    const data = this.getStoreData();
+    if (!Array.isArray(data.workflowStates)) data.workflowStates = [...INITIAL_WORKFLOW_STATES];
+    const idx = data.workflowStates.findIndex((st: WorkflowState) => st.id === id);
+    if (idx === -1) throw new Error('Situação / Etapa não encontrada');
+    const updated = { ...data.workflowStates[idx], ...updates };
+    data.workflowStates[idx] = updated;
+    this.saveStoreData(data);
+    return updated;
+  }
+
+  static deleteWorkflowState(id: string, performedByName?: string): boolean {
+    const data = this.getStoreData();
+    if (!Array.isArray(data.workflowStates)) data.workflowStates = [...INITIAL_WORKFLOW_STATES];
+    data.workflowStates = data.workflowStates.filter((st: WorkflowState) => st.id !== id);
+    this.saveStoreData(data);
+    return true;
+  }
+
+  static reorderWorkflowStates(tenantId: string, stateIds: string[], performedByName?: string): WorkflowState[] {
+    const data = this.getStoreData();
+    if (!Array.isArray(data.workflowStates)) data.workflowStates = [...INITIAL_WORKFLOW_STATES];
+    stateIds.forEach((id, idx) => {
+      const state = data.workflowStates.find((s: WorkflowState) => s.id === id);
+      if (state) {
+        state.sort_order = idx + 1;
+      }
+    });
+    this.saveStoreData(data);
+    return this.getWorkflowStates(tenantId);
+  }
+
+  static resetWorkflowStates(tenantId: string, performedByName?: string): WorkflowState[] {
+    const data = this.getStoreData();
+    data.workflowStates = [...INITIAL_WORKFLOW_STATES];
+    this.saveStoreData(data);
+    return this.getWorkflowStates(tenantId);
+  }
+
   static getKanbanColumns(tenantId: string): Array<{ id: string; title: string; color: any; statuses: string[] }> {
     const states = this.getWorkflowStates(tenantId);
     return states.map(st => ({

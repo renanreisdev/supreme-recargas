@@ -26,7 +26,8 @@ import {
   Layers,
   Wrench,
   Laptop,
-  Smartphone
+  Smartphone,
+  CheckSquare
 } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
@@ -40,7 +41,7 @@ import {
   PaymentMethod, 
   CompanySettings
 } from '@/types';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -121,6 +122,7 @@ export default function NovaEntradaPage() {
     if (items.length === 0 && cats.length > 0) {
       const defaultCat = cats[0];
       const compatibleServices = srvs.filter(s => !s.category_ids || s.category_ids.length === 0 || s.category_ids.includes(defaultCat.id));
+      const initialChecklist = (defaultCat?.checklist_items || []).map(item => ({ item, checked: false }));
       
       setItems([
         {
@@ -131,7 +133,7 @@ export default function NovaEntradaPage() {
           reported_issue: '',
           reception_notes: '',
           accessories: '',
-          checklist: [],
+          checklist: initialChecklist,
           custom_field_values: {},
           input_weight_grams: undefined,
           services: compatibleServices.map((s, sIdx) => ({
@@ -174,6 +176,7 @@ export default function NovaEntradaPage() {
     const nextId = (items.length + 1).toString();
     const defaultCat = categories[0] || { id: 'cat-default', name: 'Geral', identifier_label: 'Nº de Série' };
     const compatibleServices = allServices.filter(s => !s.category_ids || s.category_ids.length === 0 || s.category_ids.includes(defaultCat.id));
+    const initialChecklist = (defaultCat?.checklist_items || []).map(item => ({ item, checked: false }));
 
     setItems([
       ...items,
@@ -185,7 +188,7 @@ export default function NovaEntradaPage() {
         reported_issue: '',
         reception_notes: '',
         accessories: '',
-        checklist: [],
+        checklist: initialChecklist,
         custom_field_values: {},
         input_weight_grams: undefined,
         services: compatibleServices.map((s, sIdx) => ({
@@ -206,13 +209,17 @@ export default function NovaEntradaPage() {
 
   // Change Item Category
   const handleChangeCategory = (itemId: string, newCatId: string) => {
+    const cat = categories.find(c => c.id === newCatId);
     const compatibleServices = allServices.filter(s => !s.category_ids || s.category_ids.length === 0 || s.category_ids.includes(newCatId));
+    const newChecklist = (cat?.checklist_items || []).map(item => ({ item, checked: false }));
+
     setItems(prev => prev.map(it => {
       if (it.id !== itemId) return it;
       return {
         ...it,
         category_id: newCatId,
         model_id: '', // reset model on category change
+        checklist: newChecklist,
         services: compatibleServices.map((s, sIdx) => ({
           service_id: s.id,
           selected: sIdx === 0,
@@ -221,6 +228,15 @@ export default function NovaEntradaPage() {
           discount_amount: 0
         }))
       };
+    }));
+  };
+
+  // Toggle checklist item for item
+  const handleToggleItemChecklist = (itemId: string, checkIndex: number) => {
+    setItems(prev => prev.map(it => {
+      if (it.id !== itemId) return it;
+      const updated = (it.checklist || []).map((chk, idx) => idx === checkIndex ? { ...chk, checked: !chk.checked } : chk);
+      return { ...it, checklist: updated };
     }));
   };
 
@@ -647,6 +663,44 @@ export default function NovaEntradaPage() {
                       />
                     </div>
                   </div>
+
+                  {/* Checklist of Entry Inspection (if defined for this category) */}
+                  {item.checklist && item.checklist.length > 0 && (
+                    <div className="p-3 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200/80 dark:border-slate-800 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                          <CheckSquare className="w-3.5 h-3.5 text-blue-600" />
+                          <span>Checklist de Conferência de Entrada ({categories.find(c => c.id === item.category_id)?.name || 'Equipamento'})</span>
+                        </span>
+                        <span className="text-[10px] text-slate-400">
+                          {item.checklist.filter(c => c.checked).length} de {item.checklist.length} itens conferidos
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                        {item.checklist.map((chk, cIdx) => (
+                          <label
+                            key={cIdx}
+                            onClick={() => handleToggleItemChecklist(item.id, cIdx)}
+                            className={cn(
+                              "flex items-center gap-2 p-2 rounded-lg border text-xs cursor-pointer transition-all",
+                              chk.checked
+                                ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-500/40 text-emerald-900 dark:text-emerald-200 font-bold"
+                                : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400"
+                            )}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={chk.checked}
+                              onChange={() => {}}
+                              className="w-3.5 h-3.5 text-emerald-600 rounded pointer-events-none"
+                            />
+                            <span className="truncate">{chk.item}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Services Matrix on Item */}
                   <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80">

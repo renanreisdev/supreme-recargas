@@ -4,42 +4,36 @@ import React, { useState, useEffect } from 'react';
 import { 
   Wrench, 
   Search, 
-  CheckCircle2, 
-  AlertTriangle, 
-  Scale, 
   Clock, 
+  AlertCircle, 
+  CheckCircle2, 
+  ArrowRight, 
+  Scale, 
+  CheckSquare, 
+  ShieldAlert, 
   User, 
   FileText, 
-  ArrowRight,
-  ArrowLeft,
-  Sparkles,
-  ChevronRight,
-  ShieldAlert,
-  Droplets,
-  Check,
-  Tag,
-  Layers,
+  Check, 
   X,
-  Laptop,
-  Smartphone,
-  Printer
+  Sliders,
+  PlusCircle,
+  Edit3,
+  Trash2,
+  ArrowUp,
+  ArrowDown,
+  Kanban
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { AppStore } from '@/lib/store';
-import { 
-  ServiceOrderItem, 
-  WorkflowState, 
-  CompanySettings, 
-  KanbanColumnColor
-} from '@/types';
-import { formatCurrency, formatWeight, getStatusBadgeConfig, getResultBadgeConfig } from '@/lib/utils';
+import { ServiceOrderItem, WorkflowState, CompanySettings, KanbanColumnColor, StageType } from '@/types';
+import { formatCurrency, formatDate, cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Select } from '@/components/ui/select';
 
-const COLOR_MAP: Record<KanbanColumnColor, { bg: string; border: string; text: string; headerBg: string; badge: string }> = {
+const COLOR_MAP: Record<string, { bg: string; border: string; text: string; headerBg: string; badge: string }> = {
   amber: {
     bg: 'bg-slate-50/70 dark:bg-[#0e1626]/70',
     border: 'border-slate-200 dark:border-slate-800',
@@ -115,7 +109,19 @@ export default function TechnicianWorkbenchPage() {
   const [targetStatus, setTargetStatus] = useState<string>('EM_RECARGA');
   const [checklistState, setChecklistState] = useState<Array<{ item: string; checked: boolean }>>([]);
 
+  // Workflow / Columns Customization Modal State
+  const [showWorkflowModal, setShowWorkflowModal] = useState(false);
+  const [showStateFormModal, setShowStateFormModal] = useState(false);
+  const [editingStateId, setEditingStateId] = useState<string | null>(null);
+  const [formStateName, setFormStateName] = useState('');
+  const [formStateCode, setFormStateCode] = useState('');
+  const [formStateColor, setFormStateColor] = useState<KanbanColumnColor>('blue');
+  const [formStateStageType, setFormStateStageType] = useState<StageType>('EM_ANDAMENTO');
+  const [formStateIsInitial, setFormStateIsInitial] = useState(false);
+  const [formStateIsFinal, setFormStateIsFinal] = useState(false);
+
   const canEditTech = hasPermission('update_tech_status') || hasPermission('technical_update') || currentUser?.role === 'ADMINISTRADOR';
+  const canManageKanban = hasPermission('customize_kanban') || currentUser?.role === 'ADMINISTRADOR';
 
   const loadData = () => {
     const allItems = AppStore.getCartridges(currentCompany.id);
@@ -216,6 +222,78 @@ export default function TechnicianWorkbenchPage() {
     setSelectedItem(null);
   };
 
+  // ==========================================
+  // WORKFLOW STAGES CUSTOMIZATION HANDLERS
+  // ==========================================
+  const handleOpenAddState = () => {
+    setEditingStateId(null);
+    setFormStateName('');
+    setFormStateCode('');
+    setFormStateColor('blue');
+    setFormStateStageType('EM_ANDAMENTO');
+    setFormStateIsInitial(false);
+    setFormStateIsFinal(false);
+    setShowStateFormModal(true);
+  };
+
+  const handleOpenEditState = (st: WorkflowState) => {
+    setEditingStateId(st.id);
+    setFormStateName(st.name);
+    setFormStateCode(st.code);
+    setFormStateColor(st.color || 'blue');
+    setFormStateStageType(st.stage_type || 'EM_ANDAMENTO');
+    setFormStateIsInitial(Boolean(st.is_initial));
+    setFormStateIsFinal(Boolean(st.is_final));
+    setShowStateFormModal(true);
+  };
+
+  const handleSaveStateForm = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formStateName.trim()) return;
+
+    const payload: Partial<WorkflowState> = {
+      tenant_id: currentCompany.id,
+      name: formStateName.trim(),
+      code: (formStateCode || formStateName.toUpperCase().replace(/\s+/g, '_')).trim(),
+      color: formStateColor,
+      stage_type: formStateStageType,
+      is_initial: formStateIsInitial,
+      is_final: formStateIsFinal
+    };
+
+    if (editingStateId) {
+      AppStore.updateWorkflowState(editingStateId, payload, currentUser.full_name);
+    } else {
+      AppStore.addWorkflowState(currentCompany.id, payload as any, currentUser.full_name);
+    }
+
+    setShowStateFormModal(false);
+    loadData();
+  };
+
+  const handleDeleteState = (id: string, name: string) => {
+    if (workflowStates.length <= 2) {
+      alert('O Kanban precisa ter pelo menos 2 etapas operacionais.');
+      return;
+    }
+    if (!confirm(`Deseja realmente remover a coluna "${name}" do Kanban?`)) return;
+    AppStore.deleteWorkflowState(id, currentUser.full_name);
+    loadData();
+  };
+
+  const handleMoveState = (index: number, direction: 'UP' | 'DOWN') => {
+    const newIndex = direction === 'UP' ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= workflowStates.length) return;
+    
+    const reordered = [...workflowStates];
+    const [moved] = reordered.splice(index, 1);
+    reordered.splice(newIndex, 0, moved);
+
+    const stateIds = reordered.map(s => s.id);
+    AppStore.reorderWorkflowStates(currentCompany.id, stateIds, currentUser.full_name);
+    loadData();
+  };
+
   // Filter items based on search
   const filteredItems = items.filter(it => {
     if (!searchFilter.trim()) return true;
@@ -250,9 +328,9 @@ export default function TechnicianWorkbenchPage() {
           </p>
         </div>
 
-        {/* Search Input */}
-        <div className="w-full sm:w-72">
-          <div className="relative">
+        {/* Search & Customization Buttons */}
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <div className="relative flex-1 sm:w-64">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <Input
               placeholder="Buscar por OS, serial ou cliente..."
@@ -261,6 +339,18 @@ export default function TechnicianWorkbenchPage() {
               className="pl-9 h-9 text-xs rounded-xl"
             />
           </div>
+
+          {canManageKanban && (
+            <Button
+              onClick={() => setShowWorkflowModal(true)}
+              variant="outline"
+              className="h-9 px-3 text-xs font-bold rounded-xl border-slate-300 dark:border-slate-700 gap-1.5 shrink-0 hover:border-emerald-500"
+              title="Personalizar Colunas e Situações do Kanban"
+            >
+              <Sliders className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Personalizar Kanban</span>
+            </Button>
+          )}
         </div>
       </div>
 
@@ -278,85 +368,85 @@ export default function TechnicianWorkbenchPage() {
               {/* Column Header */}
               <div className={`p-3.5 ${colorStyles.headerBg} rounded-t-2xl flex items-center justify-between`}>
                 <div className="flex items-center gap-2">
-                  <span className={`w-2.5 h-2.5 rounded-full ${colorStyles.badge}`} />
-                  <span className={`text-xs font-bold ${colorStyles.text}`}>
+                  <span className="w-2.5 h-2.5 rounded-full bg-slate-400 dark:bg-slate-500" />
+                  <h3 className={`text-xs font-extrabold tracking-wide uppercase ${colorStyles.text}`}>
                     {state.name}
-                  </span>
+                  </h3>
                 </div>
-                <Badge className={`${colorStyles.badge} text-[10px] font-bold px-2`}>
+                <Badge className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${colorStyles.badge}`}>
                   {colItems.length}
                 </Badge>
               </div>
 
-              {/* Column Item Cards List */}
-              <div className="p-2.5 overflow-y-auto space-y-2.5 flex-1">
+              {/* Column Content / Cards List */}
+              <div className="p-3 space-y-3 overflow-y-auto flex-1 scrollbar-thin">
                 {colItems.length === 0 ? (
-                  <div className="p-6 text-center text-xs text-slate-400 dark:text-slate-600 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
-                    Nenhum item nesta etapa
+                  <div className="py-8 text-center border border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
+                    <p className="text-[11px] text-slate-400 font-medium">Nenhum item nesta etapa</p>
                   </div>
                 ) : (
                   colItems.map(item => {
-                    const inWeight = item.custom_field_values?.input_weight_grams;
-                    const outWeight = item.custom_field_values?.output_weight_grams;
-                    const inkDiff = outWeight !== undefined && inWeight !== undefined ? (outWeight - inWeight) : undefined;
+                    const inW = item.custom_field_values?.input_weight_grams;
+                    const outW = item.custom_field_values?.output_weight_grams;
+                    const diffW = (outW !== undefined && inW !== undefined) ? (outW - inW).toFixed(1) : null;
 
                     return (
-                      <Card
+                      <div
                         key={item.id}
                         onClick={() => handleOpenItem(item)}
-                        className="rounded-xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm bg-white dark:bg-slate-900 hover:shadow-md hover:border-emerald-400 dark:hover:border-emerald-600 transition-all cursor-pointer select-none group"
+                        className="bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-sm hover:shadow-md hover:border-emerald-500/40 transition-all cursor-pointer space-y-2.5 group"
                       >
-                        <CardContent className="p-3.5 space-y-2.5 text-xs">
-                          {/* Top Row: OS Number & Identifier */}
-                          <div className="flex items-center justify-between">
-                            <span className="font-mono font-bold text-[11px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-900/40">
-                              OS {item.order_number}
-                            </span>
-                            <span className="font-mono text-[11px] font-bold text-slate-700 dark:text-slate-300">
-                              {item.internal_identifier}
-                            </span>
-                          </div>
-
-                          {/* Model & Customer Name */}
+                        {/* OS Header & Identifier */}
+                        <div className="flex items-start justify-between gap-1">
                           <div>
-                            <h4 className="font-bold text-slate-900 dark:text-white text-xs md:text-sm group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
-                              {item.model?.name || 'Modelo'}
-                            </h4>
-                            <p className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
-                              <User className="w-3 h-3" />
-                              <span className="truncate">{item.customer_name || 'Cliente'}</span>
-                            </p>
+                            <span className="text-[10px] font-mono font-bold text-slate-400 block">
+                              OS #{item.order_number || '2026-000000'}
+                            </span>
+                            <div className="text-xs font-extrabold text-slate-900 dark:text-slate-100 group-hover:text-emerald-600 transition-colors">
+                              {item.model?.name || 'Modelo não especificado'}
+                            </div>
                           </div>
-
-                          {/* Reported Issue / Services */}
-                          {item.reported_issue && (
-                            <p className="text-[11px] text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-950/50 p-2 rounded-lg line-clamp-2">
-                              {item.reported_issue}
-                            </p>
+                          {item.internal_identifier && (
+                            <Badge className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono text-[10px] uppercase">
+                              {item.internal_identifier}
+                            </Badge>
                           )}
+                        </div>
 
-                          {/* Weight scale info if available */}
-                          {inWeight !== undefined && (
-                            <div className="flex items-center justify-between text-[10px] text-slate-500 bg-amber-50/60 dark:bg-amber-950/30 p-1.5 rounded-md border border-amber-200/40">
-                              <span>Entrada: {formatWeight(inWeight)}</span>
-                              {outWeight !== undefined && (
-                                <span className="font-bold text-emerald-600">
-                                  Saída: {formatWeight(outWeight)} {inkDiff !== undefined && `(+${inkDiff.toFixed(1)}g)`}
-                                </span>
-                              )}
-                            </div>
-                          )}
+                        {/* Customer */}
+                        {item.customer_name && (
+                          <div className="text-[11px] text-slate-500 flex items-center gap-1">
+                            <User className="w-3 h-3 text-slate-400" />
+                            <span className="truncate">{item.customer_name}</span>
+                          </div>
+                        )}
 
-                          {/* Footer: Result Badge */}
-                          {item.result_code && item.result_code !== 'PENDENTE' && (
-                            <div className="pt-1 flex justify-end">
-                              <Badge className="text-[9px] font-bold bg-slate-800 text-white">
-                                {item.result_code}
-                              </Badge>
-                            </div>
-                          )}
-                        </CardContent>
-                      </Card>
+                        {/* Services preview */}
+                        {item.services && item.services.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {item.services.map((srv, sIdx) => (
+                              <span key={sIdx} className="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-medium">
+                                {srv.service_name || 'Serviço'}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Weight info if refill */}
+                        {(inW !== undefined || outW !== undefined) && (
+                          <div className="pt-1.5 border-t border-slate-100 dark:border-slate-800/60 flex items-center justify-between text-[10px] text-slate-500">
+                            <span className="flex items-center gap-1">
+                              <Scale className="w-3 h-3 text-amber-500" />
+                              Entrada: {inW !== undefined ? `${inW}g` : '--'}
+                            </span>
+                            {diffW !== null && (
+                              <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                                +{diffW}g líquido
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     );
                   })
                 )}
@@ -366,90 +456,88 @@ export default function TechnicianWorkbenchPage() {
         })}
       </div>
 
-      {/* Technical Execution Modal */}
+      {/* ========================================================================= */}
+      {/* MODAL: EXECUÇÃO TÉCNICA DO ITEM */}
+      {/* ========================================================================= */}
       {selectedItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in-0 duration-150">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-xl overflow-hidden shadow-2xl animate-in zoom-in-95 my-8">
+            <div className="p-4 md:p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/40">
               <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono font-bold text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950 px-2 py-0.5 rounded-md">
-                    OS {selectedItem.order_number}
-                  </span>
-                  <h3 className="font-bold text-base text-slate-900 dark:text-white">
-                    {selectedItem.model?.name}
-                  </h3>
-                </div>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Cliente: <strong className="text-slate-800 dark:text-slate-200">{selectedItem.customer_name}</strong> | Identificador: <strong className="font-mono">{selectedItem.internal_identifier}</strong>
-                </p>
+                <span className="text-[10px] font-mono font-bold text-slate-400">OS #{selectedItem.order_number}</span>
+                <h3 className="font-black text-slate-900 dark:text-slate-100 text-base">
+                  {selectedItem.model?.name || 'Equipamento'}
+                </h3>
               </div>
-
-              <button
-                type="button"
-                onClick={() => setSelectedItem(null)}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-              >
+              <button onClick={() => setSelectedItem(null)} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveTechUpdate} className="space-y-4">
-              {/* Balance Scale Weights if Refill or available */}
-              <div className="p-3.5 bg-amber-50/50 dark:bg-amber-950/30 rounded-2xl border border-amber-200/60 dark:border-amber-900/40 space-y-3">
-                <div className="flex items-center gap-2 text-amber-900 dark:text-amber-300 font-bold text-xs">
-                  <Scale className="w-4 h-4 text-amber-600" />
-                  <span>Conferência de Balança & Pesagem (gramas)</span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <span className="text-[11px] text-slate-500 block mb-1">Peso de Entrada (g):</span>
-                    <Input
-                      type="number"
-                      step="0.1"
-                      placeholder="Ex: 28.5"
-                      value={inputWeight}
-                      onChange={e => setInputWeight(e.target.value)}
-                      className="h-9 text-xs rounded-xl bg-white dark:bg-slate-900 text-right font-bold"
-                    />
-                  </div>
-
-                  <div>
-                    <span className="text-[11px] text-slate-500 block mb-1">Peso de Saída / Cheio (g):</span>
-                    <Input
-                      type="number"
-                      step="0.1"
-                      placeholder="Ex: 36.5"
-                      value={outputWeight}
-                      onChange={e => setOutputWeight(e.target.value)}
-                      className="h-9 text-xs rounded-xl bg-white dark:bg-slate-900 text-right font-bold text-emerald-600"
-                    />
-                  </div>
-                </div>
-
-                {inputWeight && outputWeight && (
-                  <div className="text-right text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                    Tinta / Líquido Injetado: {(parseFloat(outputWeight) - parseFloat(inputWeight)).toFixed(1)} g
-                  </div>
-                )}
+            <form onSubmit={handleSaveTechUpdate} className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
+              {/* Target Status Select */}
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  Mover para Situação / Etapa:
+                </label>
+                <Select
+                  value={targetStatus}
+                  onChange={e => setTargetStatus(e.target.value)}
+                  className="text-xs font-bold"
+                >
+                  {workflowStates.map(st => (
+                    <option key={st.code} value={st.code}>
+                      {st.name} ({st.code})
+                    </option>
+                  ))}
+                </Select>
               </div>
 
-              {/* Checklist Items if applicable */}
-              {checklistState.length > 0 && (
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
-                    Checklist de Inspeção e Testes
+              {/* Weight Scale Inputs */}
+              <div className="grid grid-cols-2 gap-3 bg-amber-50/50 dark:bg-amber-950/20 p-3 rounded-xl border border-amber-200/60 dark:border-amber-900/40">
+                <div>
+                  <label className="text-[11px] font-bold text-amber-900 dark:text-amber-300 block mb-1">
+                    ⚖️ Peso de Entrada (g)
                   </label>
-                  <div className="space-y-1.5 p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800">
+                  <Input
+                    type="number"
+                    step="0.1"
+                    value={inputWeight}
+                    onChange={e => setInputWeight(e.target.value)}
+                    placeholder="Ex: 28.5"
+                    className="text-xs font-bold bg-white dark:bg-slate-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-amber-900 dark:text-amber-300 block mb-1">
+                    ⚖️ Peso de Saída (g)
+                  </label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    value={outputWeight}
+                    onChange={e => setOutputWeight(e.target.value)}
+                    placeholder="Ex: 38.0"
+                    className="text-xs font-bold bg-white dark:bg-slate-900"
+                  />
+                </div>
+              </div>
+
+              {/* Checklist verification if present */}
+              {checklistState.length > 0 && (
+                <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                    Checklist de Inspeção do Equipamento:
+                  </label>
+                  <div className="space-y-1.5 bg-slate-50 dark:bg-slate-800/40 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
                     {checklistState.map((chk, cIdx) => (
-                      <label key={cIdx} className="flex items-center gap-2 text-xs cursor-pointer select-none text-slate-800 dark:text-slate-200">
+                      <label key={cIdx} className="flex items-center gap-2 text-xs cursor-pointer text-slate-700 dark:text-slate-300">
                         <input
                           type="checkbox"
                           checked={chk.checked}
                           onChange={() => handleToggleChecklist(cIdx)}
-                          className="rounded text-emerald-600 focus:ring-emerald-500"
+                          className="w-3.5 h-3.5 text-emerald-600 rounded"
                         />
                         <span>{chk.item}</span>
                       </label>
@@ -458,86 +546,255 @@ export default function TechnicianWorkbenchPage() {
                 </div>
               )}
 
-              {/* Technical Opinion / Notes */}
-              <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                  Parecer Técnico / Observações da Bancada
-                </label>
-                <textarea
-                  rows={2}
-                  placeholder="Ex: Realizado desentupimento químico nos injetores pretos..."
-                  value={techNotes}
-                  onChange={e => setTechNotes(e.target.value)}
-                  className="w-full text-xs p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 outline-none focus:border-emerald-500"
-                />
-              </div>
+              {/* Result Code & Notes */}
+              <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                      Parecer Técnico / Resultado:
+                    </label>
+                    <Select
+                      value={resultCode}
+                      onChange={e => setResultCode(e.target.value)}
+                      className="text-xs"
+                    >
+                      <option value="OK">100% OK / Concluído</option>
+                      <option value="CID">CID / Circuito Queimado</option>
+                      <option value="QUEIMADO">Queimado / Sem Reparo</option>
+                      <option value="ENTUPIDO">Entupido Irrecuperável</option>
+                      <option value="DESISTENCIA">Recusado / Devolvido</option>
+                    </Select>
+                  </div>
 
-              {/* Target State & Technical Result */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                    Etapa / Status no Fluxo:
-                  </label>
-                  <Select
-                    value={targetStatus}
-                    onChange={e => setTargetStatus(e.target.value)}
-                    className="h-9 text-xs rounded-xl font-bold"
-                  >
-                    {workflowStates.map(st => (
-                      <option key={st.code} value={st.code}>
-                        {st.name}
-                      </option>
-                    ))}
-                  </Select>
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                      Detalhe do Parecer:
+                    </label>
+                    <Input
+                      value={resultDesc}
+                      onChange={e => setResultDesc(e.target.value)}
+                      placeholder="Ex: Teste padrão perfeito"
+                      className="text-xs"
+                    />
+                  </div>
                 </div>
 
                 <div>
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                    Resultado Técnico:
+                    Observações Internas da Bancada:
                   </label>
-                  <Select
-                    value={resultCode}
-                    onChange={e => setResultCode(e.target.value)}
-                    className="h-9 text-xs rounded-xl font-bold"
-                  >
-                    <option value="OK">100% OK / Aprovado</option>
-                    <option value="CID">CID (Circuito Queimado)</option>
-                    <option value="QUEIMADO">Cabeça Queimada</option>
-                    <option value="ENTUPIDO">Injetor Entupido</option>
-                    <option value="AGUARDANDO_PECA">Aguardando Peça</option>
-                    <option value="SEM_REPARO">Sem Reparo (Inviável)</option>
-                    <option value="RECUSADO">Orçamento Recusado</option>
-                  </Select>
+                  <Input
+                    value={techNotes}
+                    onChange={e => setTechNotes(e.target.value)}
+                    placeholder="Anotações para controle interno..."
+                    className="text-xs"
+                  />
                 </div>
               </div>
 
-              {/* Footer Actions */}
-              <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800">
+              {/* Actions */}
+              <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800">
                 <Button
                   type="button"
                   onClick={handleQuickApprove}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs h-9 gap-1.5 shadow-md shadow-emerald-600/20"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5"
                 >
-                  <Check className="w-3.5 h-3.5" />
-                  <span>Aprovar & Finalizar (Pronto p/ Entrega)</span>
+                  <CheckCircle2 className="w-4 h-4" />
+                  Aprovação Rápida (100% OK)
                 </Button>
 
                 <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setSelectedItem(null)}
-                    className="rounded-xl text-xs h-9"
-                  >
-                    Cancelar
+                  <Button type="button" variant="outline" onClick={() => setSelectedItem(null)} className="text-xs">
+                    Fechar
                   </Button>
-                  <Button
-                    type="submit"
-                    className="bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs h-9"
-                  >
+                  <Button type="submit" className="bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-bold text-xs">
                     Salvar Alterações
                   </Button>
                 </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: PERSONALIZAÇÃO GERAL DO KANBAN & ETAPAS */}
+      {/* ========================================================================= */}
+      {showWorkflowModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-xl overflow-hidden shadow-2xl animate-in zoom-in-95 my-8">
+            <div className="p-4 md:p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/40">
+              <div className="flex items-center gap-2">
+                <Kanban className="w-5 h-5 text-emerald-600" />
+                <h3 className="font-black text-slate-900 dark:text-slate-100 text-base">
+                  Personalizar Colunas do Kanban
+                </h3>
+              </div>
+              <button onClick={() => setShowWorkflowModal(false)} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
+              <div className="flex justify-between items-center">
+                <p className="text-xs text-slate-500">
+                  Reordene as colunas ou adicione novas etapas conforme a rotina da sua oficina.
+                </p>
+                <Button onClick={handleOpenAddState} size="sm" className="bg-emerald-600 text-white text-xs font-bold gap-1">
+                  <PlusCircle className="w-3.5 h-3.5" />
+                  Nova Etapa
+                </Button>
+              </div>
+
+              <div className="space-y-2">
+                {workflowStates.map((st, idx) => {
+                  const isFirst = idx === 0;
+                  const isLast = idx === workflowStates.length - 1;
+
+                  return (
+                    <div key={st.id} className="flex items-center justify-between gap-2 p-2.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-0.5">
+                          <button
+                            onClick={() => handleMoveState(idx, 'UP')}
+                            disabled={isFirst}
+                            className={cn("p-1 rounded border text-slate-500", isFirst ? "opacity-30 cursor-not-allowed" : "hover:bg-slate-200 dark:hover:bg-slate-700")}
+                            title="Mover para Cima"
+                          >
+                            <ArrowUp className="w-3 h-3" />
+                          </button>
+                          <button
+                            onClick={() => handleMoveState(idx, 'DOWN')}
+                            disabled={isLast}
+                            className={cn("p-1 rounded border text-slate-500", isLast ? "opacity-30 cursor-not-allowed" : "hover:bg-slate-200 dark:hover:bg-slate-700")}
+                            title="Mover para Baixo"
+                          >
+                            <ArrowDown className="w-3 h-3" />
+                          </button>
+                        </div>
+
+                        <span className="font-bold text-slate-900 dark:text-slate-100">{st.name}</span>
+                        <Badge className="bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-mono text-[9px]">
+                          {st.code}
+                        </Badge>
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleOpenEditState(st)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600"
+                          title="Editar"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteState(st.id, st.name)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600"
+                          title="Excluir"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="flex justify-end pt-3 border-t border-slate-100 dark:border-slate-800">
+                <Button onClick={() => setShowWorkflowModal(false)} className="bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-xs font-bold">
+                  Concluir
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: CRIAR / EDITAR ETAPA ESPECÍFICA */}
+      {/* ========================================================================= */}
+      {showStateFormModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-in zoom-in-95 my-8">
+            <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/40">
+              <h3 className="font-black text-slate-900 dark:text-slate-100 text-sm">
+                {editingStateId ? 'Editar Etapa do Kanban' : 'Nova Etapa do Kanban'}
+              </h3>
+              <button onClick={() => setShowStateFormModal(false)} className="p-1 rounded-lg text-slate-400">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveStateForm} className="p-5 space-y-3">
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  Nome da Etapa *
+                </label>
+                <Input
+                  value={formStateName}
+                  onChange={e => setFormStateName(e.target.value)}
+                  placeholder="Ex: Em Diagnóstico, Aguardando Peça..."
+                  className="text-xs"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  Código
+                </label>
+                <Input
+                  value={formStateCode}
+                  onChange={e => setFormStateCode(e.target.value)}
+                  placeholder="Ex: AGUARDANDO_PECA"
+                  className="text-xs font-mono uppercase"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Cor
+                  </label>
+                  <Select
+                    value={formStateColor}
+                    onChange={e => setFormStateColor(e.target.value as any)}
+                    className="text-xs"
+                  >
+                    <option value="slate">Cinza</option>
+                    <option value="amber">Amarelo</option>
+                    <option value="purple">Roxo</option>
+                    <option value="blue">Azul</option>
+                    <option value="teal">Turquesa</option>
+                    <option value="emerald">Verde</option>
+                    <option value="rose">Rosa / Vermelho</option>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Tipo de Estágio
+                  </label>
+                  <Select
+                    value={formStateStageType}
+                    onChange={e => setFormStateStageType(e.target.value as any)}
+                    className="text-xs"
+                  >
+                    <option value="RECEBIDO">Entrada</option>
+                    <option value="EM_ANDAMENTO">Em Execução</option>
+                    <option value="AGUARDANDO_APROVACAO">Aguard. Aprovação</option>
+                    <option value="CONCLUIDO">Concluído</option>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <Button type="button" variant="outline" onClick={() => setShowStateFormModal(false)} className="text-xs">
+                  Cancelar
+                </Button>
+                <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs">
+                  Salvar
+                </Button>
               </div>
             </form>
           </div>

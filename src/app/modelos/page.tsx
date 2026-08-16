@@ -24,11 +24,14 @@ import {
   Printer,
   Sliders,
   AlertCircle,
-  HelpCircle
+  HelpCircle,
+  ArrowUp,
+  ArrowDown,
+  Kanban
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { AppStore } from '@/lib/store';
-import { ItemModel, ItemCategory, Brand, Service } from '@/types';
+import { ItemModel, ItemCategory, Brand, Service, WorkflowState, KanbanColumnColor, StageType } from '@/types';
 import { formatCurrency, cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -38,12 +41,13 @@ import { Badge } from '@/components/ui/badge';
 
 export default function CatalogAndModelsPage() {
   const { currentCompany, currentUser, hasPermission } = useAuth();
-  const [activeTab, setActiveTab] = useState<'MODELS' | 'SERVICES' | 'CATEGORIES' | 'BRANDS'>('MODELS');
+  const [activeTab, setActiveTab] = useState<'MODELS' | 'SERVICES' | 'CATEGORIES' | 'BRANDS' | 'WORKFLOW'>('MODELS');
   
   const [models, setModels] = useState<ItemModel[]>([]);
   const [categories, setCategories] = useState<ItemCategory[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [services, setServices] = useState<Service[]>([]);
+  const [workflowStates, setWorkflowStates] = useState<WorkflowState[]>([]);
   
   const [searchFilter, setSearchFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
@@ -87,7 +91,7 @@ export default function CatalogAndModelsPage() {
   const [selectedServiceCategories, setSelectedServiceCategories] = useState<string[]>([]);
 
   // ==========================================
-  // CATEGORY MODAL STATE
+  // CATEGORY MODAL STATE & CHECKLIST
   // ==========================================
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
@@ -97,6 +101,8 @@ export default function CatalogAndModelsPage() {
   const [catIdentifierLabel, setCatIdentifierLabel] = useState('Nº de Série');
   const [catInspectionType, setCatInspectionType] = useState<'SCALE' | 'CHECKLIST' | 'STANDARD'>('CHECKLIST');
   const [catIcon, setCatIcon] = useState('Laptop');
+  const [catChecklistItems, setCatChecklistItems] = useState<string[]>([]);
+  const [newChecklistInput, setNewChecklistInput] = useState('');
 
   // ==========================================
   // BRAND MODAL STATE
@@ -105,6 +111,18 @@ export default function CatalogAndModelsPage() {
   const [editingBrandId, setEditingBrandId] = useState<string | null>(null);
   const [brandName, setBrandName] = useState('');
   const [brandSlug, setBrandSlug] = useState('');
+
+  // ==========================================
+  // WORKFLOW STATE MODAL STATE
+  // ==========================================
+  const [showStateModal, setShowStateModal] = useState(false);
+  const [editingStateId, setEditingStateId] = useState<string | null>(null);
+  const [stateName, setStateName] = useState('');
+  const [stateCode, setStateCode] = useState('');
+  const [stateColor, setStateColor] = useState<KanbanColumnColor>('blue');
+  const [stateStageType, setStateStageType] = useState<StageType>('EM_ANDAMENTO');
+  const [stateIsInitial, setStateIsInitial] = useState(false);
+  const [stateIsFinal, setStateIsFinal] = useState(false);
 
   const canManage = hasPermission('manage_models') || hasPermission('catalog_manage') || currentUser?.role === 'ADMINISTRADOR';
 
@@ -118,11 +136,13 @@ export default function CatalogAndModelsPage() {
     const cats = AppStore.getCategories(currentCompany.id);
     const brs = AppStore.getBrands(currentCompany.id);
     const srvs = AppStore.getServices(currentCompany.id);
+    const wfs = AppStore.getWorkflowStates(currentCompany.id);
 
     setModels(mods);
     setCategories(cats);
     setBrands(brs);
     setServices(srvs);
+    setWorkflowStates(wfs);
   };
 
   useEffect(() => {
@@ -337,7 +357,7 @@ export default function CatalogAndModelsPage() {
   };
 
   // ==========================================
-  // CATEGORY HANDLERS
+  // CATEGORY HANDLERS & CHECKLIST
   // ==========================================
   const handleOpenAddCategory = () => {
     setEditingCategoryId(null);
@@ -347,6 +367,12 @@ export default function CatalogAndModelsPage() {
     setCatIdentifierLabel('Nº de Série');
     setCatInspectionType('CHECKLIST');
     setCatIcon('Laptop');
+    setCatChecklistItems([
+      'Liga normalmente e dá vídeo',
+      'Sem riscos ou trincas na carcaça',
+      'Acompanha Carregador / Fonte Original'
+    ]);
+    setNewChecklistInput('');
     setShowCategoryModal(true);
   };
 
@@ -358,7 +384,19 @@ export default function CatalogAndModelsPage() {
     setCatIdentifierLabel(cat.identifier_label || 'Nº de Série');
     setCatInspectionType(cat.inspection_type || 'CHECKLIST');
     setCatIcon(cat.icon || 'Laptop');
+    setCatChecklistItems(cat.checklist_items || []);
+    setNewChecklistInput('');
     setShowCategoryModal(true);
+  };
+
+  const handleAddChecklistItem = () => {
+    if (!newChecklistInput.trim()) return;
+    setCatChecklistItems([...catChecklistItems, newChecklistInput.trim()]);
+    setNewChecklistInput('');
+  };
+
+  const handleRemoveChecklistItem = (index: number) => {
+    setCatChecklistItems(catChecklistItems.filter((_, i) => i !== index));
   };
 
   const handleSaveCategory = (e: React.FormEvent) => {
@@ -375,6 +413,7 @@ export default function CatalogAndModelsPage() {
       description: catDesc.trim() || undefined,
       identifier_label: catIdentifierLabel.trim() || 'Nº de Série',
       inspection_type: catInspectionType,
+      checklist_items: catChecklistItems,
       icon: catIcon,
       is_active: true
     };
@@ -472,6 +511,91 @@ export default function CatalogAndModelsPage() {
     }
   };
 
+  // ==========================================
+  // WORKFLOW STATES HANDLERS
+  // ==========================================
+  const handleOpenAddState = () => {
+    setEditingStateId(null);
+    setStateName('');
+    setStateCode('');
+    setStateColor('blue');
+    setStateStageType('EM_ANDAMENTO');
+    setStateIsInitial(false);
+    setStateIsFinal(false);
+    setShowStateModal(true);
+  };
+
+  const handleOpenEditState = (st: WorkflowState) => {
+    setEditingStateId(st.id);
+    setStateName(st.name);
+    setStateCode(st.code);
+    setStateColor(st.color || 'blue');
+    setStateStageType(st.stage_type || 'EM_ANDAMENTO');
+    setStateIsInitial(Boolean(st.is_initial));
+    setStateIsFinal(Boolean(st.is_final));
+    setShowStateModal(true);
+  };
+
+  const handleSaveState = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!stateName.trim()) {
+      showToast('Informe o nome da etapa do Kanban.', 'error');
+      return;
+    }
+
+    const payload: Partial<WorkflowState> = {
+      tenant_id: currentCompany.id,
+      name: stateName.trim(),
+      code: (stateCode || stateName.toUpperCase().replace(/\s+/g, '_')).trim(),
+      color: stateColor,
+      stage_type: stateStageType,
+      is_initial: stateIsInitial,
+      is_final: stateIsFinal
+    };
+
+    try {
+      if (editingStateId) {
+        AppStore.updateWorkflowState(editingStateId, payload, currentUser.full_name);
+        showToast(`Etapa "${stateName}" atualizada com sucesso!`);
+      } else {
+        AppStore.addWorkflowState(currentCompany.id, payload as any, currentUser.full_name);
+        showToast(`Etapa "${stateName}" adicionada ao Kanban!`);
+      }
+      setShowStateModal(false);
+      loadData();
+    } catch (err: any) {
+      showToast(err?.message || 'Erro ao salvar etapa.', 'error');
+    }
+  };
+
+  const handleDeleteState = (id: string, name: string) => {
+    if (workflowStates.length <= 2) {
+      alert('O Kanban precisa ter pelo menos 2 etapas operacionais.');
+      return;
+    }
+    if (!confirm(`Deseja realmente remover a coluna "${name}" do Kanban?`)) return;
+    try {
+      AppStore.deleteWorkflowState(id, currentUser.full_name);
+      showToast(`Etapa "${name}" removida.`);
+      loadData();
+    } catch (err: any) {
+      showToast(err?.message || 'Erro ao excluir etapa.', 'error');
+    }
+  };
+
+  const handleMoveState = (index: number, direction: 'UP' | 'DOWN') => {
+    const newIndex = direction === 'UP' ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= workflowStates.length) return;
+    
+    const reordered = [...workflowStates];
+    const [moved] = reordered.splice(index, 1);
+    reordered.splice(newIndex, 0, moved);
+
+    const stateIds = reordered.map(s => s.id);
+    AppStore.reorderWorkflowStates(currentCompany.id, stateIds, currentUser.full_name);
+    loadData();
+  };
+
   // Filtered Lists
   const filteredModels = useMemo(() => {
     return models.filter(m => {
@@ -528,7 +652,7 @@ export default function CatalogAndModelsPage() {
                 Catálogo & Engenharia de Serviços
               </h1>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Cadastre equipamentos, categorias, fabricantes e configure regras de serviços e preços específicos por modelo.
+                Personalize equipamentos, categorias, marcas, serviços e as etapas do fluxo Kanban da bancada técnica.
               </p>
             </div>
           </div>
@@ -559,6 +683,12 @@ export default function CatalogAndModelsPage() {
               <Button onClick={handleOpenAddBrand} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-2 text-xs shadow-lg shadow-emerald-600/20">
                 <PlusCircle className="w-4 h-4" />
                 Nova Marca
+              </Button>
+            )}
+            {activeTab === 'WORKFLOW' && (
+              <Button onClick={handleOpenAddState} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-2 text-xs shadow-lg shadow-emerald-600/20">
+                <PlusCircle className="w-4 h-4" />
+                Nova Etapa do Kanban
               </Button>
             )}
           </div>
@@ -609,7 +739,7 @@ export default function CatalogAndModelsPage() {
           )}
         >
           <Layers className="w-4 h-4" />
-          <span>Categorias de Equipamentos</span>
+          <span>Categorias & Checklists</span>
           <Badge className={cn("text-[10px] ml-1", activeTab === 'CATEGORIES' ? "bg-white/20 text-white dark:bg-slate-900/20 dark:text-slate-900" : "bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400")}>
             {categories.length}
           </Badge>
@@ -628,6 +758,22 @@ export default function CatalogAndModelsPage() {
           <span>Marcas & Fabricantes</span>
           <Badge className={cn("text-[10px] ml-1", activeTab === 'BRANDS' ? "bg-white/20 text-white dark:bg-slate-900/20 dark:text-slate-900" : "bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400")}>
             {brands.length}
+          </Badge>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('WORKFLOW')}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all",
+            activeTab === 'WORKFLOW'
+              ? "bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 shadow-md"
+              : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60"
+          )}
+        >
+          <Kanban className="w-4 h-4" />
+          <span>Etapas do Kanban (Situações)</span>
+          <Badge className={cn("text-[10px] ml-1", activeTab === 'WORKFLOW' ? "bg-white/20 text-white dark:bg-slate-900/20 dark:text-slate-900" : "bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400")}>
+            {workflowStates.length}
           </Badge>
         </button>
       </div>
@@ -920,7 +1066,7 @@ export default function CatalogAndModelsPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 3: CATEGORIAS DE EQUIPAMENTOS */}
+      {/* TAB 3: CATEGORIAS & CHECKLISTS */}
       {/* ========================================================================= */}
       {activeTab === 'CATEGORIES' && (
         <div className="space-y-4">
@@ -930,7 +1076,7 @@ export default function CatalogAndModelsPage() {
                 Segmentação & Tipos de Equipamentos
               </h2>
               <p className="text-xs text-slate-400">
-                Crie e configure as categorias de produtos que sua empresa atende (ex: Cartuchos, Notebooks, Celulares, Ferramentas).
+                Configure as categorias atendidas e defina o checklist de conferência específico de cada uma.
               </p>
             </div>
             {canManage && (
@@ -945,6 +1091,7 @@ export default function CatalogAndModelsPage() {
             {categories.map(cat => {
               const modelCount = models.filter(m => m.category_id === cat.id).length;
               const serviceCount = services.filter(s => s.category_ids?.includes(cat.id)).length;
+              const checklistCount = cat.checklist_items?.length || 0;
 
               return (
                 <Card key={cat.id} className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm hover:border-emerald-500/40 transition-all">
@@ -992,7 +1139,7 @@ export default function CatalogAndModelsPage() {
 
                     <div className="space-y-1.5 text-xs text-slate-600 dark:text-slate-300 pt-1">
                       <div className="flex justify-between">
-                        <span className="text-slate-400">Rótulo de Identificação:</span>
+                        <span className="text-slate-400">Rótulo do Serial:</span>
                         <span className="font-semibold">{cat.identifier_label || 'Nº de Série'}</span>
                       </div>
                       <div className="flex justify-between">
@@ -1002,6 +1149,10 @@ export default function CatalogAndModelsPage() {
                         </Badge>
                       </div>
                       <div className="flex justify-between pt-1 border-t border-slate-100 dark:border-slate-800 text-[11px]">
+                        <span className="text-slate-400">Checklist de Entrada:</span>
+                        <span className="font-bold text-blue-600 dark:text-blue-400">{checklistCount} item(ns)</span>
+                      </div>
+                      <div className="flex justify-between text-[11px]">
                         <span className="text-slate-400">Modelos Cadastrados:</span>
                         <span className="font-bold text-slate-900 dark:text-slate-100">{modelCount}</span>
                       </div>
@@ -1087,6 +1238,119 @@ export default function CatalogAndModelsPage() {
                     </div>
                   </CardContent>
                 </Card>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 5: ETAPAS DO KANBAN (SITUAÇÕES / WORKFLOW) */}
+      {/* ========================================================================= */}
+      {activeTab === 'WORKFLOW' && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div>
+              <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                Colunas & Etapas da Bancada Técnica (Kanban)
+              </h2>
+              <p className="text-xs text-slate-400">
+                Personalize as colunas do seu fluxo de trabalho: adicione novas etapas, altere cores, ordens e situações.
+              </p>
+            </div>
+            {canManage && (
+              <Button onClick={handleOpenAddState} className="bg-emerald-600 text-white font-bold text-xs gap-1.5 shadow-sm">
+                <PlusCircle className="w-4 h-4" />
+                Nova Etapa
+              </Button>
+            )}
+          </div>
+
+          <div className="space-y-3">
+            {workflowStates.map((st, idx) => {
+              const isFirst = idx === 0;
+              const isLast = idx === workflowStates.length - 1;
+
+              return (
+                <div 
+                  key={st.id} 
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm hover:border-emerald-500/40 transition-all"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleMoveState(idx, 'UP')}
+                        disabled={isFirst}
+                        className={cn("p-1.5 rounded-lg border text-slate-500", isFirst ? "opacity-30 cursor-not-allowed" : "hover:bg-slate-100 dark:hover:bg-slate-800")}
+                        title="Mover para Cima / Esquerda"
+                      >
+                        <ArrowUp className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleMoveState(idx, 'DOWN')}
+                        disabled={isLast}
+                        className={cn("p-1.5 rounded-lg border text-slate-500", isLast ? "opacity-30 cursor-not-allowed" : "hover:bg-slate-100 dark:hover:bg-slate-800")}
+                        title="Mover para Baixo / Direita"
+                      >
+                        <ArrowDown className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-2.5">
+                      <span className="w-3.5 h-3.5 rounded-full" style={{
+                        backgroundColor: st.color === 'slate' ? '#64748b' : 
+                          st.color === 'amber' ? '#f59e0b' : 
+                          st.color === 'purple' ? '#a855f7' : 
+                          st.color === 'blue' ? '#3b82f6' : 
+                          st.color === 'teal' ? '#14b8a6' : 
+                          st.color === 'emerald' ? '#10b981' : '#f43f5e'
+                      }} />
+                      <div>
+                        <div className="font-extrabold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                          <span>{st.name}</span>
+                          <Badge className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-mono text-[10px]">
+                            {st.code}
+                          </Badge>
+                          {st.is_initial && (
+                            <Badge className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 text-[10px]">
+                              Entrada
+                            </Badge>
+                          )}
+                          {st.is_final && (
+                            <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[10px]">
+                              Pronto
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-slate-400">
+                          Tipo de Estágio: <span className="font-semibold text-slate-600 dark:text-slate-300">{st.stage_type}</span> • Posição: #{idx + 1}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {canManage && (
+                    <div className="flex items-center gap-1 self-end sm:self-center">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleOpenEditState(st)}
+                        className="text-xs h-8 gap-1"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                        Editar
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDeleteState(st.id, st.name)}
+                        className="text-xs h-8 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>
@@ -1565,16 +1829,16 @@ export default function CatalogAndModelsPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL: CRIAR / EDITAR CATEGORIA */}
+      {/* MODAL: CRIAR / EDITAR CATEGORIA & CHECKLIST INTEGRADO */}
       {/* ========================================================================= */}
       {showCategoryModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-in zoom-in-95 my-8">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl animate-in zoom-in-95 my-8">
             <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/40">
               <div className="flex items-center gap-2">
                 <Layers className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                 <h3 className="font-black text-slate-900 dark:text-slate-100 text-base">
-                  {editingCategoryId ? 'Editar Categoria' : 'Nova Categoria de Equipamentos'}
+                  {editingCategoryId ? 'Editar Categoria & Checklist' : 'Nova Categoria de Equipamentos'}
                 </h3>
               </div>
               <button onClick={() => setShowCategoryModal(false)} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
@@ -1582,7 +1846,7 @@ export default function CatalogAndModelsPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSaveCategory} className="p-6 space-y-4">
+            <form onSubmit={handleSaveCategory} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
               <div>
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
                   Nome da Categoria *
@@ -1596,31 +1860,33 @@ export default function CatalogAndModelsPage() {
                 />
               </div>
 
-              <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                  Rótulo do Identificador Único (Serial/Código)
-                </label>
-                <Input
-                  value={catIdentifierLabel}
-                  onChange={e => setCatIdentifierLabel(e.target.value)}
-                  placeholder="Ex: IMEI / Serial, Nº de Série, Placa / Chassi..."
-                  className="text-xs"
-                />
-              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Rótulo do Serial / Código
+                  </label>
+                  <Input
+                    value={catIdentifierLabel}
+                    onChange={e => setCatIdentifierLabel(e.target.value)}
+                    placeholder="Ex: IMEI / Serial, Nº de Série..."
+                    className="text-xs"
+                  />
+                </div>
 
-              <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                  Tipo de Inspeção Técnica no Balcão
-                </label>
-                <Select
-                  value={catInspectionType}
-                  onChange={e => setCatInspectionType(e.target.value as any)}
-                  className="text-xs"
-                >
-                  <option value="CHECKLIST">📋 Checklist Físico & Funcional (Informática, Celulares, Ferramentas)</option>
-                  <option value="SCALE">⚖️ Balança & Pesagem em Gramas (Cartuchos, Tintas, Fluidos)</option>
-                  <option value="STANDARD">🔧 Padrão / Descrição de Sintomas</option>
-                </Select>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Tipo de Inspeção
+                  </label>
+                  <Select
+                    value={catInspectionType}
+                    onChange={e => setCatInspectionType(e.target.value as any)}
+                    className="text-xs"
+                  >
+                    <option value="CHECKLIST">📋 Checklist Físico</option>
+                    <option value="SCALE">⚖️ Balança (g)</option>
+                    <option value="STANDARD">🔧 Padrão / Sintomas</option>
+                  </Select>
+                </div>
               </div>
 
               <div>
@@ -1633,6 +1899,57 @@ export default function CatalogAndModelsPage() {
                   placeholder="Ex: Manutenção e reparos em celulares e tablets..."
                   className="text-xs"
                 />
+              </div>
+
+              {/* Interactive Checklist Editor */}
+              <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <CheckSquare className="w-4 h-4 text-emerald-600" />
+                    <span>Checklist de Conferência desta Categoria</span>
+                  </label>
+                  <span className="text-[11px] text-slate-400 font-bold">{catChecklistItems.length} itens</span>
+                </div>
+
+                <div className="flex gap-2">
+                  <Input
+                    value={newChecklistInput}
+                    onChange={e => setNewChecklistInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddChecklistItem();
+                      }
+                    }}
+                    placeholder="Ex: Liga normalmente, Carcaça sem trincas..."
+                    className="text-xs"
+                  />
+                  <Button type="button" onClick={handleAddChecklistItem} className="bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-xs font-bold shrink-0">
+                    + Adicionar
+                  </Button>
+                </div>
+
+                <div className="space-y-1.5 max-h-36 overflow-y-auto bg-slate-50 dark:bg-slate-800/40 p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800">
+                  {catChecklistItems.length === 0 ? (
+                    <p className="text-[11px] text-slate-400 text-center py-2">
+                      Nenhum item no checklist desta categoria.
+                    </p>
+                  ) : (
+                    catChecklistItems.map((item, idx) => (
+                      <div key={idx} className="flex items-center justify-between gap-2 bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-200 dark:border-slate-800 text-xs">
+                        <span className="text-slate-700 dark:text-slate-300 font-medium">✓ {item}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveChecklistItem(idx)}
+                          className="text-slate-400 hover:text-rose-600 p-1"
+                          title="Remover item"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
 
               {/* Modal Actions */}
@@ -1702,6 +2019,124 @@ export default function CatalogAndModelsPage() {
                 <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5">
                   <Check className="w-4 h-4" />
                   {editingBrandId ? 'Salvar Marca' : 'Cadastrar Marca'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: CRIAR / EDITAR ETAPA DO KANBAN (WORKFLOW STATE) */}
+      {/* ========================================================================= */}
+      {showStateModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-in zoom-in-95 my-8">
+            <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/40">
+              <div className="flex items-center gap-2">
+                <Kanban className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                <h3 className="font-black text-slate-900 dark:text-slate-100 text-base">
+                  {editingStateId ? 'Editar Etapa do Kanban' : 'Nova Etapa / Coluna do Kanban'}
+                </h3>
+              </div>
+              <button onClick={() => setShowStateModal(false)} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveState} className="p-6 space-y-4">
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  Nome da Etapa / Situação *
+                </label>
+                <Input
+                  value={stateName}
+                  onChange={e => setStateName(e.target.value)}
+                  placeholder="Ex: Em Diagnóstico, Aguardando Peça, Banho Químico..."
+                  className="text-xs"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  Código Mnemônico
+                </label>
+                <Input
+                  value={stateCode}
+                  onChange={e => setStateCode(e.target.value)}
+                  placeholder="Ex: AGUARDANDO_PECA"
+                  className="text-xs font-mono uppercase"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Cor da Coluna
+                  </label>
+                  <Select
+                    value={stateColor}
+                    onChange={e => setStateColor(e.target.value as any)}
+                    className="text-xs"
+                  >
+                    <option value="slate">Cinza (Slate)</option>
+                    <option value="amber">Amarelo (Amber)</option>
+                    <option value="purple">Roxo (Purple)</option>
+                    <option value="blue">Azul (Blue)</option>
+                    <option value="teal">Turquesa (Teal)</option>
+                    <option value="emerald">Verde (Emerald)</option>
+                    <option value="rose">Rosa / Vermelho (Rose)</option>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Tipo de Estágio
+                  </label>
+                  <Select
+                    value={stateStageType}
+                    onChange={e => setStateStageType(e.target.value as any)}
+                    className="text-xs"
+                  >
+                    <option value="RECEBIDO">Recepção / Entrada</option>
+                    <option value="EM_ANDAMENTO">Em Execução</option>
+                    <option value="AGUARDANDO_APROVACAO">Aguard. Aprovação</option>
+                    <option value="CONCLUIDO">Concluído / Pronto</option>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="flex gap-4 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={stateIsInitial}
+                    onChange={e => setStateIsInitial(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 rounded"
+                  />
+                  <span>Coluna de Entrada Inicial</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={stateIsFinal}
+                    onChange={e => setStateIsFinal(e.target.checked)}
+                    className="w-4 h-4 text-emerald-600 rounded"
+                  />
+                  <span>Coluna de Conclusão / Pronto</span>
+                </label>
+              </div>
+
+              {/* Modal Actions */}
+              <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <Button type="button" variant="outline" onClick={() => setShowStateModal(false)} className="text-xs">
+                  Cancelar
+                </Button>
+                <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5">
+                  <Check className="w-4 h-4" />
+                  {editingStateId ? 'Salvar Etapa' : 'Adicionar Etapa'}
                 </Button>
               </div>
             </form>

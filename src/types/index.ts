@@ -195,6 +195,7 @@ export interface ItemCategory {
   icon?: string;
   identifier_label?: string; // e.g. "Final de Série", "IMEI / Serial", "Nº de Série", "Placa / Chassi", "Patrimônio"
   inspection_type?: 'SCALE' | 'CHECKLIST' | 'STANDARD';
+  checklist_items?: string[]; // Custom checklist items per category
   is_system?: boolean;
   is_active: boolean;
   created_at?: string;
@@ -618,6 +619,9 @@ export interface CompanySettings {
   show_prices_on_receipt: boolean;
   receipt_header_note?: string;
   receipt_footer_note?: string;
+  receipt_header?: string;
+  receipt_footer?: string;
+  printer_paper_width?: '58mm' | '80mm';
   thermal_paper_width_mm: number;
   require_customer_document: boolean;
   require_item_serial: boolean;

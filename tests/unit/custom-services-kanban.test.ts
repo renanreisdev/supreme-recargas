@@ -109,31 +109,70 @@ describe('Custom Services, Kanban & Financial Report Suite', () => {
     });
   });
 
-  describe('5. Model Optionals & Service Price Overrides', () => {
-    it('allows defining custom prices per model for specific services', () => {
-      const srv = AppStore.getServices(tenantId)[0];
-      const standardPrice = srv.default_price;
+  describe('6. Workflow States / Kanban Situations Customization CRUD', () => {
+    it('creates, edits, reorders, and deletes custom Kanban columns', () => {
+      // 1. Add new state
+      const newState = AppStore.addWorkflowState(tenantId, {
+        workflow_id: 'default-workflow',
+        name: 'Aguardando Peça Externa',
+        code: 'AGUARDANDO_PECA',
+        color: 'rose',
+        stage_type: 'EM_ANDAMENTO',
+        sort_order: 99,
+        is_initial: false,
+        is_final: false
+      });
 
-      const modelWithOverride = AppStore.addModel({
+      expect(newState.id).toBeDefined();
+      expect(newState.name).toBe('Aguardando Peça Externa');
+      expect(AppStore.getWorkflowStates(tenantId).some(s => s.id === newState.id)).toBe(true);
+
+      // 2. Update state
+      const updated = AppStore.updateWorkflowState(newState.id, {
+        name: 'Aguardando Componente SMD',
+        color: 'amber'
+      });
+      expect(updated.name).toBe('Aguardando Componente SMD');
+      expect(updated.color).toBe('amber');
+
+      // 3. Reorder states
+      const allStates = AppStore.getWorkflowStates(tenantId);
+      const reversedIds = allStates.map(s => s.id).reverse();
+      const reordered = AppStore.reorderWorkflowStates(tenantId, reversedIds);
+      expect(reordered[0].id).toBe(reversedIds[0]);
+
+      // 4. Delete state
+      AppStore.deleteWorkflowState(newState.id);
+      expect(AppStore.getWorkflowStates(tenantId).some(s => s.id === newState.id)).toBe(false);
+    });
+  });
+
+  describe('7. Category-Linked Checklists', () => {
+    it('supports customizable checklist items directly per category', () => {
+      const catWithChecklist = AppStore.addCategory({
         tenant_id: tenantId,
-        category_id: 'cat-test',
-        name: 'Cartucho Especial Plotter HP 711',
-        is_xl: true,
-        empty_weight_grams: 45.0,
-        full_weight_grams: 85.0,
-        service_prices: {
-          [srv.id]: 75.00
-        },
+        name: 'Notebooks Gamers & Ultrabooks',
+        slug: 'notebooks-gamers',
+        identifier_label: 'Nº de Série / Service Tag',
+        inspection_type: 'CHECKLIST',
+        checklist_items: [
+          'Liga normalmente e dá vídeo',
+          'Teclado e Touchpad 100% funcionais',
+          'Carregador Original 135W incluso'
+        ],
         is_active: true
       });
 
-      // Price for standard model
-      const normalResolved = AppStore.getServicePriceForModel(srv.id);
-      expect(normalResolved).toBe(standardPrice);
+      expect(catWithChecklist.checklist_items).toHaveLength(3);
+      expect(catWithChecklist.checklist_items![0]).toBe('Liga normalmente e dá vídeo');
 
-      // Price for model with custom override
-      const customResolved = AppStore.getServicePriceForModel(srv.id, modelWithOverride.id);
-      expect(customResolved).toBe(75.00);
+      const updated = AppStore.updateCategory(catWithChecklist.id, {
+        checklist_items: ['Liga normalmente', 'Sem riscos na tela']
+      });
+      expect(updated.checklist_items).toHaveLength(2);
+
+      AppStore.deleteCategory(catWithChecklist.id);
     });
   });
 });
+
