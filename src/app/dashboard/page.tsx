@@ -26,7 +26,10 @@ import {
   Search,
   Filter,
   RotateCcw,
-  X
+  X,
+  Sparkles,
+  Activity,
+  Layers
 } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
@@ -36,7 +39,6 @@ import { formatCurrency, getPaymentMethodLabel, getStatusBadgeConfig } from '@/l
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 
 export default function DashboardPage() {
@@ -69,6 +71,7 @@ export default function DashboardPage() {
   const inProgress = cartridges.filter(c => ['RECEBIDO', 'AGUARDANDO_VERIFICACAO', 'EM_VERIFICACAO', 'AGUARDANDO_RECARGA', 'EM_RECARGA', 'AGUARDANDO_TESTE', 'EM_TESTE'].includes(c.status)).length;
   const waitingVerification = cartridges.filter(c => ['RECEBIDO', 'AGUARDANDO_VERIFICACAO'].includes(c.status)).length;
   const inRefill = cartridges.filter(c => ['EM_RECARGA', 'AGUARDANDO_RECARGA'].includes(c.status)).length;
+  const inTest = cartridges.filter(c => ['AGUARDANDO_TESTE', 'EM_TESTE'].includes(c.status)).length;
   const readyPickup = cartridges.filter(c => c.status === 'FINALIZADO').length;
   const deliveredTotal = cartridges.filter(c => c.status === 'ENTREGUE').length;
   const withDefects = cartridges.filter(c => ['CID', 'QUEIMADO', 'COM_PROBLEMA', 'SEM_REPARO'].includes(c.result_classification) || c.status === 'COM_PROBLEMA').length;
@@ -81,7 +84,6 @@ export default function DashboardPage() {
 
   // Filtered Cartridges
   const filteredCartridges = cartridges.filter(cart => {
-    // 1. Text Search Filter (Customer, Model, Serial, Final Serie)
     const query = searchQuery.trim().toLowerCase();
     const matchesSearch = !query ||
       cart.serial_number.toLowerCase().includes(query) ||
@@ -93,7 +95,6 @@ export default function DashboardPage() {
 
     if (!matchesSearch) return false;
 
-    // 2. Status Filter (Default: NAO_FINALIZADOS)
     if (statusFilter === 'NAO_FINALIZADOS') {
       return cart.status !== 'FINALIZADO' && cart.status !== 'ENTREGUE' && cart.status !== 'CANCELADO';
     }
@@ -122,386 +123,396 @@ export default function DashboardPage() {
     return cart.status === statusFilter;
   });
 
-  const getFilterLabel = () => {
-    switch (statusFilter) {
-      case 'NAO_FINALIZADOS':
-        return '⏳ Em Andamento / Não Finalizados (Padrão)';
-      case 'TODOS':
-        return '📋 Todos os Registros';
-      case 'AGUARDANDO_ANALISE':
-        return '🔍 Aguardando Análise';
-      case 'EM_RECARGA':
-        return '⚙️ Em Recarga';
-      case 'EM_TESTE':
-        return '🧪 Em Teste';
-      case 'FINALIZADO':
-        return '✅ Prontos p/ Retirada';
-      case 'ENTREGUE':
-        return '📦 Já Entregues';
-      case 'COM_PROBLEMA':
-        return '⚠️ Com Defeito / Sem Reparo';
-      default:
-        return statusFilter;
-    }
-  };
+  const filterTabs = [
+    { id: 'NAO_FINALIZADOS', label: 'Em Andamento', count: inProgress, color: 'text-amber-500 bg-amber-500/10 border-amber-500/30' },
+    { id: 'AGUARDANDO_ANALISE', label: 'Em Análise', count: waitingVerification, color: 'text-indigo-500 bg-indigo-500/10 border-indigo-500/30' },
+    { id: 'EM_RECARGA', label: 'Em Recarga', count: inRefill, color: 'text-blue-500 bg-blue-500/10 border-blue-500/30' },
+    { id: 'EM_TESTE', label: 'Em Teste', count: inTest, color: 'text-purple-500 bg-purple-500/10 border-purple-500/30' },
+    { id: 'FINALIZADO', label: 'Prontos Retirada', count: readyPickup, color: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/30' },
+    { id: 'COM_PROBLEMA', label: 'Com Defeito', count: withDefects, color: 'text-rose-500 bg-rose-500/10 border-rose-500/30' },
+    { id: 'TODOS', label: 'Todos os Itens', count: receivedTotal, color: 'text-slate-500 bg-slate-500/10 border-slate-500/30' }
+  ];
 
   return (
     <div className="space-y-6">
-      {/* Top Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+      {/* Top Banner & Quick Action Header */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-gradient-to-r from-slate-900 via-slate-900 to-slate-950 p-6 rounded-2xl border border-slate-800 shadow-lg text-white">
         <div>
-          <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-            <span>Painel Principal & Indicadores</span>
-            <span className="text-[11px] bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 px-2 py-0.5 rounded font-bold border border-emerald-300">
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight">
+              Visão Geral & Painel de Controle
+            </h1>
+            <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2.5 py-0.5 rounded-full font-bold border border-emerald-500/30 font-mono">
               {currentCompany.trade_name}
             </span>
-          </h1>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Acompanhamento em tempo real da recepção, oficina e faturamento
+          </div>
+          <p className="text-xs text-slate-400 mt-1 max-w-xl">
+            Acompanhe a recepção no balcão, fluxo na bancada técnica e entregas em tempo real com agilidade.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Action Shortcut Pills */}
+        <div className="flex flex-wrap items-center gap-2">
           {hasPermission('create_entry') && (
             <Link href="/entradas/nova">
-              <Button className="bg-emerald-600 hover:bg-emerald-700 font-bold text-xs gap-1.5 shadow-sm text-white h-9">
+              <Button className="bg-emerald-600 hover:bg-emerald-700 font-bold text-xs gap-2 shadow-md shadow-emerald-950/40 text-white h-9 rounded-xl px-4 transition-all hover:scale-105">
                 <PlusCircle className="w-4 h-4" />
-                <span>Nova Entrada</span>
+                <span>+ Nova Entrada / OS</span>
               </Button>
             </Link>
           )}
 
           {hasPermission('technical_workbench') && (
             <Link href="/bancada">
-              <Button className="bg-amber-600 hover:bg-amber-700 font-bold text-xs gap-1.5 shadow-sm text-white h-9">
-                <Wrench className="w-4 h-4" />
+              <Button variant="outline" className="bg-slate-800 hover:bg-slate-700 font-bold text-xs gap-2 border-slate-700 text-slate-200 h-9 rounded-xl px-3.5 shadow-xs">
+                <Wrench className="w-4 h-4 text-amber-400" />
                 <span>Bancada Técnica</span>
+              </Button>
+            </Link>
+          )}
+
+          {hasPermission('view_customers') && (
+            <Link href="/clientes">
+              <Button variant="outline" className="bg-slate-800 hover:bg-slate-700 font-semibold text-xs gap-2 border-slate-700 text-slate-300 h-9 rounded-xl px-3 shadow-xs">
+                <Users className="w-4 h-4 text-blue-400" />
+                <span>Clientes</span>
               </Button>
             </Link>
           )}
         </div>
       </div>
 
-      {/* Operational KPI Grid (Clickable to Filter Table) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <Card 
+      {/* Modern KPI Metric Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
+        {/* Total Recebidos */}
+        <div 
           onClick={() => setStatusFilter('TODOS')}
-          className={`border-l-4 border-l-slate-600 shadow-sm hover:shadow transition-all cursor-pointer ${
-            statusFilter === 'TODOS' ? 'ring-2 ring-slate-500 bg-slate-50 dark:bg-slate-850' : ''
+          className={`p-4 rounded-2xl border transition-all cursor-pointer bg-white dark:bg-[#0e1626] ${
+            statusFilter === 'TODOS' 
+              ? 'border-slate-500 shadow-md ring-2 ring-slate-500/20' 
+              : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 shadow-xs'
           }`}
         >
-          <CardContent className="p-3.5">
-            <div className="flex items-center justify-between text-slate-500 mb-1">
-              <span className="text-[11px] font-bold uppercase">Total Recebidos</span>
-              <Inbox className="w-4 h-4 text-slate-400" />
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Recebidos</span>
+            <div className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500">
+              <Inbox className="w-3.5 h-3.5" />
             </div>
-            <div className="text-xl font-extrabold text-slate-900 dark:text-slate-100">{receivedTotal}</div>
-            <p className="text-[10px] text-slate-400 mt-0.5">Clique p/ ver todos</p>
-          </CardContent>
-        </Card>
+          </div>
+          <div className="text-2xl font-black text-slate-900 dark:text-slate-100">{receivedTotal}</div>
+          <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1 font-medium">
+            <span>Histórico total</span>
+          </p>
+        </div>
 
-        <Card 
+        {/* Em Análise */}
+        <div 
           onClick={() => setStatusFilter('AGUARDANDO_ANALISE')}
-          className={`border-l-4 border-l-amber-500 shadow-sm hover:shadow transition-all cursor-pointer ${
-            statusFilter === 'AGUARDANDO_ANALISE' ? 'ring-2 ring-amber-500 bg-amber-50/50 dark:bg-amber-950/20' : ''
+          className={`p-4 rounded-2xl border transition-all cursor-pointer bg-white dark:bg-[#0e1626] ${
+            statusFilter === 'AGUARDANDO_ANALISE' 
+              ? 'border-indigo-500 shadow-md ring-2 ring-indigo-500/20' 
+              : 'border-slate-200 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-800 shadow-xs'
           }`}
         >
-          <CardContent className="p-3.5">
-            <div className="flex items-center justify-between text-slate-500 mb-1">
-              <span className="text-[11px] font-bold uppercase text-amber-700 dark:text-amber-400">Em Análise</span>
-              <Clock className="w-4 h-4 text-amber-500" />
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Em Análise</span>
+            <div className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-500">
+              <Clock className="w-3.5 h-3.5" />
             </div>
-            <div className="text-xl font-extrabold text-amber-600 dark:text-amber-400">{waitingVerification}</div>
-            <p className="text-[10px] text-slate-400 mt-0.5">Aguardando bancada</p>
-          </CardContent>
-        </Card>
+          </div>
+          <div className="text-2xl font-black text-indigo-600 dark:text-indigo-400">{waitingVerification}</div>
+          <p className="text-[10px] text-slate-400 mt-1 font-medium">Aguardando bancada</p>
+        </div>
 
-        <Card 
+        {/* Em Recarga */}
+        <div 
           onClick={() => setStatusFilter('EM_RECARGA')}
-          className={`border-l-4 border-l-purple-500 shadow-sm hover:shadow transition-all cursor-pointer ${
-            statusFilter === 'EM_RECARGA' ? 'ring-2 ring-purple-500 bg-purple-50/50 dark:bg-purple-950/20' : ''
+          className={`p-4 rounded-2xl border transition-all cursor-pointer bg-white dark:bg-[#0e1626] ${
+            statusFilter === 'EM_RECARGA' 
+              ? 'border-blue-500 shadow-md ring-2 ring-blue-500/20' 
+              : 'border-slate-200 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-800 shadow-xs'
           }`}
         >
-          <CardContent className="p-3.5">
-            <div className="flex items-center justify-between text-slate-500 mb-1">
-              <span className="text-[11px] font-bold uppercase text-purple-700 dark:text-purple-400">Em Recarga</span>
-              <Wrench className="w-4 h-4 text-purple-500" />
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">Em Recarga</span>
+            <div className="w-7 h-7 rounded-lg bg-blue-50 dark:bg-blue-950/60 flex items-center justify-center text-blue-500">
+              <Wrench className="w-3.5 h-3.5" />
             </div>
-            <div className="text-xl font-extrabold text-purple-600 dark:text-purple-400">{inRefill}</div>
-            <p className="text-[10px] text-slate-400 mt-0.5">Na oficina técnica</p>
-          </CardContent>
-        </Card>
+          </div>
+          <div className="text-2xl font-black text-blue-600 dark:text-blue-400">{inRefill}</div>
+          <p className="text-[10px] text-slate-400 mt-1 font-medium">Em processamento</p>
+        </div>
 
-        <Card 
+        {/* Prontos Retirada */}
+        <div 
           onClick={() => setStatusFilter('FINALIZADO')}
-          className={`border-l-4 border-l-emerald-500 shadow-sm hover:shadow transition-all cursor-pointer ${
-            statusFilter === 'FINALIZADO' ? 'ring-2 ring-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20' : ''
+          className={`p-4 rounded-2xl border transition-all cursor-pointer bg-white dark:bg-[#0e1626] ${
+            statusFilter === 'FINALIZADO' 
+              ? 'border-emerald-500 shadow-md ring-2 ring-emerald-500/20' 
+              : 'border-slate-200 dark:border-slate-800 hover:border-emerald-300 dark:hover:border-emerald-800 shadow-xs'
           }`}
         >
-          <CardContent className="p-3.5">
-            <div className="flex items-center justify-between text-slate-500 mb-1">
-              <span className="text-[11px] font-bold uppercase text-emerald-700 dark:text-emerald-400">Prontos Retirada</span>
-              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Prontos</span>
+            <div className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 flex items-center justify-center text-emerald-500">
+              <CheckCircle2 className="w-3.5 h-3.5" />
             </div>
-            <div className="text-xl font-extrabold text-emerald-600 dark:text-emerald-400">{readyPickup}</div>
-            <p className="text-[10px] text-slate-400 mt-0.5">Avisar cliente</p>
-          </CardContent>
-        </Card>
+          </div>
+          <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{readyPickup}</div>
+          <p className="text-[10px] text-slate-400 mt-1 font-medium">Avisar cliente</p>
+        </div>
 
-        <Card 
+        {/* Entregues */}
+        <div 
           onClick={() => setStatusFilter('ENTREGUE')}
-          className={`border-l-4 border-l-slate-700 shadow-sm hover:shadow transition-all cursor-pointer ${
-            statusFilter === 'ENTREGUE' ? 'ring-2 ring-slate-700 bg-slate-50 dark:bg-slate-850' : ''
+          className={`p-4 rounded-2xl border transition-all cursor-pointer bg-white dark:bg-[#0e1626] ${
+            statusFilter === 'ENTREGUE' 
+              ? 'border-slate-600 shadow-md ring-2 ring-slate-600/20' 
+              : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 shadow-xs'
           }`}
         >
-          <CardContent className="p-3.5">
-            <div className="flex items-center justify-between text-slate-500 mb-1">
-              <span className="text-[11px] font-bold uppercase text-slate-700 dark:text-slate-300">Entregues</span>
-              <Package className="w-4 h-4 text-slate-600" />
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">Entregues</span>
+            <div className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500">
+              <Package className="w-3.5 h-3.5" />
             </div>
-            <div className="text-xl font-extrabold text-slate-800 dark:text-slate-200">{deliveredTotal}</div>
-            <p className="text-[10px] text-slate-400 mt-0.5">Baixa concluída</p>
-          </CardContent>
-        </Card>
+          </div>
+          <div className="text-2xl font-black text-slate-800 dark:text-slate-200">{deliveredTotal}</div>
+          <p className="text-[10px] text-slate-400 mt-1 font-medium">Baixa concluída</p>
+        </div>
 
-        <Card 
+        {/* Com Defeito */}
+        <div 
           onClick={() => setStatusFilter('COM_PROBLEMA')}
-          className={`border-l-4 border-l-rose-500 shadow-sm hover:shadow transition-all cursor-pointer ${
-            statusFilter === 'COM_PROBLEMA' ? 'ring-2 ring-rose-500 bg-rose-50/50 dark:bg-rose-950/20' : ''
+          className={`p-4 rounded-2xl border transition-all cursor-pointer bg-white dark:bg-[#0e1626] ${
+            statusFilter === 'COM_PROBLEMA' 
+              ? 'border-rose-500 shadow-md ring-2 ring-rose-500/20' 
+              : 'border-slate-200 dark:border-slate-800 hover:border-rose-300 dark:hover:border-rose-800 shadow-xs'
           }`}
         >
-          <CardContent className="p-3.5">
-            <div className="flex items-center justify-between text-slate-500 mb-1">
-              <span className="text-[11px] font-bold uppercase text-rose-700 dark:text-rose-400">Com Defeito</span>
-              <AlertTriangle className="w-4 h-4 text-rose-500" />
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400">Com Defeito</span>
+            <div className="w-7 h-7 rounded-lg bg-rose-50 dark:bg-rose-950/60 flex items-center justify-center text-rose-500">
+              <AlertTriangle className="w-3.5 h-3.5" />
             </div>
-            <div className="text-xl font-extrabold text-rose-600 dark:text-rose-400">{withDefects}</div>
-            <p className="text-[10px] text-slate-400 mt-0.5">CID / Queimados</p>
-          </CardContent>
-        </Card>
+          </div>
+          <div className="text-2xl font-black text-rose-600 dark:text-rose-400">{withDefects}</div>
+          <p className="text-[10px] text-slate-400 mt-1 font-medium">CID / Queimados</p>
+        </div>
       </div>
 
-      {/* Financial Overview (Visible for Admins) */}
+      {/* Financial Quick Overview (Admin Access) */}
       {hasPermission('view_financial_reports') && (
-        <Card className="bg-slate-900 text-white border-slate-800 shadow-md">
-          <CardHeader className="border-b border-slate-800 pb-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-sm font-bold text-white flex items-center gap-2">
-                  <DollarSign className="w-4 h-4 text-emerald-400" />
-                  <span>Resumo Financeiro & Caixa</span>
-                </CardTitle>
-                <CardDescription className="text-slate-400 text-xs">
-                  Valores liquidados no balcão e créditos a receber
-                </CardDescription>
-              </div>
-              <Link href="/relatorios">
-                <Button variant="outline" size="sm" className="text-xs h-7 bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700 gap-1">
-                  <span>Ver Relatório Completo</span>
-                  <ArrowRight className="w-3 h-3" />
-                </Button>
-              </Link>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-slate-800/80 p-3.5 rounded-xl border border-slate-700/60">
-                <p className="text-[11px] text-slate-400 uppercase font-bold">Total Recebido (Caixa)</p>
-                <p className="text-2xl font-extrabold text-emerald-400 mt-0.5">{formatCurrency(paidRevenue)}</p>
-                <p className="text-[10px] text-slate-400 mt-0.5">PIX, Dinheiro e Cartões</p>
-              </div>
-
-              <div className="bg-slate-800/80 p-3.5 rounded-xl border border-slate-700/60">
-                <p className="text-[11px] text-slate-400 uppercase font-bold">A Receber (A Prazo)</p>
-                <p className="text-2xl font-bold text-amber-400 mt-0.5">{formatCurrency(pendingRevenue)}</p>
-                <p className="text-[10px] text-slate-400 mt-0.5">Comandas faturadas pendentes</p>
-              </div>
-
-              <div className="bg-slate-800/80 p-3.5 rounded-xl border border-slate-700/60">
-                <p className="text-[11px] text-slate-400 uppercase font-bold">Faturamento Total Gerado</p>
-                <p className="text-2xl font-extrabold text-teal-300 mt-0.5">{formatCurrency(totalRevenue)}</p>
-                <p className="text-[10px] text-slate-400 mt-0.5">Total de {entries.length} atendimentos</p>
-              </div>
-
-              <div className="bg-slate-800/80 p-3.5 rounded-xl border border-slate-700/60">
-                <p className="text-[11px] text-slate-400 uppercase font-bold">Ticket Médio p/ Comanda</p>
-                <p className="text-2xl font-bold text-white mt-0.5">{formatCurrency(ticketPerEntry)}</p>
-                <p className="text-[10px] text-slate-400 mt-0.5">Média por atendimento</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Main Operational Tables / Kanban Shortcut */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Active Queue Table */}
-        <Card className="lg:col-span-2 shadow-sm border-slate-200 dark:border-slate-800">
-          <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 gap-2">
+        <div className="p-5 rounded-2xl bg-gradient-to-br from-slate-900 to-[#0c1424] text-white border border-slate-800 shadow-md">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-800/80 gap-2">
             <div>
               <div className="flex items-center gap-2">
-                <CardTitle className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                  Fila de Cartuchos ({filteredCartridges.length})
-                </CardTitle>
-                <Badge className="bg-amber-600/90 text-white font-bold text-[10px] py-0.5 px-2">
-                  {statusFilter === 'NAO_FINALIZADOS' ? 'Em Andamento (Padrão)' : getFilterLabel()}
-                </Badge>
+                <DollarSign className="w-4 h-4 text-emerald-400" />
+                <h3 className="text-sm font-bold text-white">Resumo Financeiro & Caixa Operacional</h3>
               </div>
-              <CardDescription className="text-xs mt-0.5">
-                Exibindo por padrão os cartuchos em processo na bancada / oficina
-              </CardDescription>
+              <p className="text-xs text-slate-400 mt-0.5">Valores liquidados no balcão e saldo pendente a faturar</p>
+            </div>
+            <Link href="/relatorios">
+              <Button variant="outline" size="sm" className="text-xs h-8 bg-slate-800/90 hover:bg-slate-700 text-slate-200 border-slate-700 gap-1.5 rounded-xl">
+                <span>Relatório Completo</span>
+                <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
+              </Button>
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 pt-4">
+            <div className="p-3.5 rounded-xl bg-slate-800/60 border border-slate-700/60">
+              <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Total Recebido (Caixa)</span>
+              <p className="text-2xl font-black text-emerald-400 mt-1">{formatCurrency(paidRevenue)}</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">PIX, Dinheiro e Cartões</p>
             </div>
 
-            <div className="flex items-center gap-2">
-              {hasPermission('technical_workbench') && (
-                <Link href="/bancada">
-                  <Button variant="ghost" size="sm" className="text-xs gap-1 text-amber-700 dark:text-amber-400 font-bold h-8">
-                    <span>Abrir Kanban</span>
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
-                </Link>
+            <div className="p-3.5 rounded-xl bg-slate-800/60 border border-slate-700/60">
+              <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">A Receber / Pendente</span>
+              <p className="text-2xl font-black text-amber-400 mt-1">{formatCurrency(pendingRevenue)}</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Comandas a liquidar na entrega</p>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-slate-800/60 border border-slate-700/60">
+              <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Faturamento Total</span>
+              <p className="text-2xl font-black text-teal-300 mt-1">{formatCurrency(totalRevenue)}</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Total de {entries.length} atendimentos</p>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-slate-800/60 border border-slate-700/60">
+              <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Ticket Médio</span>
+              <p className="text-2xl font-black text-white mt-1">{formatCurrency(ticketPerEntry)}</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Média por comanda</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Main Operational Table with Tabbed Filters */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Active Queue Table */}
+        <div className="lg:col-span-2 bg-white dark:bg-[#0e1626] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800/80 gap-2">
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                  Fila de Cartuchos & Ordens de Serviço ({filteredCartridges.length})
+                </h2>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Exibição rápida da fila operacional para técnicos e atendentes
+              </p>
+            </div>
+
+            {hasPermission('technical_workbench') && (
+              <Link href="/bancada">
+                <Button variant="ghost" size="sm" className="text-xs gap-1.5 text-emerald-600 dark:text-emerald-400 font-bold h-8 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-xl">
+                  <span>Abrir Quadro Kanban</span>
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </Link>
+            )}
+          </div>
+
+          {/* Filter Pills Bar */}
+          <div className="flex flex-wrap items-center gap-1.5 overflow-x-auto pb-1">
+            {filterTabs.map(tab => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setStatusFilter(tab.id)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all flex items-center gap-1.5 shrink-0 ${
+                  statusFilter === tab.id
+                    ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 border-transparent shadow-xs font-bold'
+                    : 'bg-slate-50 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700/80 hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
+              >
+                <span>{tab.label}</span>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${
+                  statusFilter === tab.id ? 'bg-white/20 text-white dark:bg-slate-900/20 dark:text-slate-900' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                }`}>
+                  {tab.count}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {/* Search Box */}
+          <div className="flex items-center gap-2 p-2 bg-slate-50 dark:bg-slate-900/80 rounded-xl border border-slate-200 dark:border-slate-800">
+            <div className="relative flex-1">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Pesquisar por cliente, modelo, serial ou identificador..."
+                className="w-full pl-8 pr-8 py-1.5 text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:border-emerald-500 text-slate-900 dark:text-slate-100 placeholder:text-slate-400"
+              />
+              {searchQuery && (
+                <button 
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
               )}
             </div>
-          </CardHeader>
 
-          <CardContent className="pt-0 space-y-3">
-            {/* Search & Status Filter Controls */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 p-2.5 bg-slate-50 dark:bg-slate-850 rounded-xl border border-slate-200 dark:border-slate-800">
-              {/* Search Box */}
-              <div className="relative flex-1">
-                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <Input
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Buscar por cliente, modelo, serial ou final de série..."
-                  className="pl-8 text-xs h-8 bg-white dark:bg-slate-900"
-                />
-                {searchQuery && (
-                  <button 
-                    onClick={() => setSearchQuery('')}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
+            {(searchQuery || statusFilter !== 'NAO_FINALIZADOS') && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSearchQuery('');
+                  setStatusFilter('NAO_FINALIZADOS');
+                }}
+                className="h-8 px-2.5 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 gap-1.5 shrink-0 rounded-lg"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span className="hidden sm:inline">Limpar</span>
+              </Button>
+            )}
+          </div>
 
-              {/* Status Select Filter */}
-              <div className="flex items-center gap-2">
-                <div className="relative w-full sm:w-56">
-                  <Select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                    className="text-xs h-8 bg-white dark:bg-slate-900 font-medium"
-                  >
-                    <option value="NAO_FINALIZADOS">⏳ Em Andamento (Padrão)</option>
-                    <option value="TODOS">📋 Todos os Cartuchos</option>
-                    <option value="AGUARDANDO_ANALISE">🔍 Aguardando Análise</option>
-                    <option value="EM_RECARGA">⚙️ Em Recarga</option>
-                    <option value="EM_TESTE">🧪 Em Teste</option>
-                    <option value="FINALIZADO">✅ Prontos p/ Retirada</option>
-                    <option value="ENTREGUE">📦 Já Entregues</option>
-                    <option value="COM_PROBLEMA">⚠️ Com Defeito / Sem Reparo</option>
-                  </Select>
-                </div>
-
-                {(searchQuery || statusFilter !== 'NAO_FINALIZADOS') && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setSearchQuery('');
-                      setStatusFilter('NAO_FINALIZADOS');
-                    }}
-                    title="Restaurar padrão (Não Finalizados)"
-                    className="h-8 px-2 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 gap-1 shrink-0"
-                  >
-                    <RotateCcw className="w-3 h-3" />
-                    <span className="hidden sm:inline">Padrão</span>
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            {/* Cartridges Table */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold uppercase tracking-wider">
-                  <tr>
-                    <th className="p-2.5 rounded-l-lg">Serial / Código</th>
-                    <th className="p-2.5">Cliente</th>
-                    <th className="p-2.5">Modelo</th>
-                    <th className="p-2.5">Série Final</th>
-                    <th className="p-2.5">Serviço</th>
-                    <th className="p-2.5">Status</th>
-                    <th className="p-2.5 rounded-r-lg text-right">Ação</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {filteredCartridges.slice(0, 10).map((cart) => {
-                    const statusConfig = getStatusBadgeConfig(cart.status);
-                    return (
-                      <tr key={cart.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                        <td className="p-2.5 font-mono font-bold text-slate-900 dark:text-slate-100">
-                          {cart.serial_number}
-                        </td>
-                        <td className="p-2.5">
-                          <div className="flex items-center gap-1.5 font-semibold text-slate-900 dark:text-slate-100 max-w-[150px] truncate" title={cart.customer_name}>
-                            <User className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                            <span className="truncate">{cart.customer_name || 'Cliente'}</span>
-                          </div>
-                        </td>
-                        <td className="p-2.5 font-semibold text-slate-800 dark:text-slate-200">
-                          {cart.model?.model_name || 'Modelo'} ({cart.color})
-                        </td>
-                        <td className="p-2.5">
-                          <span className="bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 px-2 py-0.5 rounded font-mono font-bold border border-amber-300">
-                            {cart.final_serie}
-                          </span>
-                        </td>
-                        <td className="p-2.5 font-medium">{cart.service_requested.replace('_E_', ' + ')}</td>
-                        <td className="p-2.5">
-                          <Badge className={statusConfig.className}>{statusConfig.label}</Badge>
-                        </td>
-                        <td className="p-2.5 text-right">
-                          <Link href={`/entradas?search=${cart.entry_number || cart.serial_number.split('-').slice(0, 2).join('-')}`}>
-                            <Button size="sm" variant="outline" className="h-6 text-[10px] px-2 font-bold text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800 hover:bg-emerald-50">
-                              Ver Comanda
-                            </Button>
-                          </Link>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {filteredCartridges.length === 0 && (
-                    <tr>
-                      <td colSpan={7} className="text-center py-10 text-slate-400 space-y-1">
-                        <p className="font-semibold text-slate-600 dark:text-slate-300">Nenhum cartucho encontrado com os filtros selecionados.</p>
-                        <p className="text-[11px] text-slate-400">
-                          {statusFilter === 'NAO_FINALIZADOS' 
-                            ? 'Não há cartuchos pendentes na bancada no momento.' 
-                            : 'Tente alterar os termos da pesquisa ou restaurar o filtro.'}
-                        </p>
+          {/* Table */}
+          <div className="overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-800">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider text-[10px]">
+                <tr>
+                  <th className="p-3">Código / Serial</th>
+                  <th className="p-3">Cliente</th>
+                  <th className="p-3">Equipamento / Modelo</th>
+                  <th className="p-3">Identificador</th>
+                  <th className="p-3">Serviço</th>
+                  <th className="p-3">Status</th>
+                  <th className="p-3 text-right">Ação</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
+                {filteredCartridges.slice(0, 10).map((cart) => {
+                  const statusConfig = getStatusBadgeConfig(cart.status);
+                  return (
+                    <tr key={cart.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                      <td className="p-3 font-mono font-bold text-slate-900 dark:text-slate-100">
+                        {cart.serial_number}
+                      </td>
+                      <td className="p-3">
+                        <div className="flex items-center gap-1.5 font-bold text-slate-900 dark:text-slate-100 max-w-[150px] truncate" title={cart.customer_name}>
+                          <User className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                          <span className="truncate">{cart.customer_name || 'Cliente'}</span>
+                        </div>
+                      </td>
+                      <td className="p-3 font-semibold text-slate-800 dark:text-slate-200">
+                        {cart.model?.model_name || 'Modelo'} <span className="text-slate-400 font-normal">({cart.color})</span>
+                      </td>
+                      <td className="p-3">
+                        <span className="bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 px-2 py-0.5 rounded-md font-mono font-bold border border-amber-300 dark:border-amber-800 text-[11px]">
+                          {cart.final_serie}
+                        </span>
+                      </td>
+                      <td className="p-3 text-slate-600 dark:text-slate-300">{cart.service_requested.replace('_E_', ' + ')}</td>
+                      <td className="p-3">
+                        <Badge className={statusConfig.className}>{statusConfig.label}</Badge>
+                      </td>
+                      <td className="p-3 text-right">
+                        <Link href={`/entradas?search=${cart.entry_number || cart.serial_number.split('-').slice(0, 2).join('-')}`}>
+                          <Button size="sm" variant="outline" className="h-7 text-[11px] px-2.5 font-bold text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/80 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 rounded-lg">
+                            Ver Comanda
+                          </Button>
+                        </Link>
                       </td>
                     </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+                  );
+                })}
+                {filteredCartridges.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="text-center py-10 text-slate-400 space-y-1">
+                      <p className="font-semibold text-slate-600 dark:text-slate-300">Nenhum registro encontrado.</p>
+                      <p className="text-[11px] text-slate-400">
+                        {statusFilter === 'NAO_FINALIZADOS' 
+                          ? 'Não há cartuchos pendentes na bancada no momento.' 
+                          : 'Tente alterar os termos da pesquisa ou restaurar os filtros.'}
+                      </p>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
 
-        {/* Quick Actions Card based on Role */}
-        <Card className="shadow-sm border-slate-200 dark:border-slate-800">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-bold text-slate-900 dark:text-slate-100">Atalhos Operacionais</CardTitle>
-            <CardDescription className="text-xs">Ações rápidas para seu perfil ({currentUser.role})</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2.5 pt-0">
+        {/* Operational Shortcuts Card */}
+        <div className="bg-white dark:bg-[#0e1626] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5 space-y-3">
+          <div>
+            <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">Atalhos Operacionais</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Ações rápidas para {currentUser.full_name}</p>
+          </div>
+
+          <div className="space-y-2.5 pt-1">
             {hasPermission('create_entry') && (
-              <Link href="/entradas/nova" className="block">
-                <div className="p-3 bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 rounded-xl flex items-center gap-3 hover:border-emerald-400 transition-all cursor-pointer">
-                  <div className="w-9 h-9 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold shrink-0">
+              <Link href="/entradas/nova" className="block group">
+                <div className="p-3.5 bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-800/50 rounded-xl flex items-center gap-3 group-hover:border-emerald-400 transition-all cursor-pointer shadow-xs">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold shrink-0 shadow-sm group-hover:scale-105 transition-transform">
                     <PlusCircle className="w-5 h-5" />
                   </div>
                   <div>
@@ -513,9 +524,9 @@ export default function DashboardPage() {
             )}
 
             {hasPermission('register_delivery') && (
-              <Link href="/entradas" className="block">
-                <div className="p-3 bg-teal-50/70 dark:bg-teal-950/30 border border-teal-200 dark:border-teal-800/50 rounded-xl flex items-center gap-3 hover:border-teal-400 transition-all cursor-pointer">
-                  <div className="w-9 h-9 rounded-lg bg-teal-700 text-white flex items-center justify-center font-bold shrink-0">
+              <Link href="/entradas" className="block group">
+                <div className="p-3.5 bg-teal-50/70 dark:bg-teal-950/30 border border-teal-200/80 dark:border-teal-800/50 rounded-xl flex items-center gap-3 group-hover:border-teal-400 transition-all cursor-pointer shadow-xs">
+                  <div className="w-10 h-10 rounded-xl bg-teal-700 text-white flex items-center justify-center font-bold shrink-0 shadow-sm group-hover:scale-105 transition-transform">
                     <PackageCheck className="w-5 h-5" />
                   </div>
                   <div>
@@ -527,9 +538,9 @@ export default function DashboardPage() {
             )}
 
             {hasPermission('technical_workbench') && (
-              <Link href="/bancada" className="block">
-                <div className="p-3 bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-xl flex items-center gap-3 hover:border-amber-400 transition-all cursor-pointer">
-                  <div className="w-9 h-9 rounded-lg bg-amber-600 text-white flex items-center justify-center font-bold shrink-0">
+              <Link href="/bancada" className="block group">
+                <div className="p-3.5 bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/50 rounded-xl flex items-center gap-3 group-hover:border-amber-400 transition-all cursor-pointer shadow-xs">
+                  <div className="w-10 h-10 rounded-xl bg-amber-600 text-white flex items-center justify-center font-bold shrink-0 shadow-sm group-hover:scale-105 transition-transform">
                     <Wrench className="w-5 h-5" />
                   </div>
                   <div>
@@ -540,9 +551,9 @@ export default function DashboardPage() {
               </Link>
             )}
 
-            <Link href="/impressao" className="block">
-              <div className="p-3 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl flex items-center gap-3 hover:border-slate-400 transition-all cursor-pointer">
-                <div className="w-9 h-9 rounded-lg bg-slate-800 text-white flex items-center justify-center font-bold shrink-0">
+            <Link href="/impressao" className="block group">
+              <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl flex items-center gap-3 group-hover:border-slate-400 transition-all cursor-pointer shadow-xs">
+                <div className="w-10 h-10 rounded-xl bg-slate-800 text-white flex items-center justify-center font-bold shrink-0 shadow-sm group-hover:scale-105 transition-transform">
                   <Printer className="w-5 h-5" />
                 </div>
                 <div>
@@ -551,10 +562,9 @@ export default function DashboardPage() {
                 </div>
               </div>
             </Link>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
-

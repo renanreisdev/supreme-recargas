@@ -14,7 +14,12 @@ import {
   Edit3, 
   Info,
   Sliders,
-  X
+  X,
+  Wrench, 
+  Clock, 
+  Trash2, 
+  Power,
+  Layers
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { AppStore } from '@/lib/store';
@@ -25,7 +30,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Wrench, Clock, Trash2, Power } from 'lucide-react';
 
 export default function CartridgeModelsPage() {
   const { currentCompany, currentUser, hasPermission } = useAuth();
@@ -276,13 +280,18 @@ export default function CartridgeModelsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-[#0e1626] p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
         <div>
-          <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-            <Printer className="w-5 h-5 text-emerald-600" />
-            <span>Catálogo de Modelos & Gestão de Serviços</span>
-          </h1>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <div className="flex items-center gap-2.5">
+            <Printer className="w-6 h-6 text-emerald-600" />
+            <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-slate-100">
+              Catálogo de Modelos & Gestão de Serviços
+            </h1>
+            <Badge className="bg-emerald-500/20 text-emerald-400 font-mono font-bold text-[10px] border border-emerald-500/30">
+              {segmentConfig.segmentName}
+            </Badge>
+          </div>
+          <p className="text-xs text-slate-500 mt-1">
             Cadastro de {segmentConfig.itemLabelPlural.toLowerCase()}, tipos de serviços solicitados e regras de cobrança
           </p>
         </div>
@@ -290,31 +299,31 @@ export default function CartridgeModelsPage() {
         <div className="flex items-center gap-3 flex-wrap">
           <div className="relative w-64">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <Input
+            <input
               placeholder={activeTab === 'SERVICES' ? "Buscar serviços..." : `Buscar ${segmentConfig.itemLabelSingular.toLowerCase()}...`}
               value={searchFilter}
               onChange={(e) => setSearchFilter(e.target.value)}
-              className="pl-9 text-xs"
+              className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:border-emerald-500 text-slate-900 dark:text-slate-100 font-medium"
             />
           </div>
 
           {activeTab === 'MODELS' && hasPermission('manage_models') && (
             <Button 
               onClick={handleOpenAdd} 
-              className="bg-emerald-600 hover:bg-emerald-700 font-bold text-xs gap-1.5 shadow-sm text-white h-9"
+              className="bg-emerald-600 hover:bg-emerald-700 font-bold text-xs gap-1.5 shadow-md shadow-emerald-950/30 text-white h-9 rounded-xl px-4"
             >
               <PlusCircle className="w-4 h-4" />
-              <span>Novo {segmentConfig.itemLabelSingular}</span>
+              <span>+ Novo {segmentConfig.itemLabelSingular}</span>
             </Button>
           )}
 
           {activeTab === 'SERVICES' && (hasPermission('manage_services') || hasPermission('manage_models')) && (
             <Button 
               onClick={handleOpenAddService} 
-              className="bg-emerald-600 hover:bg-emerald-700 font-bold text-xs gap-1.5 shadow-sm text-white h-9"
+              className="bg-emerald-600 hover:bg-emerald-700 font-bold text-xs gap-1.5 shadow-md shadow-emerald-950/30 text-white h-9 rounded-xl px-4"
             >
               <PlusCircle className="w-4 h-4" />
-              <span>Cadastrar Novo Serviço</span>
+              <span>+ Novo Serviço</span>
             </Button>
           )}
         </div>
@@ -324,38 +333,38 @@ export default function CartridgeModelsPage() {
       <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-0">
         <button
           onClick={() => setActiveTab('MODELS')}
-          className={`pb-2.5 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 ${
+          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 ${
             activeTab === 'MODELS'
-              ? 'border-emerald-600 text-emerald-700 dark:text-emerald-400 font-extrabold'
+              ? 'border-emerald-600 text-emerald-700 dark:text-emerald-400 font-black'
               : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
           }`}
         >
-          <Tag className="w-3.5 h-3.5" />
+          <Tag className="w-4 h-4" />
           <span>{segmentConfig.itemLabelPlural} & Modelos ({models.length})</span>
         </button>
 
         <button
           onClick={() => setActiveTab('SERVICES')}
-          className={`pb-2.5 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 ${
+          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 ${
             activeTab === 'SERVICES'
-              ? 'border-emerald-600 text-emerald-700 dark:text-emerald-400 font-extrabold'
+              ? 'border-emerald-600 text-emerald-700 dark:text-emerald-400 font-black'
               : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
           }`}
         >
-          <Wrench className="w-3.5 h-3.5" />
+          <Wrench className="w-4 h-4" />
           <span>Serviços & Procedimentos ({services.length})</span>
         </button>
 
         {hasPermission('manage_prices') && (
           <button
             onClick={() => setActiveTab('GLOBAL')}
-            className={`pb-2.5 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 ${
+            className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 ${
               activeTab === 'GLOBAL'
-                ? 'border-emerald-600 text-emerald-700 dark:text-emerald-400 font-extrabold'
+                ? 'border-emerald-600 text-emerald-700 dark:text-emerald-400 font-black'
                 : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
-            <Sliders className="w-3.5 h-3.5" />
+            <Sliders className="w-4 h-4" />
             <span>Regras Globais & Operação</span>
           </button>
         )}
@@ -370,10 +379,10 @@ export default function CartridgeModelsPage() {
               <button
                 type="button"
                 onClick={() => setCategoryFilter('ALL')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-colors ${
                   categoryFilter === 'ALL'
-                    ? 'bg-slate-900 text-white dark:bg-emerald-600 shadow-sm'
-                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                    ? 'bg-slate-900 text-white dark:bg-emerald-600 shadow-xs'
+                    : 'bg-white dark:bg-[#0e1626] text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-800'
                 }`}
               >
                 Todas as Categorias ({models.length})
@@ -385,10 +394,10 @@ export default function CartridgeModelsPage() {
                     key={i}
                     type="button"
                     onClick={() => setCategoryFilter(cat)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-colors flex items-center gap-1.5 ${
                       categoryFilter === cat
-                        ? 'bg-emerald-600 text-white shadow-sm'
-                        : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-emerald-300'
+                        ? 'bg-emerald-600 text-white shadow-xs'
+                        : 'bg-white dark:bg-[#0e1626] text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-800 hover:border-emerald-300'
                     }`}
                   >
                     <span>{cat}</span>
@@ -409,87 +418,78 @@ export default function CartridgeModelsPage() {
               const modTest = mod.test_price ?? globalTest;
 
               return (
-                <Card key={mod.id} className="shadow-sm border-slate-200 dark:border-slate-800 hover:border-emerald-400 transition-all flex flex-col justify-between">
+                <div key={mod.id} className="bg-white dark:bg-[#0e1626] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs hover:border-emerald-500 transition-all flex flex-col justify-between p-5 space-y-4">
                   <div>
-                    <CardHeader className="pb-2">
-                      <div className="flex items-center justify-between">
-                        <Badge variant="outline" className="font-bold text-xs bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-slate-300 dark:border-slate-700">
-                          {mod.brand_name || 'Fabricante N/I'}
-                        </Badge>
-                        <div className="flex items-center gap-1.5">
-                          {mod.category && (
-                            <Badge className="bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 font-semibold text-[10px]">
-                              {mod.category}
-                            </Badge>
-                          )}
-                          {mod.is_xl && <Badge className="bg-purple-700 text-white font-bold text-[10px]">XL Alta Cap.</Badge>}
+                    <div className="flex items-center justify-between">
+                      <Badge variant="outline" className="font-bold text-xs bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700">
+                        {mod.brand_name || 'Fabricante N/I'}
+                      </Badge>
+                      <div className="flex items-center gap-1.5">
+                        {mod.category && (
+                          <Badge className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold text-[10px]">
+                            {mod.category}
+                          </Badge>
+                        )}
+                        {mod.is_xl && <Badge className="bg-purple-600 text-white font-bold text-[10px]">XL Alta Cap.</Badge>}
+                      </div>
+                    </div>
+
+                    <h3 className="text-base font-black mt-2 text-slate-900 dark:text-slate-100">
+                      {mod.model_name}
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {mod.color ? <span>Cor/Tipo: <strong className="text-slate-800 dark:text-slate-200">{mod.color}</strong></span> : null}
+                    </p>
+
+                    {/* Pricing Box */}
+                    <div className="mt-3 p-3 bg-emerald-50/50 dark:bg-emerald-950/20 rounded-xl space-y-1.5 border border-emerald-200/80 dark:border-emerald-800/50 text-xs">
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-600 dark:text-slate-400 font-medium">{segmentConfig.serviceLabel}:</span>
+                        <span className="font-black text-emerald-700 dark:text-emerald-400 text-sm font-mono">{formatCurrency(modRefill)}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-600 dark:text-slate-400 font-medium">Diagnóstico / Triagem:</span>
+                        <span className="font-semibold text-slate-800 dark:text-slate-200 font-mono">{formatCurrency(modVerif)}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-600 dark:text-slate-400 font-medium">Teste Avulso:</span>
+                        <span className="font-semibold text-slate-800 dark:text-slate-200 font-mono">{formatCurrency(modTest)}</span>
+                      </div>
+                    </div>
+
+                    {/* Weights info */}
+                    {segmentConfig.hasWeightInspection && (
+                      <div className="mt-2 p-2.5 bg-slate-50 dark:bg-slate-900 rounded-xl space-y-1 text-[11px] border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400">
+                        <div className="flex justify-between">
+                          <span>Capacidade:</span>
+                          <strong className="text-slate-800 dark:text-slate-200">{mod.capacity_ml ? `${mod.capacity_ml} ml` : 'N/I'}</strong>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Peso Vazio Médio:</span>
+                          <span>{mod.empty_weight_grams ? `${mod.empty_weight_grams} g` : 'N/I'}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Peso Cheio Ideal:</span>
+                          <strong className="text-emerald-600 dark:text-emerald-400">{mod.full_weight_grams ? `${mod.full_weight_grams} g` : 'N/I'}</strong>
                         </div>
                       </div>
-                      <CardTitle className="text-base font-bold mt-2 text-slate-900 dark:text-slate-100">
-                        {mod.model_name}
-                      </CardTitle>
-                      <CardDescription className="text-xs">
-                        {mod.color ? <span>Cor/Tipo: <strong className="text-slate-800 dark:text-slate-200">{mod.color}</strong></span> : null}
-                      </CardDescription>
-                    </CardHeader>
-
-                    <CardContent className="space-y-3 pt-2 text-xs">
-                      {/* Pricing Box */}
-                      <div className="p-3 bg-emerald-50/50 dark:bg-emerald-950/20 rounded-xl space-y-1.5 border border-emerald-200 dark:border-emerald-800/60">
-                        <div className="flex justify-between items-center">
-                          <span className="text-slate-600 dark:text-slate-400 font-medium">{segmentConfig.serviceLabel}:</span>
-                          <span className="font-bold text-emerald-700 dark:text-emerald-400 text-sm">{formatCurrency(modRefill)}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-slate-600 dark:text-slate-400 font-medium">Diagnóstico / Triagem:</span>
-                          <span className="font-semibold text-slate-800 dark:text-slate-200">{formatCurrency(modVerif)}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-slate-600 dark:text-slate-400 font-medium">Teste Avulso:</span>
-                          <span className="font-semibold text-slate-800 dark:text-slate-200">{formatCurrency(modTest)}</span>
-                        </div>
-                      </div>
-
-                      {/* Weights info for Cartridges */}
-                      {segmentConfig.hasWeightInspection && (
-                        <div className="p-2.5 bg-slate-50 dark:bg-slate-800 rounded-lg space-y-1 text-[11px] border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300">
-                          <div className="flex justify-between">
-                            <span>Capacidade:</span>
-                            <strong>{mod.capacity_ml ? `${mod.capacity_ml} ml` : 'N/I'}</strong>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Peso Vazio Médio:</span>
-                            <span>{mod.empty_weight_grams ? `${mod.empty_weight_grams} g` : 'N/I'}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Peso Cheio Ideal:</span>
-                            <strong className="text-emerald-600">{mod.full_weight_grams ? `${mod.full_weight_grams} g` : 'N/I'}</strong>
-                          </div>
-                        </div>
-                      )}
-
-                      {mod.technical_notes && (
-                        <p className="text-slate-500 italic text-[11px] bg-amber-50 dark:bg-amber-950/20 p-2 rounded border border-amber-200 dark:border-amber-800/40">
-                          <strong>Nota Técnica:</strong> {mod.technical_notes}
-                        </p>
-                      )}
-                    </CardContent>
+                    )}
                   </div>
 
                   {hasPermission('manage_models') && (
-                    <div className="p-3 pt-0 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-end">
                       <Button 
                         size="sm" 
                         variant="outline" 
                         onClick={() => handleOpenEdit(mod)} 
-                        className="text-xs gap-1.5 h-8 font-semibold"
+                        className="text-xs gap-1.5 h-8 font-semibold rounded-xl border-slate-200 dark:border-slate-700"
                       >
-                        <Edit3 className="w-3.5 h-3.5" />
-                        <span>Editar Item & Preços</span>
+                        <Edit3 className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Editar Item</span>
                       </Button>
                     </div>
                   )}
-                </Card>
+                </div>
               );
             })}
           </div>
@@ -508,57 +508,54 @@ export default function CartridgeModelsPage() {
                 (s.description && s.description.toLowerCase().includes(searchFilter.toLowerCase()))
               )
               .map(srv => (
-                <Card key={srv.id} className={`shadow-sm border transition-all flex flex-col justify-between ${
-                  srv.is_active ? 'border-slate-200 dark:border-slate-800 hover:border-emerald-400' : 'border-slate-200 bg-slate-50/70 dark:bg-slate-900/40 opacity-70'
+                <div key={srv.id} className={`bg-white dark:bg-[#0e1626] rounded-2xl border transition-all flex flex-col justify-between p-5 space-y-4 shadow-xs ${
+                  srv.is_active ? 'border-slate-200 dark:border-slate-800 hover:border-emerald-500' : 'border-slate-200 dark:border-slate-800 opacity-70'
                 }`}>
                   <div>
-                    <CardHeader className="pb-2">
-                      <div className="flex items-center justify-between">
-                        <Badge variant="outline" className="font-bold text-xs bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-700">
-                          {srv.category || 'Geral'}
-                        </Badge>
-                        <Badge className={srv.is_active ? 'bg-emerald-600 text-white text-[10px]' : 'bg-slate-400 text-white text-[10px]'}>
-                          {srv.is_active ? 'Ativo no Balcão' : 'Inativo'}
-                        </Badge>
-                      </div>
-                      <CardTitle className="text-base font-bold mt-2 text-slate-900 dark:text-slate-100">
-                        {srv.title}
-                      </CardTitle>
-                      {srv.description && (
-                        <CardDescription className="text-xs line-clamp-2 mt-1">
-                          {srv.description}
-                        </CardDescription>
-                      )}
-                    </CardHeader>
+                    <div className="flex items-center justify-between">
+                      <Badge variant="outline" className="font-bold text-xs bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+                        {srv.category || 'Geral'}
+                      </Badge>
+                      <Badge className={srv.is_active ? 'bg-emerald-600 text-white text-[10px]' : 'bg-slate-400 text-white text-[10px]'}>
+                        {srv.is_active ? 'Ativo no Balcão' : 'Inativo'}
+                      </Badge>
+                    </div>
 
-                    <CardContent className="pt-2 text-xs space-y-2">
-                      <div className="p-3 bg-emerald-50/60 dark:bg-emerald-950/20 rounded-xl flex items-center justify-between border border-emerald-200 dark:border-emerald-800/60">
-                        <div>
-                          <span className="text-[11px] text-slate-500 block font-medium">Valor Padrão Cobrado:</span>
-                          <span className="text-lg font-extrabold text-emerald-700 dark:text-emerald-400 font-mono">
-                            {formatCurrency(srv.default_price)}
+                    <h3 className="text-base font-black mt-2 text-slate-900 dark:text-slate-100">
+                      {srv.title}
+                    </h3>
+                    {srv.description && (
+                      <p className="text-xs text-slate-500 line-clamp-2 mt-1">
+                        {srv.description}
+                      </p>
+                    )}
+
+                    <div className="mt-3 p-3 bg-emerald-50/60 dark:bg-emerald-950/20 rounded-xl flex items-center justify-between border border-emerald-200/80 dark:border-emerald-800/50">
+                      <div>
+                        <span className="text-[10px] text-slate-500 block font-semibold uppercase">Valor Padrão:</span>
+                        <span className="text-lg font-black text-emerald-700 dark:text-emerald-400 font-mono">
+                          {formatCurrency(srv.default_price)}
+                        </span>
+                      </div>
+                      {srv.estimated_time_minutes && (
+                        <div className="text-right">
+                          <span className="text-[10px] text-slate-400 block font-semibold uppercase">Tempo:</span>
+                          <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5 text-amber-500" />
+                            {srv.estimated_time_minutes} min
                           </span>
                         </div>
-                        {srv.estimated_time_minutes && (
-                          <div className="text-right">
-                            <span className="text-[10px] text-slate-400 block">Tempo Estimado:</span>
-                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
-                              <Clock className="w-3 h-3 text-amber-500" />
-                              {srv.estimated_time_minutes} min
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </CardContent>
+                      )}
+                    </div>
                   </div>
 
                   {(hasPermission('manage_services') || hasPermission('manage_models')) && (
-                    <div className="p-3 pt-0 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
                       <Button
                         size="sm"
                         variant="ghost"
                         onClick={() => handleToggleService(srv)}
-                        className={`text-xs gap-1 h-8 ${srv.is_active ? 'text-amber-600 hover:text-amber-700' : 'text-emerald-600 hover:text-emerald-700'}`}
+                        className={`text-xs gap-1 h-8 rounded-xl ${srv.is_active ? 'text-amber-600 hover:text-amber-700' : 'text-emerald-600 hover:text-emerald-700'}`}
                       >
                         <Power className="w-3.5 h-3.5" />
                         <span>{srv.is_active ? 'Desativar' : 'Ativar'}</span>
@@ -569,16 +566,16 @@ export default function CartridgeModelsPage() {
                           size="sm" 
                           variant="outline" 
                           onClick={() => handleOpenEditService(srv)} 
-                          className="text-xs gap-1 h-8 font-semibold"
+                          className="text-xs gap-1 h-8 font-semibold rounded-xl border-slate-200 dark:border-slate-700"
                         >
-                          <Edit3 className="w-3.5 h-3.5" />
+                          <Edit3 className="w-3.5 h-3.5 text-emerald-600" />
                           <span>Editar</span>
                         </Button>
                         <Button
                           size="sm"
                           variant="ghost"
                           onClick={() => handleDeleteService(srv)}
-                          className="text-xs text-rose-600 hover:text-rose-700 h-8 px-2"
+                          className="text-xs text-rose-500 hover:text-rose-700 h-8 px-2 rounded-xl"
                           title="Excluir serviço"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -586,7 +583,7 @@ export default function CartridgeModelsPage() {
                       </div>
                     </div>
                   )}
-                </Card>
+                </div>
               ))}
           </div>
         </div>
@@ -594,153 +591,93 @@ export default function CartridgeModelsPage() {
 
       {/* TAB 3: GLOBAL PRICING & POLICIES */}
       {activeTab === 'GLOBAL' && hasPermission('manage_prices') && (
-        <Card className="shadow-sm border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/60">
-          <CardHeader className="pb-3 border-b border-slate-200 dark:border-slate-800">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                  <Sliders className="w-4 h-4 text-emerald-600" />
-                  <span>Configuração de Regras de Precificação & Operação da Empresa</span>
-                </CardTitle>
-                <CardDescription className="text-xs">
-                  Defina os valores padrão Normal e XL, taxas de verificação e a responsabilidade da pesagem de entrada
-                </CardDescription>
-              </div>
-              {settingsSavedAlert && (
-                <Badge className="bg-emerald-600 text-white font-bold animate-in fade-in text-xs">
-                  ✓ Regras Salvas com Sucesso!
-                </Badge>
-              )}
+        <div className="bg-white dark:bg-[#0e1626] rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm space-y-5">
+          <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
+            <div>
+              <h3 className="text-sm font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <Sliders className="w-4 h-4 text-emerald-600" />
+                <span>Configuração de Regras de Precificação & Operação da Empresa</span>
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Defina os valores padrão Normal e XL, taxas de verificação e a responsabilidade da pesagem de entrada
+              </p>
             </div>
-          </CardHeader>
-          <CardContent className="pt-4">
-            <form onSubmit={handleSaveGlobalPricing} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                <div>
-                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 block">
-                    Preço Padrão Recarga Normal (R$)
-                  </label>
-                  <Input
-                    type="number"
-                    step="0.50"
-                    value={globalRefill}
-                    onChange={(e) => setGlobalRefill(Number(e.target.value))}
-                    className="text-xs font-bold text-emerald-700 dark:text-emerald-400"
-                  />
-                  <span className="text-[10px] text-slate-400">Cartuchos de tamanho padrão</span>
-                </div>
+            {settingsSavedAlert && (
+              <Badge className="bg-emerald-600 text-white font-bold animate-in fade-in text-xs">
+                ✓ Regras Salvas com Sucesso!
+              </Badge>
+            )}
+          </div>
 
-                <div>
-                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 block">
-                    Preço Padrão Recarga XL (R$)
-                  </label>
-                  <Input
-                    type="number"
-                    step="0.50"
-                    value={globalRefillXl}
-                    onChange={(e) => setGlobalRefillXl(Number(e.target.value))}
-                    className="text-xs font-bold text-purple-700 dark:text-purple-400"
-                  />
-                  <span className="text-[10px] text-slate-400">Cartuchos de alta capacidade (XL)</span>
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 block">
-                    Taxa de Verificação / Diagnóstico (R$)
-                  </label>
-                  <Input
-                    type="number"
-                    step="0.50"
-                    value={globalVerification}
-                    onChange={(e) => setGlobalVerification(Number(e.target.value))}
-                    className="text-xs font-bold text-slate-800 dark:text-slate-200"
-                  />
-                  <span className="text-[10px] text-slate-400">Cobrado em testes ou cartuchos condenados</span>
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 block">
-                    Taxa de Teste Avulso (R$)
-                  </label>
-                  <Input
-                    type="number"
-                    step="0.50"
-                    value={globalTest}
-                    onChange={(e) => setGlobalTest(Number(e.target.value))}
-                    className="text-xs font-bold text-slate-800 dark:text-slate-200"
-                  />
-                  <span className="text-[10px] text-slate-400">Folha de teste e alinhamento</span>
-                </div>
+          <form onSubmit={handleSaveGlobalPricing} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 block">
+                  Preço Padrão Recarga Normal (R$)
+                </label>
+                <Input
+                  type="number"
+                  step="0.50"
+                  value={globalRefill}
+                  onChange={(e) => setGlobalRefill(Number(e.target.value))}
+                  className="text-xs font-bold text-emerald-700 dark:text-emerald-400 h-9 rounded-xl"
+                />
               </div>
 
-              {/* Input Weight Responsibility Setting */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-3.5 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Scale className="w-4 h-4 text-emerald-600" />
-                    <label className="text-xs font-bold text-slate-900 dark:text-slate-100">
-                      Responsabilidade da Pesagem de Entrada do Cartucho
-                    </label>
-                  </div>
-                  <p className="text-[11px] text-slate-500">
-                    Defina quem deve preencher o peso inicial do cartucho:
-                  </p>
-                  <Select
-                    value={inputWeightResponsibility}
-                    onChange={(e) => setInputWeightResponsibility(e.target.value as any)}
-                    className="text-xs"
-                  >
-                    <option value="AMBOS">Ambos (Atendente no Balcão ou Técnico na Bancada)</option>
-                    <option value="ATENDENTE">Obrigatório pelo Atendente no Balcão de Entrada</option>
-                    <option value="TECNICO">Exclusivo pelo Técnico na Bancada da Oficina</option>
-                  </Select>
-                </div>
-
-                {/* Waiver Policy Toggle Box */}
-                <div className="p-3.5 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3">
-                  <div className="flex items-start gap-2.5">
-                    <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 flex items-center justify-center font-bold shrink-0 mt-0.5">
-                      <Check className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">
-                        Verificação Gratuita na Recarga (Combo)
-                      </h4>
-                      <p className="text-[11px] text-slate-500 mt-0.5">
-                        Isenta taxa de verificação quando o cliente solicita Recarga + Verificação.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={waiveVerification}
-                        onChange={(e) => setWaiveVerification(e.target.checked)}
-                        className="sr-only peer"
-                      />
-                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
-                    </label>
-                  </div>
-                </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 block">
+                  Preço Padrão Recarga XL (R$)
+                </label>
+                <Input
+                  type="number"
+                  step="0.50"
+                  value={globalRefillXl}
+                  onChange={(e) => setGlobalRefillXl(Number(e.target.value))}
+                  className="text-xs font-bold text-purple-700 dark:text-purple-400 h-9 rounded-xl"
+                />
               </div>
 
-              <div className="flex justify-end pt-1">
-                <Button type="submit" size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-9">
-                  Salvar Regras de Precificação & Operação
-                </Button>
+              <div>
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 block">
+                  Taxa de Verificação / Diagnóstico (R$)
+                </label>
+                <Input
+                  type="number"
+                  step="0.50"
+                  value={globalVerification}
+                  onChange={(e) => setGlobalVerification(Number(e.target.value))}
+                  className="text-xs font-bold text-slate-800 dark:text-slate-200 h-9 rounded-xl"
+                />
               </div>
-            </form>
-          </CardContent>
-        </Card>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 block">
+                  Taxa de Teste Avulso (R$)
+                </label>
+                <Input
+                  type="number"
+                  step="0.50"
+                  value={globalTest}
+                  onChange={(e) => setGlobalTest(Number(e.target.value))}
+                  className="text-xs font-bold text-slate-800 dark:text-slate-200 h-9 rounded-xl"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <Button type="submit" size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-9 rounded-xl shadow-xs">
+                Salvar Regras de Precificação
+              </Button>
+            </div>
+          </form>
+        </div>
       )}
 
       {/* Modal Create / Edit Model */}
       {showModal && (
         <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 w-full max-w-lg p-4 sm:p-6 shadow-2xl space-y-4 max-h-[92vh] flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800 shrink-0">
+          <div className="bg-white dark:bg-[#0e1626] rounded-3xl border border-slate-200 dark:border-slate-800 w-full max-w-lg p-6 shadow-2xl space-y-4 max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 shrink-0">
               <div>
                 <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
                   {editingModelId ? `Editar ${segmentConfig.itemLabelSingular}` : `Cadastrar Novo ${segmentConfig.itemLabelSingular}`}
@@ -758,10 +695,10 @@ export default function CartridgeModelsPage() {
                   <label className="text-xs font-semibold mb-1 block">Marca / Fabricante *</label>
                   <Input 
                     required 
-                    placeholder="Ex: Apple, HP, Bosch..." 
+                    placeholder="Ex: HP, Apple..." 
                     value={brandName} 
                     onChange={e => setBrandName(e.target.value)} 
-                    className="text-xs font-semibold" 
+                    className="text-xs font-semibold h-9 rounded-xl" 
                   />
                 </div>
 
@@ -769,10 +706,10 @@ export default function CartridgeModelsPage() {
                   <label className="text-xs font-semibold mb-1 block">Nome do Modelo / Item *</label>
                   <Input 
                     required 
-                    placeholder="Ex: iPhone 13, Furadeira HP1640..." 
+                    placeholder="Ex: DeskJet 664, iPhone 13..." 
                     value={modelName} 
                     onChange={e => setModelName(e.target.value)} 
-                    className="text-xs font-semibold" 
+                    className="text-xs font-semibold h-9 rounded-xl" 
                   />
                 </div>
               </div>
@@ -781,84 +718,49 @@ export default function CartridgeModelsPage() {
                 <div>
                   <label className="text-xs font-semibold mb-1 block">Categoria</label>
                   <Input
-                    placeholder="Ex: Smartphones, Furadeiras..."
+                    placeholder="Ex: Cartuchos, Smartphones..."
                     value={category}
                     onChange={e => setCategory(e.target.value)}
-                    list="category-suggestions"
-                    className="text-xs"
+                    className="text-xs h-9 rounded-xl"
                   />
-                  <datalist id="category-suggestions">
-                    {categoriesAvailable.map((c, i) => (
-                      <option key={i} value={c} />
-                    ))}
-                  </datalist>
                 </div>
 
                 <div>
                   <label className="text-xs font-semibold mb-1 block">Cor / Variante</label>
                   <Input 
-                    placeholder="Ex: Preto, Azul, Cinza..." 
+                    placeholder="Ex: Preto, Colorido..." 
                     value={color} 
                     onChange={e => setColor(e.target.value)} 
-                    className="text-xs" 
+                    className="text-xs h-9 rounded-xl" 
                   />
                 </div>
               </div>
 
-              {/* Specific Pricing Per Item */}
-              <div className="p-3 bg-emerald-50/60 dark:bg-emerald-950/20 rounded-xl border border-emerald-200 dark:border-emerald-800/60 space-y-2">
+              <div className="p-3.5 bg-emerald-50/60 dark:bg-emerald-950/20 rounded-2xl border border-emerald-200/80 dark:border-emerald-800/60 space-y-2">
                 <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 block">
-                  Tabela de Preços Deste {segmentConfig.itemLabelSingular}:
+                  Tabela de Preços Deste Item:
                 </span>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <div>
                     <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-0.5 block">Serviço Padrão (R$)</label>
-                    <Input type="number" step="0.50" required value={refillPrice} onChange={e => setRefillPrice(e.target.value)} className="text-xs font-bold text-emerald-700" />
+                    <Input type="number" step="0.50" required value={refillPrice} onChange={e => setRefillPrice(e.target.value)} className="text-xs font-bold text-emerald-700 h-9 rounded-xl" />
                   </div>
                   <div>
                     <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-0.5 block">Diagnóstico (R$)</label>
-                    <Input type="number" step="0.50" required value={verificationPrice} onChange={e => setVerificationPrice(e.target.value)} className="text-xs font-bold" />
+                    <Input type="number" step="0.50" required value={verificationPrice} onChange={e => setVerificationPrice(e.target.value)} className="text-xs font-bold h-9 rounded-xl" />
                   </div>
                   <div>
                     <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-0.5 block">Teste / Laudo (R$)</label>
-                    <Input type="number" step="0.50" required value={testPrice} onChange={e => setTestPrice(e.target.value)} className="text-xs font-bold" />
+                    <Input type="number" step="0.50" required value={testPrice} onChange={e => setTestPrice(e.target.value)} className="text-xs font-bold h-9 rounded-xl" />
                   </div>
                 </div>
-              </div>
-
-              {/* Weights for Scale inspection */}
-              {segmentConfig.hasWeightInspection && (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
-                  <div>
-                    <label className="text-xs font-semibold mb-1 block">Capacidade (ml)</label>
-                    <Input type="number" step="0.5" placeholder="Ex: 8.5" value={capacityMl} onChange={e => setCapacityMl(e.target.value)} className="text-xs" />
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold mb-1 block">Peso Vazio (g)</label>
-                    <Input type="number" step="0.1" placeholder="Ex: 27.5" value={emptyWeight} onChange={e => setEmptyWeight(e.target.value)} className="text-xs" />
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold mb-1 block">Peso Cheio (g)</label>
-                    <Input type="number" step="0.1" placeholder="Ex: 33.5" value={fullWeight} onChange={e => setFullWeight(e.target.value)} className="text-xs" />
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <label className="text-xs font-semibold mb-1 block">Observações Técnicas</label>
-                <textarea
-                  className="w-full h-16 p-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg outline-none"
-                  placeholder="Dicas de reparo, compatibilidade de peças, tensão elétrica..."
-                  value={techNotes}
-                  onChange={e => setTechNotes(e.target.value)}
-                />
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
-                <Button type="button" variant="outline" size="sm" onClick={() => setShowModal(false)}>
+                <Button type="button" variant="outline" size="sm" onClick={() => setShowModal(false)} className="rounded-xl">
                   Cancelar
                 </Button>
-                <Button type="submit" size="sm" className="bg-emerald-600 hover:bg-emerald-700 font-bold text-white">
+                <Button type="submit" size="sm" className="bg-emerald-600 hover:bg-emerald-700 font-bold text-white rounded-xl shadow-xs">
                   {editingModelId ? 'Salvar Alterações' : 'Salvar Novo Item'}
                 </Button>
               </div>
@@ -870,12 +772,12 @@ export default function CartridgeModelsPage() {
       {/* Modal Create / Edit Service */}
       {showServiceModal && (
         <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 w-full max-w-md p-4 sm:p-6 shadow-2xl space-y-4 max-h-[92vh] flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800 shrink-0">
+          <div className="bg-white dark:bg-[#0e1626] rounded-3xl border border-slate-200 dark:border-slate-800 w-full max-w-md p-6 shadow-2xl space-y-4 max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 shrink-0">
               <div>
                 <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                   <Wrench className="w-4 h-4 text-emerald-600" />
-                  <span>{editingServiceId ? 'Editar Serviço Solicitado' : 'Cadastrar Novo Serviço Solicitado'}</span>
+                  <span>{editingServiceId ? 'Editar Serviço Solicitado' : 'Cadastrar Novo Serviço'}</span>
                 </h3>
                 <p className="text-xs text-slate-500">Defina o nome, valor padrão e tempo estimado</p>
               </div>
@@ -891,10 +793,10 @@ export default function CartridgeModelsPage() {
                 </label>
                 <Input 
                   required 
-                  placeholder="Ex: Troca de Tela Frontal, Troca de Bateria, Recarga Express..." 
+                  placeholder="Ex: Troca de Tela, Troca de Conector..." 
                   value={serviceTitle} 
                   onChange={e => setServiceTitle(e.target.value)} 
-                  className="text-xs font-semibold" 
+                  className="text-xs font-semibold h-9 rounded-xl" 
                 />
               </div>
 
@@ -904,10 +806,10 @@ export default function CartridgeModelsPage() {
                     Categoria
                   </label>
                   <Input
-                    placeholder="Ex: Smartphones, Geral..."
+                    placeholder="Ex: Celulares, Geral..."
                     value={serviceCategory}
                     onChange={e => setServiceCategory(e.target.value)}
-                    className="text-xs"
+                    className="text-xs h-9 rounded-xl"
                   />
                 </div>
 
@@ -922,41 +824,16 @@ export default function CartridgeModelsPage() {
                     placeholder="0.00" 
                     value={servicePrice} 
                     onChange={e => setServicePrice(e.target.value)} 
-                    className="text-xs font-bold text-emerald-700 dark:text-emerald-400" 
+                    className="text-xs font-bold text-emerald-700 dark:text-emerald-400 h-9 rounded-xl" 
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="text-xs font-semibold mb-1 block text-slate-700 dark:text-slate-300">
-                  Tempo Estimado de Execução (Minutos)
-                </label>
-                <Input 
-                  type="number"
-                  placeholder="Ex: 30, 45, 60..." 
-                  value={serviceEstTime} 
-                  onChange={e => setServiceEstTime(e.target.value)} 
-                  className="text-xs" 
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold mb-1 block text-slate-700 dark:text-slate-300">
-                  Descrição & Instruções de Procedimento
-                </label>
-                <textarea
-                  className="w-full h-20 p-2.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg outline-none"
-                  placeholder="Descreva o que está incluso neste serviço (ex: limpeza química, troca de selo térmico, garantia de 90 dias)..."
-                  value={serviceDescription}
-                  onChange={e => setServiceDescription(e.target.value)}
-                />
-              </div>
-
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
-                <Button type="button" variant="outline" size="sm" onClick={() => setShowServiceModal(false)}>
+                <Button type="button" variant="outline" size="sm" onClick={() => setShowServiceModal(false)} className="rounded-xl">
                   Cancelar
                 </Button>
-                <Button type="submit" size="sm" className="bg-emerald-600 hover:bg-emerald-700 font-bold text-white">
+                <Button type="submit" size="sm" className="bg-emerald-600 hover:bg-emerald-700 font-bold text-white rounded-xl shadow-xs">
                   {editingServiceId ? 'Salvar Alterações' : 'Salvar Serviço'}
                 </Button>
               </div>
@@ -967,4 +844,3 @@ export default function CartridgeModelsPage() {
     </div>
   );
 }
-

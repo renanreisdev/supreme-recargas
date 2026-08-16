@@ -29,7 +29,9 @@ import {
   AlertTriangle,
   Percent,
   Lock,
-  X
+  X,
+  Phone,
+  MessageSquare
 } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
@@ -105,24 +107,24 @@ function EntriesListContent() {
   // Permission Guard for view_entries
   if (!hasPermission('view_entries')) {
     return (
-      <div className="max-w-2xl mx-auto mt-10 p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm text-center space-y-4">
-        <div className="w-14 h-14 rounded-full bg-rose-100 dark:bg-rose-950 text-rose-600 flex items-center justify-center mx-auto">
+      <div className="max-w-2xl mx-auto mt-10 p-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-xl text-center space-y-4">
+        <div className="w-14 h-14 rounded-2xl bg-rose-100 dark:bg-rose-950 text-rose-600 flex items-center justify-center mx-auto">
           <ClipboardList className="w-7 h-7" />
         </div>
-        <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Acesso Restrito às Entradas & Entregas</h2>
+        <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Acesso Restrito às Entradas</h2>
         <p className="text-sm text-slate-600 dark:text-slate-400">
-          Seu usuário não possui permissão para visualizar a lista geral de comandas e atendimentos. Solicite ao Administrador o ajuste no painel da empresa.
+          Seu usuário não possui permissão para visualizar a lista geral de comandas. Solicite ao Administrador o ajuste.
         </p>
         <div className="pt-2">
           <Link href="/dashboard">
-            <Button className="bg-slate-900 text-white font-bold">Voltar ao Painel</Button>
+            <Button className="bg-slate-900 text-white font-bold rounded-xl">Voltar ao Painel</Button>
           </Link>
         </div>
       </div>
     );
   }
 
-  // Open Delivery Checkout Modal with Multi-Payment Initial State & Uncompleted Check
+  // Open Delivery Checkout Modal
   const handleOpenDeliveryModal = (entry: CartridgeEntry) => {
     const hasUncompleted = entry.cartridges?.some(c => 
       ['RECEBIDO', 'AGUARDANDO_VERIFICACAO', 'EM_VERIFICACAO', 'AGUARDANDO_RECARGA', 'EM_RECARGA', 'AGUARDANDO_TESTE', 'EM_TESTE'].includes(c.status)
@@ -142,7 +144,6 @@ function EntriesListContent() {
     setReceiverRelation('Próprio Cliente');
     setDeliveryNotes('');
 
-    // Initialize with 1 payment line of entry total
     setPayments([
       {
         id: `pay-${Date.now()}-1`,
@@ -152,7 +153,6 @@ function EntriesListContent() {
     ]);
   };
 
-  // Payment Lines Handlers
   const handleAddPaymentLine = () => {
     if (!selectedEntryForDelivery) return;
     const currentTotalPaid = payments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
@@ -185,7 +185,6 @@ function EntriesListContent() {
     }));
   };
 
-  // Live Multi-Payment Calculations
   const modalTotal = selectedEntryForDelivery ? selectedEntryForDelivery.total_amount : 0;
   const totalPaidSum = payments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
   const diff = totalPaidSum - modalTotal;
@@ -193,7 +192,6 @@ function EntriesListContent() {
   const liveRemaining = diff < 0 ? Math.abs(diff) : 0;
   const isUnderpaid = liveRemaining > 0;
 
-  // Submit Delivery & Payment (Baixa Financeira)
   const handleRegisterDelivery = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedEntryForDelivery) return;
@@ -249,7 +247,6 @@ function EntriesListContent() {
     }
   };
 
-  // Reopen Entry Handlers
   const handleOpenReopenModal = (entry: CartridgeEntry) => {
     if (!canReopenEntry) {
       alert('Seu usuário não possui permissão para reabrir comandas. Solicite ao Administrador.');
@@ -275,7 +272,6 @@ function EntriesListContent() {
     }
   };
 
-  // Delete Entry Handlers
   const handleOpenDeleteModal = (entry: CartridgeEntry) => {
     if (!canDeleteEntry) {
       alert('Seu usuário não possui permissão para excluir comandas. Solicite ao Administrador.');
@@ -324,7 +320,7 @@ function EntriesListContent() {
     <div className="space-y-6">
       {/* Alert Notification */}
       {actionAlert && (
-        <div className={`p-4 rounded-xl border flex items-center justify-between text-xs font-semibold shadow-sm animate-in fade-in slide-in-from-top-2 ${
+        <div className={`p-4 rounded-2xl border flex items-center justify-between text-xs font-semibold shadow-sm animate-in fade-in slide-in-from-top-2 ${
           actionAlert.type === 'success' 
             ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200' 
             : 'bg-rose-50 dark:bg-rose-950/60 border-rose-300 dark:border-rose-800 text-rose-800 dark:text-rose-200'
@@ -340,12 +336,17 @@ function EntriesListContent() {
       )}
 
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-[#0e1626] p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
         <div>
-          <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+          <div className="flex items-center gap-2">
             <ClipboardList className="w-5 h-5 text-emerald-600" />
-            <span>Atendimentos & Entradas de Cartuchos</span>
-          </h1>
+            <h1 className="text-xl font-black text-slate-900 dark:text-slate-100">
+              Atendimentos & Ordens de Serviço
+            </h1>
+            <Badge className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono font-bold text-[10px]">
+              {entries.length} Total
+            </Badge>
+          </div>
           <p className="text-xs text-slate-500 mt-0.5">
             Gerenciamento de comandas, conferência de status, baixa financeira e entrega de cartuchos
           </p>
@@ -354,9 +355,9 @@ function EntriesListContent() {
         <div className="flex items-center gap-2">
           {hasPermission('create_entry') && (
             <Link href="/entradas/nova">
-              <Button className="bg-emerald-600 hover:bg-emerald-700 text-xs font-bold gap-1.5 shadow-sm text-white h-9">
+              <Button className="bg-emerald-600 hover:bg-emerald-700 text-xs font-bold gap-1.5 shadow-md shadow-emerald-950/30 text-white h-9 rounded-xl px-4">
                 <PlusCircle className="w-4 h-4" />
-                <span>Nova Entrada</span>
+                <span>+ Nova Entrada / OS</span>
               </Button>
             </Link>
           )}
@@ -364,240 +365,225 @@ function EntriesListContent() {
       </div>
 
       {/* Filter and Search Bar */}
-      <Card className="shadow-sm border-slate-200 dark:border-slate-800">
-        <CardContent className="py-3">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div className="relative w-full sm:w-80">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <Input
-                placeholder="Buscar por N° comanda, cliente, fone ou série..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9 text-xs"
-              />
-            </div>
-
-            <div className="flex items-center gap-1.5 w-full sm:w-auto overflow-x-auto">
-              <button
-                onClick={() => setStatusFilter('ALL')}
-                className={`px-3 py-1.5 text-xs rounded font-semibold transition-all ${statusFilter === 'ALL' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+      <div className="bg-white dark:bg-[#0e1626] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-4 space-y-3">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="relative w-full sm:w-80">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Buscar por N° comanda, cliente, telefone ou serial..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-9 pr-8 py-2 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:border-emerald-500 text-slate-900 dark:text-slate-100 font-medium"
+            />
+            {searchTerm && (
+              <button 
+                onClick={() => setSearchTerm('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
               >
-                Todos ({entries.length})
+                <X className="w-3.5 h-3.5" />
               </button>
-              <button
-                onClick={() => setStatusFilter('READY')}
-                className={`px-3 py-1.5 text-xs rounded font-semibold transition-all ${statusFilter === 'READY' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'}`}
-              >
-                Prontos ({entries.filter(e => !e.cartridges?.every(c => c.status === 'ENTREGUE') && e.cartridges?.some(c => c.status === 'FINALIZADO')).length})
-              </button>
-              <button
-                onClick={() => setStatusFilter('PROCESSING')}
-                className={`px-3 py-1.5 text-xs rounded font-semibold transition-all ${statusFilter === 'PROCESSING' ? 'bg-amber-600 text-white' : 'bg-amber-50 text-amber-800 hover:bg-amber-100'}`}
-              >
-                Em Andamento ({entries.filter(e => !e.cartridges?.every(c => c.status === 'ENTREGUE') && !e.cartridges?.some(c => c.status === 'FINALIZADO')).length})
-              </button>
-              <button
-                onClick={() => setStatusFilter('DELIVERED')}
-                className={`px-3 py-1.5 text-xs rounded font-semibold transition-all ${statusFilter === 'DELIVERED' ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
-              >
-                Entregues ({entries.filter(e => e.cartridges?.every(c => c.status === 'ENTREGUE')).length})
-              </button>
-            </div>
+            )}
           </div>
-        </CardContent>
-      </Card>
+
+          <div className="flex items-center gap-1.5 w-full sm:w-auto overflow-x-auto pb-1">
+            <button
+              onClick={() => setStatusFilter('ALL')}
+              className={`px-3 py-1.5 text-xs rounded-xl font-bold transition-all ${statusFilter === 'ALL' ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+            >
+              Todas ({entries.length})
+            </button>
+            <button
+              onClick={() => setStatusFilter('READY')}
+              className={`px-3 py-1.5 text-xs rounded-xl font-bold transition-all ${statusFilter === 'READY' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100'}`}
+            >
+              Prontas ({entries.filter(e => !e.cartridges?.every(c => c.status === 'ENTREGUE') && e.cartridges?.some(c => c.status === 'FINALIZADO')).length})
+            </button>
+            <button
+              onClick={() => setStatusFilter('PROCESSING')}
+              className={`px-3 py-1.5 text-xs rounded-xl font-bold transition-all ${statusFilter === 'PROCESSING' ? 'bg-amber-600 text-white shadow-xs' : 'bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 hover:bg-amber-100'}`}
+            >
+              Em Andamento ({entries.filter(e => !e.cartridges?.every(c => c.status === 'ENTREGUE') && !e.cartridges?.some(c => c.status === 'FINALIZADO')).length})
+            </button>
+            <button
+              onClick={() => setStatusFilter('DELIVERED')}
+              className={`px-3 py-1.5 text-xs rounded-xl font-bold transition-all ${statusFilter === 'DELIVERED' ? 'bg-slate-700 text-white shadow-xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'}`}
+            >
+              Entregues ({entries.filter(e => e.cartridges?.every(c => c.status === 'ENTREGUE')).length})
+            </button>
+          </div>
+        </div>
+      </div>
 
       {/* Entries Table */}
-      <Card className="shadow-sm border-slate-200 dark:border-slate-800">
-        <CardContent className="pt-6">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold uppercase">
-                <tr>
-                  <th className="p-3 rounded-l-lg">Comanda / Data</th>
-                  <th className="p-3">Cliente</th>
-                  <th className="p-3">Cartuchos / Modelos</th>
-                  <th className="p-3">Valor Total</th>
-                  <th className="p-3">Pagamento</th>
-                  <th className="p-3">Status Geral</th>
-                  <th className="p-3 rounded-r-lg text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {filteredEntries.map(entry => {
-                  const isDelivered = entry.cartridges?.every(c => c.status === 'ENTREGUE');
-                  const isReady = !isDelivered && entry.cartridges?.some(c => c.status === 'FINALIZADO');
-                  const payBadge = getPaymentStatusBadge(entry.payment_status);
+      <div className="bg-white dark:bg-[#0e1626] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider text-[10px]">
+              <tr>
+                <th className="p-3.5">Comanda / Data</th>
+                <th className="p-3.5">Cliente</th>
+                <th className="p-3.5">Itens / Equipamentos</th>
+                <th className="p-3.5">Valor Total</th>
+                <th className="p-3.5">Pagamento</th>
+                <th className="p-3.5">Status Geral</th>
+                <th className="p-3.5 text-right">Ações Operacionais</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
+              {filteredEntries.map(entry => {
+                const isDelivered = entry.cartridges?.every(c => c.status === 'ENTREGUE');
+                const isReady = !isDelivered && entry.cartridges?.some(c => c.status === 'FINALIZADO');
+                const payBadge = getPaymentStatusBadge(entry.payment_status);
 
-                  return (
-                    <tr key={entry.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                      <td className="p-3">
-                        <div className="font-mono font-bold text-slate-900 dark:text-slate-100 text-sm">
-                          {entry.entry_number}
-                        </div>
-                        <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
-                          <Calendar className="w-3 h-3" />
-                          <span>{formatDateTime(entry.entry_date)}</span>
-                        </div>
-                      </td>
+                return (
+                  <tr key={entry.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                    <td className="p-3.5">
+                      <div className="font-mono font-black text-slate-900 dark:text-slate-100 text-sm">
+                        {entry.entry_number}
+                      </div>
+                      <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
+                        <Calendar className="w-3 h-3 text-slate-400" />
+                        <span>{formatDateTime(entry.entry_date)}</span>
+                      </div>
+                    </td>
 
-                      <td className="p-3">
-                        <div className="font-bold text-slate-900 dark:text-slate-100">
-                          {entry.customer?.name}
-                        </div>
-                        <div className="text-[11px] text-slate-500">
-                          {entry.customer?.phone}
-                        </div>
-                      </td>
-
-                      <td className="p-3">
-                        <div className="space-y-1">
-                          {entry.cartridges?.map(c => {
-                            const badge = getStatusBadgeConfig(c.status);
-                            return (
-                              <div key={c.id} className="flex items-center gap-1.5 text-[11px]">
-                                <span className="font-semibold text-slate-800 dark:text-slate-200">
-                                  {c.model?.model_name || 'Cartucho'}
-                                </span>
-                                <span className="text-slate-400 font-mono text-[10px]">
-                                  (Série: {c.final_serie || 'S/N'})
-                                </span>
-                                <span className={`px-1.5 py-0.2 text-[9px] rounded font-bold ${badge.className}`}>
-                                  {badge.label}
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </td>
-
-                      <td className="p-3">
-                        <div className="font-bold text-slate-900 dark:text-slate-100">
-                          {formatCurrency(entry.total_amount)}
-                        </div>
-                        {entry.discount_amount > 0 && (
-                          <div className="text-[10px] text-emerald-600 font-semibold">
-                            Desc: -{formatCurrency(entry.discount_amount)}
-                          </div>
+                    <td className="p-3.5">
+                      <div className="font-bold text-slate-900 dark:text-slate-100">
+                        {entry.customer?.name}
+                      </div>
+                      <div className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5">
+                        <span>{entry.customer?.phone}</span>
+                        {entry.customer?.phone_is_whatsapp && (
+                          <a
+                            href={`https://wa.me/55${(entry.customer.whatsapp || entry.customer.phone || '').replace(/\D/g, '')}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-emerald-600 hover:text-emerald-700"
+                            title="Conversar no WhatsApp"
+                          >
+                            <MessageSquare className="w-3 h-3" />
+                          </a>
                         )}
-                      </td>
+                      </div>
+                    </td>
 
-                      <td className="p-3">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${payBadge.className}`}>
-                          {payBadge.label}
-                        </span>
-                        <div className="text-[10px] text-slate-500 mt-1">
-                          {entry.payments && entry.payments.length > 1 ? (
-                            <span className="font-semibold text-emerald-700 dark:text-emerald-400">
-                              Dividido ({entry.payments.length} formas)
-                            </span>
-                          ) : (
-                            getPaymentMethodLabel(entry.payment_method)
-                          )}
-                        </div>
-                      </td>
-
-                      <td className="p-3">
-                        {isDelivered ? (
-                          <div>
-                            <span className="inline-block px-2 py-0.5 rounded text-[10px] bg-slate-800 text-slate-100 font-semibold">
-                              Entregue
-                            </span>
-                            {entry.delivery_info && (
-                              <p className="text-[10px] text-slate-500 mt-0.5">
-                                Retirado por: <strong>{entry.delivery_info.receiver_name}</strong>
-                              </p>
-                            )}
+                    <td className="p-3.5">
+                      <div className="space-y-1">
+                        {entry.cartridges?.map(c => (
+                          <div key={c.id} className="text-[11px] text-slate-600 dark:text-slate-300 font-mono flex items-center gap-1.5">
+                            <span className="font-bold text-slate-800 dark:text-slate-200">• {c.serial_number}</span>
+                            <span className="text-slate-400">[{c.final_serie}]</span>
                           </div>
-                        ) : isReady ? (
-                          <Badge className="bg-emerald-600 text-white font-bold">PRONTO P/ RETIRADA</Badge>
-                        ) : (
-                          <Badge variant="secondary" className="bg-amber-100 text-amber-900 border-amber-300">EM BANCADA</Badge>
-                        )}
-                      </td>
+                        ))}
+                      </div>
+                    </td>
 
-                      <td className="p-3 text-right">
-                        <div className="flex items-center justify-end gap-1.5 flex-wrap">
-                          {/* Print Receipt */}
-                          <Link href={`/impressao?entry=${entry.entry_number}`}>
-                            <Button size="sm" variant="outline" className="h-7 text-[11px] px-2 gap-1 font-semibold" title="Imprimir Comanda">
-                              <Printer className="w-3.5 h-3.5" />
-                              <span>Comanda</span>
-                            </Button>
-                          </Link>
-
-                          {/* Delivery & Checkout (if not delivered) */}
-                          {!isDelivered && (canRegisterDelivery || canCloseUncompleted) && (
-                            <Button 
-                              size="sm" 
-                              onClick={() => handleOpenDeliveryModal(entry)}
-                              className="h-7 text-[11px] px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-1 shadow-sm"
-                            >
-                              <PackageCheck className="w-3.5 h-3.5" />
-                              <span>Baixa & Entrega</span>
-                            </Button>
-                          )}
-
-                          {/* Reopen Entry (if delivered and has permission) */}
-                          {isDelivered && canReopenEntry && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleOpenReopenModal(entry)}
-                              className="h-7 text-[11px] px-2 gap-1 font-semibold text-amber-700 border-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/40"
-                              title="Reabrir comanda para reprocessamento"
-                            >
-                              <RotateCcw className="w-3.5 h-3.5 text-amber-600" />
-                              <span>Reabrir</span>
-                            </Button>
-                          )}
-
-                          {/* Delete Entry (if has permission) */}
-                          {canDeleteEntry && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleOpenDeleteModal(entry)}
-                              className="h-7 text-[11px] px-2 gap-1 font-semibold text-rose-700 border-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40"
-                              title="Excluir comanda permanentemente"
-                            >
-                              <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                              <span>Excluir</span>
-                            </Button>
-                          )}
+                    <td className="p-3.5">
+                      <div className="font-black text-slate-900 dark:text-slate-100 text-sm font-mono">
+                        {formatCurrency(entry.total_amount)}
+                      </div>
+                      {entry.discount_amount > 0 && (
+                        <div className="text-[10px] text-rose-500 font-medium">
+                          Desconto: {formatCurrency(entry.discount_amount)}
                         </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                      )}
+                    </td>
 
-                {filteredEntries.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="text-center py-10 text-slate-400 text-xs">
-                      Nenhum atendimento ou comanda encontrado para os filtros selecionados.
+                    <td className="p-3.5">
+                      <Badge className={payBadge.className}>{payBadge.label}</Badge>
+                      <div className="text-[10px] text-slate-500 mt-0.5 font-medium">
+                        {getPaymentMethodLabel(entry.payment_method || 'DINHEIRO')}
+                      </div>
+                    </td>
+
+                    <td className="p-3.5">
+                      {isDelivered ? (
+                        <Badge className="bg-slate-700 text-white font-bold">📦 Entregue</Badge>
+                      ) : isReady ? (
+                        <Badge className="bg-emerald-600 text-white font-bold animate-pulse">✅ Pronto p/ Retirada</Badge>
+                      ) : (
+                        <Badge className="bg-amber-600 text-white font-bold">⚙️ Em Andamento</Badge>
+                      )}
+                    </td>
+
+                    <td className="p-3.5 text-right">
+                      <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                        {/* Delivery Button */}
+                        {canRegisterDelivery && !isDelivered && (
+                          <Button
+                            size="sm"
+                            onClick={() => handleOpenDeliveryModal(entry)}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold h-8 px-2.5 rounded-xl gap-1 shadow-xs"
+                          >
+                            <PackageCheck className="w-3.5 h-3.5" />
+                            <span>Dar Baixa</span>
+                          </Button>
+                        )}
+
+                        {/* Thermal Voucher Print */}
+                        <Link href={`/impressao?entry=${entry.entry_number}`}>
+                          <Button size="sm" variant="outline" className="h-8 text-[11px] px-2 rounded-xl text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700">
+                            <Printer className="w-3.5 h-3.5" />
+                          </Button>
+                        </Link>
+
+                        {/* Reopen Button */}
+                        {canReopenEntry && isDelivered && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleOpenReopenModal(entry)}
+                            className="h-8 text-[11px] px-2 rounded-xl text-amber-700 border-amber-300 hover:bg-amber-50"
+                            title="Reabrir Comanda"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
+
+                        {/* Delete Button */}
+                        {canDeleteEntry && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleOpenDeleteModal(entry)}
+                            className="h-8 text-[11px] px-2 rounded-xl text-rose-600 border-rose-200 hover:bg-rose-50"
+                            title="Excluir Comanda"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+                );
+              })}
 
-      {/* Professional Multi-Payment Delivery Checkout Modal */}
+              {filteredEntries.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="text-center py-10 text-slate-400 text-xs">
+                    Nenhum atendimento ou comanda encontrado para os filtros selecionados.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Multi-Payment Delivery Checkout Modal */}
       {selectedEntryForDelivery && (
         <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 max-h-[92vh] flex flex-col">
-            {/* Modal Header */}
+          <div className="bg-white dark:bg-[#0e1626] rounded-3xl border border-slate-200 dark:border-slate-800 w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 max-h-[92vh] flex flex-col">
             <div className="bg-slate-900 text-white p-4 flex items-center justify-between border-b border-slate-800 shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-emerald-600 flex items-center justify-center font-bold text-white shadow-md">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-600 flex items-center justify-center font-bold text-white shadow-md">
                   <PackageCheck className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-sm">Baixa Financeira & Entrega de Cartuchos</h3>
+                  <h3 className="font-bold text-sm">Baixa Financeira & Entrega</h3>
                   <p className="text-[11px] text-slate-400">
-                    Comanda: <strong className="text-white font-mono">{selectedEntryForDelivery.entry_number}</strong> — Cliente: {selectedEntryForDelivery.customer?.name}
+                    Comanda: <strong className="text-white font-mono">{selectedEntryForDelivery.entry_number}</strong> — {selectedEntryForDelivery.customer?.name}
                   </p>
                 </div>
               </div>
@@ -606,26 +592,25 @@ function EntriesListContent() {
               </Button>
             </div>
 
-            {/* Modal Form */}
-            <form onSubmit={handleRegisterDelivery} className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1">
-              {/* Uncompleted Cartridges Warning / Desistência */}
+            <form onSubmit={handleRegisterDelivery} className="p-5 space-y-4 overflow-y-auto flex-1">
+              {/* Uncompleted Cartridges Warning */}
               {hasUncompletedCartridges && (
-                <div className="p-3.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 rounded-xl space-y-2">
+                <div className="p-3.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 rounded-2xl space-y-2">
                   <div className="flex items-center gap-2 text-amber-900 dark:text-amber-200 text-xs font-bold">
                     <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                    <span>Cartuchos Não Finalizados na Bancada (Encerramento Antecipado)</span>
+                    <span>Cartuchos Não Concluídos na Bancada</span>
                   </div>
                   <p className="text-[11px] text-amber-800 dark:text-amber-300 leading-relaxed">
-                    Esta comanda contém itens em andamento na oficina. Como você possui permissão para <strong>Encerrar por Desistência</strong>, os itens serão baixados como Devolvidos ao cliente.
+                    Esta comanda contém itens em andamento na oficina. A baixa registrará os itens como Devolvidos ao cliente por desistência.
                   </p>
                   <div>
                     <label className="text-[11px] font-semibold text-amber-900 dark:text-amber-200 mb-0.5 block">
-                      Motivo da Baixa / Desistência *
+                      Motivo da Baixa *
                     </label>
                     <Select
                       value={forcedCloseReason}
                       onChange={(e) => setForcedCloseReason(e.target.value)}
-                      className="text-xs bg-white dark:bg-slate-900"
+                      className="text-xs bg-white dark:bg-slate-900 rounded-xl"
                     >
                       <option value="Desistência do Cliente">Desistência do Cliente (Retirada antes do reparo)</option>
                       <option value="Devolução sem serviço">Devolução sem serviço (Cliente não aguardou)</option>
@@ -637,21 +622,21 @@ function EntriesListContent() {
                 </div>
               )}
 
-              {/* Financial Summary Card */}
-              <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/30 rounded-xl border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-between">
+              {/* Total Card */}
+              <div className="p-4 bg-emerald-50 dark:bg-emerald-950/30 rounded-2xl border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-between">
                 <div>
                   <p className="text-xs text-slate-600 dark:text-slate-300 font-semibold">Valor Total da Comanda:</p>
-                  <p className="text-2xl font-extrabold text-emerald-700 dark:text-emerald-400">
+                  <p className="text-2xl font-black text-emerald-700 dark:text-emerald-400 font-mono">
                     {formatCurrency(selectedEntryForDelivery.total_amount)}
                   </p>
                 </div>
                 <div className="text-right text-xs">
-                  <span className="text-slate-500">Cartuchos:</span>
+                  <span className="text-slate-500">Itens:</span>
                   <p className="font-bold text-slate-800 dark:text-slate-200">{selectedEntryForDelivery.cartridges?.length} itens</p>
                 </div>
               </div>
 
-              {/* Multi-Payment Methods Section */}
+              {/* Multi-Payment Methods */}
               <div className="space-y-2.5">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
@@ -663,7 +648,7 @@ function EntriesListContent() {
                     variant="outline"
                     size="sm"
                     onClick={handleAddPaymentLine}
-                    className="text-[11px] h-7 gap-1 text-emerald-700 dark:text-emerald-300 border-emerald-300"
+                    className="text-[11px] h-7 gap-1 text-emerald-700 dark:text-emerald-300 border-emerald-300 rounded-lg"
                   >
                     <Plus className="w-3 h-3" />
                     <span>Adicionar Outra Forma</span>
@@ -671,13 +656,13 @@ function EntriesListContent() {
                 </div>
 
                 <div className="space-y-2">
-                  {payments.map((p, pIdx) => (
-                    <div key={p.id} className="flex items-center gap-2 p-2.5 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200 dark:border-slate-700">
+                  {payments.map((p) => (
+                    <div key={p.id} className="flex items-center gap-2 p-2.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700">
                       <div className="flex-1">
                         <Select
                           value={p.method}
                           onChange={(e) => handleUpdatePaymentLine(p.id, 'method', e.target.value as PaymentMethod)}
-                          className="text-xs font-semibold"
+                          className="text-xs font-semibold h-9 rounded-lg"
                         >
                           <option value="PIX">⚡ PIX Instantâneo</option>
                           <option value="DINHEIRO">💵 Dinheiro em Espécie</option>
@@ -695,7 +680,7 @@ function EntriesListContent() {
                           required
                           value={p.amount}
                           onChange={(e) => handleUpdatePaymentLine(p.id, 'amount', e.target.value)}
-                          className="text-xs font-bold text-slate-900 dark:text-slate-100"
+                          className="text-xs font-bold text-slate-900 dark:text-slate-100 h-9 rounded-lg"
                           placeholder="Valor R$"
                         />
                       </div>
@@ -704,8 +689,8 @@ function EntriesListContent() {
                         <button
                           type="button"
                           onClick={() => handleRemovePaymentLine(p.id)}
-                          className="text-rose-600 hover:text-rose-800 p-1.5"
-                          title="Remover forma de pagamento"
+                          className="text-rose-500 hover:text-rose-700 p-1.5"
+                          title="Remover forma"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -714,33 +699,31 @@ function EntriesListContent() {
                   ))}
                 </div>
 
-                {/* Calculation Indicator: Troco ou Valor Menor / Desconto */}
+                {/* Calculation Indicator */}
                 <div className="pt-1 space-y-2">
                   {liveChange > 0 && (
-                    <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800 rounded-lg flex items-center justify-between text-xs">
-                      <span className="font-bold text-emerald-800 dark:text-emerald-300">Troco a Devolver ao Cliente:</span>
-                      <strong className="text-sm text-emerald-900 dark:text-emerald-200">
+                    <div className="p-3 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800 rounded-xl flex items-center justify-between text-xs">
+                      <span className="font-bold text-emerald-800 dark:text-emerald-300">Troco a Devolver:</span>
+                      <strong className="text-base font-black text-emerald-900 dark:text-emerald-200 font-mono">
                         {formatCurrency(liveChange)}
                       </strong>
                     </div>
                   )}
 
-                  {/* Underpaid / Valor Menor: Prompt for Discount vs Pending Balance */}
                   {isUnderpaid && (
-                    <div className="p-3.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 rounded-xl space-y-2.5">
+                    <div className="p-3.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 rounded-2xl space-y-2.5">
                       <div className="flex items-center justify-between text-xs">
                         <span className="font-bold text-amber-900 dark:text-amber-200 flex items-center gap-1">
                           <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-                          <span>Valor informado menor que o total ({formatCurrency(totalPaidSum)} de {formatCurrency(modalTotal)}):</span>
+                          <span>Diferença a menor:</span>
                         </span>
-                        <strong className="text-sm font-extrabold text-rose-600">
-                          Diferença: {formatCurrency(liveRemaining)}
+                        <strong className="text-sm font-black text-rose-600 font-mono">
+                          {formatCurrency(liveRemaining)}
                         </strong>
                       </div>
 
                       <div className="space-y-2 text-xs pt-1 border-t border-amber-200 dark:border-amber-800/80">
-                        {/* Option A: Keep as Pending Balance */}
-                        <label className="flex items-start gap-2 cursor-pointer p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-amber-400">
+                        <label className="flex items-start gap-2 cursor-pointer p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
                           <input
                             type="radio"
                             name="discount_decision"
@@ -750,19 +733,18 @@ function EntriesListContent() {
                           />
                           <div>
                             <span className="font-bold text-slate-800 dark:text-slate-200 block">
-                              Manter {formatCurrency(liveRemaining)} como Saldo Devedor / A Prazo
+                              Manter {formatCurrency(liveRemaining)} como Saldo Devedor
                             </span>
                             <span className="text-[11px] text-slate-500">
-                              A comanda ficará com status <strong>PENDENTE</strong> até o recebimento do restante.
+                              A comanda permanecerá com status PENDENTE.
                             </span>
                           </div>
                         </label>
 
-                        {/* Option B: Apply Discount to Settle Comanda */}
-                        <label className={`flex items-start gap-2 p-2 rounded-lg border transition-all ${
+                        <label className={`flex items-start gap-2 p-2 rounded-xl border transition-all ${
                           !canApplyDiscount 
                             ? 'bg-slate-100 dark:bg-slate-850 opacity-60 cursor-not-allowed border-slate-300' 
-                            : 'bg-white dark:bg-slate-900 cursor-pointer hover:border-emerald-500'
+                            : 'bg-white dark:bg-slate-900 cursor-pointer'
                         }`}>
                           <input
                             type="radio"
@@ -773,41 +755,23 @@ function EntriesListContent() {
                             className="mt-0.5 text-emerald-600"
                           />
                           <div className="flex-1">
-                            <div className="flex items-center justify-between">
-                              <span className="font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
-                                <Percent className="w-3.5 h-3.5" />
-                                <span>Conceder Desconto de {formatCurrency(liveRemaining)} e Quitar Comanda</span>
-                              </span>
-                              {!canApplyDiscount && (
-                                <Badge variant="secondary" className="text-[9px] bg-slate-200 text-slate-600 gap-0.5">
-                                  <Lock className="w-2.5 h-2.5" /> Sem Permissão
-                                </Badge>
-                              )}
-                            </div>
-                            <span className="text-[11px] text-slate-500 block mt-0.5">
-                              {canApplyDiscount 
-                                ? 'A comanda será quitada como 100% PAGA, registrando o abatimento como desconto.' 
-                                : 'Requer permissão de "Conceder Desconto na Baixa" liberada pelo Administrador nas configurações.'}
+                            <span className="font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
+                              <Percent className="w-3.5 h-3.5" />
+                              <span>Conceder Desconto de {formatCurrency(liveRemaining)} e Quitar</span>
                             </span>
                           </div>
                         </label>
                       </div>
                     </div>
                   )}
-
-                  {liveChange === 0 && liveRemaining === 0 && (
-                    <div className="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg text-center text-[11px] text-emerald-700 dark:text-emerald-400 font-bold">
-                      ✓ Valor Total Exato Quitado
-                    </div>
-                  )}
                 </div>
               </div>
 
-              {/* Who Received the cartridge (Quem Retirou) */}
+              {/* Who Received */}
               <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-3">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
-                    Quem está retirando os cartuchos? *
+                    Quem está retirando? *
                   </label>
                   {selectedEntryForDelivery.customer?.name && (
                     <button
@@ -819,7 +783,7 @@ function EntriesListContent() {
                       }}
                       className="text-[11px] text-emerald-600 hover:underline font-semibold"
                     >
-                      Preencher com dados do cliente
+                      Preencher dados do cliente
                     </button>
                   )}
                 </div>
@@ -829,59 +793,38 @@ function EntriesListContent() {
                     <label className="text-[11px] text-slate-500 mb-0.5 block">Nome do Recebedor *</label>
                     <Input
                       required
-                      placeholder="Nome completo de quem retirou"
+                      placeholder="Nome completo"
                       value={receiverName}
                       onChange={(e) => setReceiverName(e.target.value)}
-                      className="text-xs"
+                      className="text-xs h-9 rounded-xl"
                     />
                   </div>
 
                   <div>
-                    <label className="text-[11px] text-slate-500 mb-0.5 block">Parentesco / Relação</label>
+                    <label className="text-[11px] text-slate-500 mb-0.5 block">Relação</label>
                     <Select
                       value={receiverRelation}
                       onChange={(e) => setReceiverRelation(e.target.value)}
-                      className="text-xs"
+                      className="text-xs h-9 rounded-xl"
                     >
                       <option value="Próprio Cliente">Próprio Cliente</option>
                       <option value="Funcionário / Portador">Funcionário / Portador</option>
-                      <option value="Familiar">Familiar (Cônjuge / Filho / etc)</option>
+                      <option value="Familiar">Familiar</option>
                       <option value="Motoboy / Entrega">Motoboy / Entrega</option>
                       <option value="Outro">Outro</option>
                     </Select>
                   </div>
                 </div>
-
-                <div>
-                  <label className="text-[11px] text-slate-500 mb-0.5 block">Documento / RG / CPF (Opcional)</label>
-                  <Input
-                    placeholder="Documento de identificação"
-                    value={receiverDoc}
-                    onChange={(e) => setReceiverDoc(e.target.value)}
-                    className="text-xs"
-                  />
-                </div>
-              </div>
-
-              {/* Notes */}
-              <div>
-                <label className="text-[11px] text-slate-500 mb-0.5 block">Observações da Entrega</label>
-                <Input
-                  placeholder="Ex: Cartuchos testados e entregues na caixa com comprovante..."
-                  value={deliveryNotes}
-                  onChange={(e) => setDeliveryNotes(e.target.value)}
-                  className="text-xs"
-                />
               </div>
 
               {/* Action Buttons */}
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
-                <Button type="button" variant="outline" size="sm" onClick={() => setSelectedEntryForDelivery(null)} className="text-xs">
+                <Button type="button" variant="outline" size="sm" onClick={() => setSelectedEntryForDelivery(null)} className="rounded-xl">
                   Cancelar
                 </Button>
-                <Button type="submit" size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-1.5 shadow-md text-xs">
+                <Button type="submit" size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-1.5 shadow-md rounded-xl">
                   <CheckCircle className="w-4 h-4" />
-                  <span>Confirmar Baixa & Concluir Entrega</span>
+                  <span>Confirmar Baixa & Concluir</span>
                 </Button>
               </div>
             </form>
@@ -889,10 +832,10 @@ function EntriesListContent() {
         </div>
       )}
 
-      {/* Reopen Entry Confirmation Modal */}
+      {/* Reopen Modal */}
       {showReopenModal && entryToReopen && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 w-full max-w-md p-5 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 w-full max-w-md p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
               <div className="flex items-center gap-2 text-amber-600">
                 <RotateCcw className="w-5 h-5" />
@@ -904,7 +847,7 @@ function EntriesListContent() {
             </div>
 
             <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-              Deseja reabrir a comanda <strong className="text-slate-900 dark:text-slate-100 font-mono">#{entryToReopen.entry_number}</strong> do cliente <strong>{entryToReopen.customer?.name}</strong>? A comanda voltará para a fila de atendimento e o status de pagamento retornará a Pendente.
+              Deseja reabrir a comanda <strong className="text-slate-900 dark:text-slate-100 font-mono">#{entryToReopen.entry_number}</strong>? A comanda voltará para a fila de atendimento.
             </p>
 
             <form onSubmit={handleConfirmReopen} className="space-y-3">
@@ -916,16 +859,16 @@ function EntriesListContent() {
                   required
                   value={reopenReason}
                   onChange={(e) => setReopenReason(e.target.value)}
-                  placeholder="Ex: Cliente retornou para reteste ou retrabalho..."
-                  className="text-xs"
+                  placeholder="Ex: Cliente retornou para reteste..."
+                  className="text-xs h-9 rounded-xl"
                 />
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
-                <Button type="button" variant="outline" size="sm" onClick={() => setShowReopenModal(false)} className="text-xs">
+                <Button type="button" variant="outline" size="sm" onClick={() => setShowReopenModal(false)} className="rounded-xl">
                   Cancelar
                 </Button>
-                <Button type="submit" size="sm" className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs gap-1">
+                <Button type="submit" size="sm" className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs gap-1 rounded-xl">
                   <RotateCcw className="w-3.5 h-3.5" />
                   <span>Confirmar Reabertura</span>
                 </Button>
@@ -935,10 +878,10 @@ function EntriesListContent() {
         </div>
       )}
 
-      {/* Delete Entry Confirmation Modal */}
+      {/* Delete Modal */}
       {showDeleteModal && entryToDelete && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 w-full max-w-md p-5 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 w-full max-w-md p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
               <div className="flex items-center gap-2 text-rose-600">
                 <Trash2 className="w-5 h-5" />
@@ -949,22 +892,22 @@ function EntriesListContent() {
               </Button>
             </div>
 
-            <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-xl space-y-1">
+            <div className="p-3.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-2xl space-y-1">
               <p className="text-xs font-bold text-rose-800 dark:text-rose-200">
                 Atenção: Ação permanente e irreversível!
               </p>
               <p className="text-[11px] text-rose-700 dark:text-rose-300 leading-relaxed">
-                Tem certeza que deseja excluir definitivamente a comanda <strong className="font-mono">#{entryToDelete.entry_number}</strong> e seus <strong>{entryToDelete.cartridges?.length || 0} cartuchos</strong>? Esta ação será registrada no histórico de auditoria.
+                Tem certeza que deseja excluir definitivamente a comanda <strong className="font-mono">#{entryToDelete.entry_number}</strong>?
               </p>
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
-              <Button type="button" variant="outline" size="sm" onClick={() => setShowDeleteModal(false)} className="text-xs">
+              <Button type="button" variant="outline" size="sm" onClick={() => setShowDeleteModal(false)} className="rounded-xl">
                 Cancelar
               </Button>
-              <Button type="button" size="sm" onClick={handleConfirmDelete} className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs gap-1 shadow-sm">
+              <Button type="button" size="sm" onClick={handleConfirmDelete} className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs gap-1 rounded-xl shadow-sm">
                 <Trash2 className="w-3.5 h-3.5" />
-                <span>Sim, Excluir Definitivamente</span>
+                <span>Sim, Excluir</span>
               </Button>
             </div>
           </div>
@@ -976,7 +919,7 @@ function EntriesListContent() {
 
 export default function EntriesListPage() {
   return (
-    <Suspense fallback={<div className="p-6 text-xs text-slate-500">Carregando lista de atendimentos...</div>}>
+    <Suspense fallback={<div className="p-6 text-xs text-slate-500">Carregando atendimentos...</div>}>
       <EntriesListContent />
     </Suspense>
   );

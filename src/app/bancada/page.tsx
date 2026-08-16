@@ -29,7 +29,8 @@ import {
   X,
   RotateCcw,
   Check,
-  Layers
+  Layers,
+  Zap
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { AppStore } from '@/lib/store';
@@ -57,56 +58,56 @@ const ALL_STATUSES: { key: CartridgeStatus; label: string }[] = [
 
 const COLOR_MAP: Record<KanbanColumnColor, { bg: string; border: string; text: string; headerBg: string; badge: string }> = {
   amber: {
-    bg: 'bg-amber-50/40 dark:bg-amber-950/20',
-    border: 'border-amber-200 dark:border-amber-900/60',
+    bg: 'bg-amber-50/40 dark:bg-[#13171f]',
+    border: 'border-amber-200/80 dark:border-amber-900/50',
     text: 'text-amber-800 dark:text-amber-300',
-    headerBg: 'bg-amber-100/70 dark:bg-amber-950/40',
+    headerBg: 'bg-amber-100/70 dark:bg-amber-950/50',
     badge: 'bg-amber-600 text-white'
   },
   purple: {
-    bg: 'bg-purple-50/40 dark:bg-purple-950/20',
-    border: 'border-purple-200 dark:border-purple-900/60',
+    bg: 'bg-purple-50/40 dark:bg-[#131522]',
+    border: 'border-purple-200/80 dark:border-purple-900/50',
     text: 'text-purple-800 dark:text-purple-300',
-    headerBg: 'bg-purple-100/70 dark:bg-purple-950/40',
+    headerBg: 'bg-purple-100/70 dark:bg-purple-950/50',
     badge: 'bg-purple-600 text-white'
   },
   blue: {
-    bg: 'bg-blue-50/40 dark:bg-blue-950/20',
-    border: 'border-blue-200 dark:border-blue-900/60',
+    bg: 'bg-blue-50/40 dark:bg-[#0f1826]',
+    border: 'border-blue-200/80 dark:border-blue-900/50',
     text: 'text-blue-800 dark:text-blue-300',
-    headerBg: 'bg-blue-100/70 dark:bg-blue-950/40',
+    headerBg: 'bg-blue-100/70 dark:bg-blue-950/50',
     badge: 'bg-blue-600 text-white'
   },
   emerald: {
-    bg: 'bg-emerald-50/40 dark:bg-emerald-950/20',
-    border: 'border-emerald-200 dark:border-emerald-900/60',
+    bg: 'bg-emerald-50/40 dark:bg-[#0d1c1a]',
+    border: 'border-emerald-200/80 dark:border-emerald-900/50',
     text: 'text-emerald-800 dark:text-emerald-300',
-    headerBg: 'bg-emerald-100/70 dark:bg-emerald-950/40',
+    headerBg: 'bg-emerald-100/70 dark:bg-emerald-950/50',
     badge: 'bg-emerald-600 text-white'
   },
   rose: {
-    bg: 'bg-rose-50/40 dark:bg-rose-950/20',
-    border: 'border-rose-200 dark:border-rose-900/60',
+    bg: 'bg-rose-50/40 dark:bg-[#1c1216]',
+    border: 'border-rose-200/80 dark:border-rose-900/50',
     text: 'text-rose-800 dark:text-rose-300',
-    headerBg: 'bg-rose-100/70 dark:bg-rose-950/40',
+    headerBg: 'bg-rose-100/70 dark:bg-rose-950/50',
     badge: 'bg-rose-600 text-white'
   },
   indigo: {
-    bg: 'bg-indigo-50/40 dark:bg-indigo-950/20',
-    border: 'border-indigo-200 dark:border-indigo-900/60',
+    bg: 'bg-indigo-50/40 dark:bg-[#121626]',
+    border: 'border-indigo-200/80 dark:border-indigo-900/50',
     text: 'text-indigo-800 dark:text-indigo-300',
-    headerBg: 'bg-indigo-100/70 dark:bg-indigo-950/40',
+    headerBg: 'bg-indigo-100/70 dark:bg-indigo-950/50',
     badge: 'bg-indigo-600 text-white'
   },
   teal: {
-    bg: 'bg-teal-50/40 dark:bg-teal-950/20',
-    border: 'border-teal-200 dark:border-teal-900/60',
+    bg: 'bg-teal-50/40 dark:bg-[#0e1c1e]',
+    border: 'border-teal-200/80 dark:border-teal-900/50',
     text: 'text-teal-800 dark:text-teal-300',
-    headerBg: 'bg-teal-100/70 dark:bg-teal-950/40',
+    headerBg: 'bg-teal-100/70 dark:bg-teal-950/50',
     badge: 'bg-teal-600 text-white'
   },
   slate: {
-    bg: 'bg-slate-100/60 dark:bg-slate-900/60',
+    bg: 'bg-slate-100/50 dark:bg-[#0f1420]',
     border: 'border-slate-200 dark:border-slate-800',
     text: 'text-slate-800 dark:text-slate-300',
     headerBg: 'bg-slate-200/60 dark:bg-slate-800',
@@ -161,11 +162,10 @@ export default function TechnicianWorkbenchPage() {
 
   if (!currentUser) return null;
 
-  // Strict Role & Permission Guard for technical_workbench (Atendentes are never allowed)
   if (!hasPermission('technical_workbench') || currentUser.role === 'ATENDENTE') {
     return (
-      <div className="p-8 text-center space-y-4 max-w-lg mx-auto mt-12 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl">
-        <div className="w-16 h-16 bg-amber-100 dark:bg-amber-950/60 rounded-full flex items-center justify-center mx-auto text-amber-600">
+      <div className="p-8 text-center space-y-4 max-w-lg mx-auto mt-12 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xl">
+        <div className="w-16 h-16 bg-amber-100 dark:bg-amber-950/60 rounded-2xl flex items-center justify-center mx-auto text-amber-600">
           <ShieldAlert className="w-8 h-8" />
         </div>
         <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Acesso Restrito à Oficina Técnica</h2>
@@ -191,12 +191,10 @@ export default function TechnicianWorkbenchPage() {
     );
   };
 
-  // Toggle checklist item in technician modal
   const handleToggleTechChecklist = (idx: number) => {
     setChecklistState(prev => prev.map((c, i) => i === idx ? { ...c, checked: !c.checked } : c));
   };
 
-  // Save Technical Update
   const handleSaveTechUpdate = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCartridge || !canEditTech) return;
@@ -217,7 +215,6 @@ export default function TechnicianWorkbenchPage() {
     setSelectedCartridge(null);
   };
 
-  // Quick 1-Click Action: Approve and Complete
   const handleQuickApprove = () => {
     if (!selectedCartridge || !canEditTech) return;
     const finalOutWeight = outputWeight ? Number(outputWeight) : (selectedCartridge.model?.full_weight_grams || 35.0);
@@ -237,7 +234,6 @@ export default function TechnicianWorkbenchPage() {
     setSelectedCartridge(null);
   };
 
-  // 1-Click Quick Move between Kanban columns
   const handleQuickMove = (cart: Cartridge, direction: -1 | 1) => {
     if (!canEditTech) return;
 
@@ -254,7 +250,6 @@ export default function TechnicianWorkbenchPage() {
     loadData();
   };
 
-  // Drag and Drop
   const handleDropOnColumn = (targetCol: KanbanColumnConfig, cartId: string) => {
     if (!canEditTech || !cartId) return;
     setDragOverColId(null);
@@ -263,7 +258,6 @@ export default function TechnicianWorkbenchPage() {
     loadData();
   };
 
-  // Kanban Customization Handlers
   const handleOpenCustomize = () => {
     setEditedColumns(JSON.parse(JSON.stringify(kanbanColumns)));
     setShowCustomizeModal(true);
@@ -276,13 +270,10 @@ export default function TechnicianWorkbenchPage() {
   };
 
   const handleResetToPreset = () => {
-    const seg = segmentConfig.segment || 'RECARGA_CARTUCHOS';
-    const defaults = AppStore.getSegmentConfig(currentCompany.id);
     const presetCols = AppStore.getKanbanColumns();
     setEditedColumns(presetCols);
   };
 
-  // Filtered cartridges
   const filtered = cartridges.filter(c => 
     !searchFilter ||
     c.serial_number.toLowerCase().includes(searchFilter.toLowerCase()) ||
@@ -291,7 +282,6 @@ export default function TechnicianWorkbenchPage() {
     (c.model?.model_name && c.model.model_name.toLowerCase().includes(searchFilter.toLowerCase()))
   );
 
-  // Calculated Weight Diff Live Preview
   const inVal = Number(inputWeight) || 0;
   const outVal = Number(outputWeight) || 0;
   const liveDiff = (outVal > 0 && inVal > 0) ? (outVal - inVal).toFixed(1) : null;
@@ -299,26 +289,31 @@ export default function TechnicianWorkbenchPage() {
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Header & Quick Search */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-[#0e1626] p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
         <div>
-          <h1 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-            <Wrench className="w-5 h-5 text-amber-600 shrink-0" />
-            <span>Bancada Técnica & Fila Kanban</span>
-            <Badge className="bg-amber-700 text-white font-bold text-[10px]">{segmentConfig.segmentName}</Badge>
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-lg sm:text-xl font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
+              <Wrench className="w-5 h-5 text-amber-500 shrink-0" />
+              <span>Bancada Técnica & Fila Kanban</span>
+            </h1>
+            <Badge className="bg-amber-500/20 text-amber-300 font-bold text-[10px] border border-amber-500/30">
+              {segmentConfig.segmentName}
+            </Badge>
+          </div>
           <p className="text-xs text-slate-500 mt-0.5">
-            Fluxo operacional personalizável com arrastar e soltar, diagnósticos e controle de etapas
+            Arraste os cartões entre as etapas ou utilize os botões de avanço rápido de bancada
           </p>
         </div>
 
         <div className="flex items-center gap-2.5 w-full sm:w-auto flex-wrap">
           <div className="relative w-full sm:w-64">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <Input
-              placeholder={`Buscar por cliente, modelo ou ${segmentConfig.identifierLabel.toLowerCase()}...`}
+            <input
+              type="text"
+              placeholder={`Buscar cliente, modelo ou ${segmentConfig.identifierLabel.toLowerCase()}...`}
               value={searchFilter}
               onChange={(e) => setSearchFilter(e.target.value)}
-              className="pl-9 text-xs"
+              className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:border-amber-500 text-slate-900 dark:text-slate-100"
             />
           </div>
 
@@ -327,10 +322,10 @@ export default function TechnicianWorkbenchPage() {
               onClick={handleOpenCustomize}
               variant="outline"
               size="sm"
-              className="gap-1.5 text-xs font-semibold h-9 border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+              className="gap-1.5 text-xs font-semibold h-9 rounded-xl border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
             >
-              <Settings2 className="w-4 h-4 text-amber-600" />
-              <span>Personalizar Colunas</span>
+              <Settings2 className="w-4 h-4 text-amber-500" />
+              <span>Personalizar Etapas</span>
             </Button>
           )}
         </div>
@@ -340,9 +335,9 @@ export default function TechnicianWorkbenchPage() {
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:hidden">
         <button
           onClick={() => setActiveMobileColumnId('ALL')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors ${
+          className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-colors ${
             activeMobileColumnId === 'ALL'
-              ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-sm'
+              ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-xs'
               : 'bg-slate-100 text-slate-600 dark:bg-slate-850 dark:text-slate-400'
           }`}
         >
@@ -357,9 +352,9 @@ export default function TechnicianWorkbenchPage() {
             <button
               key={col.id}
               onClick={() => setActiveMobileColumnId(col.id)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-colors ${
                 isActive
-                  ? `${styles.badge} shadow-sm`
+                  ? `${styles.badge} shadow-xs`
                   : `${styles.bg} ${styles.text}`
               }`}
             >
@@ -368,16 +363,6 @@ export default function TechnicianWorkbenchPage() {
           );
         })}
       </div>
-
-      {/* Notice if Attendant is viewing Bancada */}
-      {!canEditTech && (
-        <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 rounded-xl flex items-center gap-2.5 text-xs text-amber-800 dark:text-amber-300">
-          <Info className="w-4 h-4 text-amber-600 shrink-0" />
-          <span>
-            <strong>Modo Somente Leitura:</strong> Você pode acompanhar o andamento dos itens na bancada, mas alterações técnicas e diagnósticos só podem ser gravados por Técnicos ou Administradores.
-          </span>
-        </div>
-      )}
 
       {/* Dynamic Kanban Board Grid */}
       <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-${Math.min(kanbanColumns.length, 5)} gap-4 items-start`}>
@@ -400,30 +385,30 @@ export default function TechnicianWorkbenchPage() {
                 const cartId = e.dataTransfer.getData('text/plain');
                 handleDropOnColumn(col, cartId);
               }}
-              className={`p-3 rounded-xl border transition-all space-y-2.5 ${styles.bg} ${styles.border} ${
+              className={`p-3.5 rounded-2xl border transition-all space-y-3 ${styles.bg} ${styles.border} ${
                 isDragOver ? 'ring-2 ring-emerald-500 border-emerald-500 scale-[1.01]' : ''
               } ${isMobileVisible ? 'block' : 'hidden lg:block'}`}
             >
               {/* Column Header */}
-              <div className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg ${styles.headerBg}`}>
+              <div className={`flex items-center justify-between px-3 py-2 rounded-xl ${styles.headerBg}`}>
                 <div className="flex items-center gap-1.5 min-w-0">
-                  <span className={`font-bold text-xs uppercase tracking-wider truncate ${styles.text}`}>
+                  <span className={`font-black text-xs uppercase tracking-wider truncate ${styles.text}`}>
                     {col.title}
                   </span>
                 </div>
-                <Badge className={`${styles.badge} text-[10px] font-mono px-2 py-0`}>
+                <Badge className={`${styles.badge} text-[10px] font-mono px-2 py-0.2 rounded-full font-bold shadow-xs`}>
                   {colItems.length}
                 </Badge>
               </div>
 
               {col.description && (
-                <p className="text-[10px] text-slate-500 dark:text-slate-400 px-1 leading-tight">
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 px-1 leading-tight font-medium">
                   {col.description}
                 </p>
               )}
 
               {/* Cards List */}
-              <div className="space-y-2 min-h-[120px]">
+              <div className="space-y-2.5 min-h-[140px]">
                 {colItems.map(cart => (
                   <KanbanCard 
                     key={cart.id} 
@@ -447,11 +432,11 @@ export default function TechnicianWorkbenchPage() {
       {/* Modal: Customize Kanban Columns */}
       {showCustomizeModal && (
         <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 w-full max-w-2xl p-5 sm:p-6 shadow-2xl space-y-4 max-h-[92vh] flex flex-col overflow-hidden">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 w-full max-w-2xl p-6 shadow-2xl space-y-4 max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 shrink-0">
               <div>
                 <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                  <Sliders className="w-4 h-4 text-amber-600" />
+                  <Sliders className="w-4 h-4 text-amber-500" />
                   <span>Personalizar Colunas & Etapas do Kanban</span>
                 </h3>
                 <p className="text-xs text-slate-500">
@@ -467,7 +452,7 @@ export default function TechnicianWorkbenchPage() {
               {editedColumns.map((col, idx) => (
                 <div 
                   key={col.id || idx}
-                  className="p-3.5 bg-slate-50 dark:bg-slate-850 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3"
+                  className="p-4 bg-slate-50 dark:bg-slate-850 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3"
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex-1">
@@ -480,7 +465,7 @@ export default function TechnicianWorkbenchPage() {
                           const val = e.target.value;
                           setEditedColumns(prev => prev.map((c, i) => i === idx ? { ...c, title: val } : c));
                         }}
-                        className="text-xs font-bold"
+                        className="text-xs font-bold h-9 rounded-xl"
                       />
                     </div>
 
@@ -494,7 +479,7 @@ export default function TechnicianWorkbenchPage() {
                           const val = e.target.value as KanbanColumnColor;
                           setEditedColumns(prev => prev.map((c, i) => i === idx ? { ...c, color: val } : c));
                         }}
-                        className="text-xs font-semibold"
+                        className="text-xs font-semibold h-9 rounded-xl"
                       >
                         <option value="amber">Âmbar / Amarelo</option>
                         <option value="purple">Roxo / Púrpura</option>
@@ -511,7 +496,7 @@ export default function TechnicianWorkbenchPage() {
                       <button
                         type="button"
                         onClick={() => setEditedColumns(prev => prev.filter((_, i) => i !== idx))}
-                        className="text-rose-600 hover:text-rose-700 p-1.5 mt-5"
+                        className="text-rose-500 hover:text-rose-700 p-1.5 mt-5"
                         title="Remover coluna"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -519,10 +504,9 @@ export default function TechnicianWorkbenchPage() {
                     )}
                   </div>
 
-                  {/* Statuses assigned to this column */}
                   <div>
                     <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 block">
-                      Status que pertencem a esta coluna:
+                      Status vinculados a esta coluna:
                     </label>
                     <div className="flex flex-wrap gap-1.5">
                       {ALL_STATUSES.map(st => {
@@ -540,9 +524,9 @@ export default function TechnicianWorkbenchPage() {
                                 return { ...c, statuses: newStatuses };
                               }));
                             }}
-                            className={`px-2 py-1 rounded text-[10px] font-semibold border transition-all ${
+                            className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold border transition-all ${
                               isChecked
-                                ? 'bg-slate-900 text-white dark:bg-emerald-600 border-transparent shadow-sm'
+                                ? 'bg-slate-900 text-white dark:bg-emerald-600 border-transparent shadow-xs'
                                 : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-400'
                             }`}
                           >
@@ -567,10 +551,10 @@ export default function TechnicianWorkbenchPage() {
                       { id: newId, title: `Nova Etapa ${prev.length + 1}`, color: 'teal', statuses: ['EM_TESTE'] }
                     ]);
                   }}
-                  className="gap-1.5 text-xs font-semibold"
+                  className="gap-1.5 text-xs font-semibold rounded-xl"
                 >
                   <PlusCircle className="w-3.5 h-3.5" />
-                  <span>Adicionar Mais 1 Coluna</span>
+                  <span>+ Adicionar Coluna</span>
                 </Button>
 
                 <Button
@@ -581,17 +565,17 @@ export default function TechnicianWorkbenchPage() {
                   className="gap-1.5 text-xs text-slate-500 hover:text-slate-800"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Restaurar Padrão do Segmento</span>
+                  <span>Restaurar Padrão</span>
                 </Button>
               </div>
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800 shrink-0">
-              <Button type="button" variant="outline" size="sm" onClick={() => setShowCustomizeModal(false)}>
+              <Button type="button" variant="outline" size="sm" onClick={() => setShowCustomizeModal(false)} className="rounded-xl">
                 Cancelar
               </Button>
-              <Button type="button" size="sm" onClick={handleSaveCustomization} className="bg-amber-600 hover:bg-amber-700 font-bold text-white">
-                Salvar Configuração do Kanban
+              <Button type="button" size="sm" onClick={handleSaveCustomization} className="bg-amber-600 hover:bg-amber-700 font-bold text-white rounded-xl">
+                Salvar Configuração
               </Button>
             </div>
           </div>
@@ -599,16 +583,14 @@ export default function TechnicianWorkbenchPage() {
       )}
 
       {/* Technician Action Modal / Drawer */}
-
-      {/* Technician Action Modal / Drawer */}
       {selectedCartridge && (
         <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 w-full max-w-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-white dark:bg-[#0e1626] rounded-3xl border border-slate-200 dark:border-slate-800 w-full max-w-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             {/* Modal Header */}
             <div className="bg-slate-900 text-white p-5 flex items-center justify-between border-b border-slate-800">
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="font-mono text-emerald-400 font-bold text-lg">{selectedCartridge.serial_number}</span>
+                  <span className="font-mono text-emerald-400 font-black text-lg">{selectedCartridge.serial_number}</span>
                   <Badge className="bg-amber-500 text-slate-950 font-mono font-bold">
                     Série: {selectedCartridge.final_serie}
                   </Badge>
@@ -633,98 +615,43 @@ export default function TechnicianWorkbenchPage() {
             <form onSubmit={handleSaveTechUpdate} className="p-6 space-y-4">
               {/* Reference Weight Info from Catalog */}
               {selectedCartridge.model && (
-                <div className="p-3 bg-slate-50 dark:bg-slate-850 rounded-xl text-xs flex items-center justify-between border border-slate-200 dark:border-slate-800">
+                <div className="p-3 bg-slate-50 dark:bg-slate-900 rounded-2xl text-xs flex items-center justify-between border border-slate-200 dark:border-slate-800">
                   <div>
-                    <span className="text-slate-500">Capacidade Tinta:</span>{' '}
+                    <span className="text-slate-500">Capacidade:</span>{' '}
                     <strong className="text-slate-800 dark:text-slate-200">{selectedCartridge.model.capacity_ml ? `${selectedCartridge.model.capacity_ml} ml` : 'N/I'}</strong>
                   </div>
                   <div>
-                    <span className="text-slate-500">Peso Vazio Ideal:</span>{' '}
+                    <span className="text-slate-500">Peso Vazio:</span>{' '}
                     <strong className="text-slate-800 dark:text-slate-200">{selectedCartridge.model.empty_weight_grams ? `${selectedCartridge.model.empty_weight_grams} g` : 'N/I'}</strong>
                   </div>
                   <div>
-                    <span className="text-slate-500">Peso Cheio Ideal:</span>{' '}
+                    <span className="text-slate-500">Peso Cheio:</span>{' '}
                     <strong className="text-emerald-600 dark:text-emerald-400">{selectedCartridge.model.full_weight_grams ? `${selectedCartridge.model.full_weight_grams} g` : 'N/I'}</strong>
                   </div>
                 </div>
               )}
 
-              {/* Reception notes & Accessories */}
-              {(selectedCartridge.reception_notes || selectedCartridge.accessories) && (
-                <div className="p-3 bg-amber-50 dark:bg-amber-950/20 rounded-xl text-xs border border-amber-200 dark:border-amber-800/40 text-slate-700 dark:text-slate-300 space-y-1">
-                  {selectedCartridge.reception_notes && (
-                    <p><strong>Obs. Balcão:</strong> {selectedCartridge.reception_notes}</p>
-                  )}
-                  {selectedCartridge.accessories && (
-                    <p><strong>Acessórios / Cabos Deixados:</strong> <span className="font-semibold text-amber-900 dark:text-amber-200">{selectedCartridge.accessories}</span></p>
-                  )}
-                </div>
-              )}
-
-              {/* Dynamic Checklist for Technical Inspection (Device / Tool / General Workshops) */}
-              {segmentConfig.hasChecklist && checklistState.length > 0 && (
-                <div className="p-4 bg-slate-50 dark:bg-slate-850 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                      <CheckCircle className="w-4 h-4 text-emerald-600" />
-                      <span>Checklist de Inspeção & Testes na Bancada</span>
-                    </h4>
-                    <span className="text-[11px] text-slate-500 font-semibold">
-                      {checklistState.filter(c => c.checked).length} de {checklistState.length} verificados
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {checklistState.map((chk, idx) => (
-                      <label
-                        key={idx}
-                        className={`flex items-center gap-2 p-2 rounded-lg border text-xs cursor-pointer transition-all ${
-                          chk.checked
-                            ? 'bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 font-semibold'
-                            : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={chk.checked}
-                          disabled={!canEditTech}
-                          onChange={() => handleToggleTechChecklist(idx)}
-                          className="w-4 h-4 rounded text-emerald-600 border-slate-300"
-                        />
-                        <span className="truncate">{chk.item}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Weight Section (Input & Output Weight + Auto Calculated Diff for Cartridge Refills) */}
+              {/* Weight Section */}
               {segmentConfig.hasWeightInspection && (
-                <div className="p-4 bg-emerald-50/60 dark:bg-emerald-950/20 rounded-xl border border-emerald-200 dark:border-emerald-800/60 space-y-3">
+                <div className="p-4 bg-emerald-50/60 dark:bg-emerald-950/20 rounded-2xl border border-emerald-200 dark:border-emerald-800/60 space-y-3">
                   <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
                     <Scale className="w-4 h-4" />
-                    <span>Pesagem na Bancada (Gramagem Injetada)</span>
+                    <span>Pesagem na Bancada & Delta Injetado</span>
                   </h4>
 
                   <div className="grid grid-cols-3 gap-3">
                     <div>
                       <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
                         <span>Peso Entrada (g)</span>
-                        {settings.input_weight_responsibility === 'TECNICO' && (
-                          <span className="text-[9px] text-amber-700 font-bold bg-amber-100 dark:bg-amber-950 px-1 rounded">Bancada</span>
-                        )}
-                        {settings.input_weight_responsibility === 'ATENDENTE' && (
-                          <span className="text-[9px] text-emerald-700 font-bold bg-emerald-100 dark:bg-emerald-950 px-1 rounded">Balcão</span>
-                        )}
                       </label>
                       <Input
                         type="number"
                         step="0.1"
                         placeholder="Ex: 27.5"
                         value={inputWeight}
-                        disabled={!canEditTech || (settings.input_weight_responsibility === 'ATENDENTE' && currentUser.role !== 'ADMINISTRADOR' && Boolean(selectedCartridge.input_weight_grams))}
+                        disabled={!canEditTech}
                         onChange={(e) => setInputWeight(e.target.value)}
-                        className={`text-xs ${settings.input_weight_responsibility === 'TECNICO' ? 'border-amber-400 font-bold' : ''}`}
+                        className="text-xs font-bold h-9 rounded-xl"
                       />
                     </div>
 
@@ -739,13 +666,13 @@ export default function TechnicianWorkbenchPage() {
                         value={outputWeight}
                         disabled={!canEditTech}
                         onChange={(e) => setOutputWeight(e.target.value)}
-                        className="text-xs font-bold"
+                        className="text-xs font-bold h-9 rounded-xl"
                       />
                     </div>
 
-                    <div className="bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 flex flex-col justify-center text-center">
+                    <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col justify-center text-center shadow-xs">
                       <span className="text-[10px] text-slate-400 font-semibold uppercase">Tinta Injetada</span>
-                      <span className={`text-base font-extrabold ${liveDiff && Number(liveDiff) > 0 ? 'text-emerald-600' : 'text-slate-700'}`}>
+                      <span className={`text-base font-black ${liveDiff && Number(liveDiff) > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-700'}`}>
                         {liveDiff ? `+ ${liveDiff} g` : '-'}
                       </span>
                     </div>
@@ -763,7 +690,7 @@ export default function TechnicianWorkbenchPage() {
                     value={resultClass}
                     disabled={!canEditTech}
                     onChange={(e) => setResultClass(e.target.value as ResultClassification)}
-                    className="text-xs font-semibold"
+                    className="text-xs font-semibold h-9 rounded-xl"
                   >
                     <option value="PENDENTE">⏳ Análise Pendente</option>
                     <option value="OK">✅ 100% OK (Aprovado / Reparado)</option>
@@ -784,7 +711,7 @@ export default function TechnicianWorkbenchPage() {
                     value={targetStatus}
                     disabled={!canEditTech}
                     onChange={(e) => setTargetStatus(e.target.value as CartridgeStatus)}
-                    className="text-xs font-semibold"
+                    className="text-xs font-semibold h-9 rounded-xl"
                   >
                     <option value="EM_VERIFICACAO">EM_VERIFICACAO (Diagnóstico / Triagem)</option>
                     <option value="EM_RECARGA">EM_RECARGA (Em Manutenção / Reparo)</option>
@@ -796,9 +723,9 @@ export default function TechnicianWorkbenchPage() {
                 </div>
               </div>
 
-              {/* Quick Diagnostic Shortcut Buttons for Technicians */}
+              {/* Quick Diagnostic Shortcut Buttons */}
               {canEditTech && (
-                <div className="p-3 bg-slate-50 dark:bg-slate-850 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2">
+                <div className="p-3.5 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2">
                   <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider block">
                     Atalhos Rápidos de Diagnóstico da Bancada:
                   </span>
@@ -807,7 +734,7 @@ export default function TechnicianWorkbenchPage() {
                       type="button"
                       size="sm"
                       onClick={handleQuickApprove}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5 h-8"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5 h-8 rounded-xl shadow-xs"
                     >
                       <CheckCircle className="w-3.5 h-3.5" />
                       <span>Aprovar 100% OK & Finalizar</span>
@@ -822,7 +749,7 @@ export default function TechnicianWorkbenchPage() {
                         setTargetStatus('SEM_REPARO');
                         setTechNotes('Inviabilidade técnica de conserto constatada na bancada.');
                       }}
-                      className="border-rose-400 text-rose-700 dark:text-rose-300 hover:bg-rose-50 text-xs h-8 font-semibold"
+                      className="border-rose-300 text-rose-700 dark:text-rose-300 hover:bg-rose-50 text-xs h-8 font-semibold rounded-xl"
                     >
                       Marcar SEM REPARO
                     </Button>
@@ -836,7 +763,7 @@ export default function TechnicianWorkbenchPage() {
                         setTargetStatus('COM_PROBLEMA');
                         setTechNotes('Aguardando chegada de componente / autorização do cliente.');
                       }}
-                      className="border-amber-400 text-amber-800 dark:text-amber-300 hover:bg-amber-50 text-xs h-8 font-semibold"
+                      className="border-amber-300 text-amber-800 dark:text-amber-300 hover:bg-amber-50 text-xs h-8 font-semibold rounded-xl"
                     >
                       Aguardando Peça
                     </Button>
@@ -850,8 +777,8 @@ export default function TechnicianWorkbenchPage() {
                   Laudo Técnico & Procedimento Realizado
                 </label>
                 <textarea
-                  className="w-full h-18 p-2.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg outline-none focus:ring-1 focus:ring-amber-500"
-                  placeholder="Descreva o procedimento realizado na bancada (ex: desobstrução por sucção, recarga com 3ml de corante, teste 100% uniforme)..."
+                  className="w-full h-18 p-2.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:border-amber-500 font-medium"
+                  placeholder="Descreva o procedimento realizado na bancada..."
                   value={techNotes}
                   disabled={!canEditTech}
                   onChange={(e) => setTechNotes(e.target.value)}
@@ -860,11 +787,11 @@ export default function TechnicianWorkbenchPage() {
 
               {/* Action Buttons */}
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
-                <Button type="button" variant="outline" size="sm" onClick={() => setSelectedCartridge(null)}>
+                <Button type="button" variant="outline" size="sm" onClick={() => setSelectedCartridge(null)} className="rounded-xl">
                   Fechar
                 </Button>
                 {canEditTech && (
-                  <Button type="submit" size="sm" className="bg-amber-600 hover:bg-amber-700 text-white font-bold">
+                  <Button type="submit" size="sm" className="bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl shadow-xs">
                     Salvar Alterações Técnicas
                   </Button>
                 )}
@@ -900,41 +827,41 @@ function KanbanCard({
   const resultBadge = getResultBadgeConfig(cart.result_classification);
 
   return (
-    <Card 
+    <div 
       onClick={onClick}
       draggable={canEdit}
       onDragStart={(e) => {
         e.dataTransfer.setData('text/plain', cart.id);
       }}
-      className={`p-3 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-amber-400 dark:hover:border-amber-500 transition-all cursor-pointer shadow-sm hover:shadow group ${
-        canEdit ? 'active:cursor-grabbing hover:translate-y-[-1px]' : ''
+      className={`p-3.5 bg-white dark:bg-[#111927] border border-slate-200/80 dark:border-slate-800 rounded-2xl hover:border-amber-400/80 dark:hover:border-amber-500/80 transition-all cursor-pointer shadow-xs hover:shadow-md group ${
+        canEdit ? 'active:cursor-grabbing hover:-translate-y-0.5' : ''
       }`}
     >
-      <div className="flex items-center justify-between mb-1.5">
-        <span className="font-mono text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-amber-600 transition-colors">
+      <div className="flex items-center justify-between mb-2">
+        <span className="font-mono text-xs font-black text-slate-900 dark:text-slate-100 group-hover:text-amber-500 transition-colors">
           {cart.serial_number}
         </span>
-        <span className="font-mono text-xs bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 px-1.5 py-0.5 rounded font-bold border border-amber-300">
+        <span className="font-mono text-xs bg-amber-100/80 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 px-2 py-0.5 rounded-lg font-black border border-amber-300/80 dark:border-amber-800">
           {cart.final_serie || 'S/N'}
         </span>
       </div>
 
       {/* Customer Name */}
-      <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-700 dark:text-slate-300 mb-1.5 bg-slate-50 dark:bg-slate-800/80 px-2 py-1 rounded-md border border-slate-200/80 dark:border-slate-700/80">
-        <User className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
-        <span className="truncate font-semibold">{cart.customer_name || 'Cliente'}</span>
+      <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-2 bg-slate-50 dark:bg-slate-800/80 px-2.5 py-1.5 rounded-xl border border-slate-200/60 dark:border-slate-700/60">
+        <User className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+        <span className="truncate">{cart.customer_name || 'Cliente'}</span>
       </div>
 
-      <div className="text-xs font-semibold text-slate-900 dark:text-slate-100 mb-1">
+      <div className="text-xs font-bold text-slate-900 dark:text-slate-100 mb-1">
         {cart.model?.model_name || segmentConfig.itemLabelSingular} {cart.color ? `(${cart.color})` : ''} {cart.is_xl ? '[XL]' : ''}
       </div>
 
       <div className="text-[11px] text-slate-500 flex items-center justify-between mb-1.5">
-        <span className="truncate max-w-[130px]">{cart.service_requested.replace(/_/g, ' ')}</span>
+        <span className="truncate max-w-[130px] font-medium">{cart.service_requested.replace(/_/g, ' ')}</span>
         {segmentConfig.hasWeightInspection && cart.input_weight_grams ? (
-          <span>Peso: {formatWeight(cart.input_weight_grams)}</span>
+          <span className="font-mono text-slate-600 dark:text-slate-400 font-semibold">{formatWeight(cart.input_weight_grams)}</span>
         ) : (
-          <span className={`text-[10px] px-1.5 py-0.2 rounded font-medium ${statusBadge.className}`}>
+          <span className={`text-[10px] px-1.5 py-0.2 rounded-md font-semibold ${statusBadge.className}`}>
             {statusBadge.label}
           </span>
         )}
@@ -943,20 +870,20 @@ function KanbanCard({
       {/* Result badge or weight diff */}
       {cart.result_classification !== 'PENDENTE' && (
         <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-          <span className={`text-[10px] px-2 py-0.5 rounded ${resultBadge.className}`}>
+          <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold ${resultBadge.className}`}>
             {resultBadge.label}
           </span>
           {cart.weight_diff_grams ? (
-            <span className="text-[11px] font-bold text-emerald-600">
+            <span className="text-[11px] font-black text-emerald-600 dark:text-emerald-400 font-mono">
               +{cart.weight_diff_grams}g
             </span>
           ) : null}
         </div>
       )}
 
-      {/* Quick 1-Click Move Toolbar (Visible on hover or mobile) */}
+      {/* Quick 1-Click Move Toolbar */}
       {canEdit && (
-        <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-1.5 opacity-90 group-hover:opacity-100">
+        <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-1.5">
           <button
             type="button"
             disabled={isFirstCol}
@@ -965,7 +892,7 @@ function KanbanCard({
               onQuickMoveBack();
             }}
             title="Voltar para etapa anterior"
-            className={`p-1 rounded text-xs flex items-center gap-1 transition-colors ${
+            className={`p-1 px-2 rounded-lg text-xs flex items-center gap-1 transition-colors ${
               isFirstCol
                 ? 'opacity-20 cursor-not-allowed text-slate-400'
                 : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold'
@@ -985,10 +912,10 @@ function KanbanCard({
               onQuickMoveForward();
             }}
             title="Avançar para próxima etapa"
-            className={`p-1 rounded text-xs flex items-center gap-1 transition-colors ${
+            className={`p-1 px-2 rounded-lg text-xs flex items-center gap-1 transition-colors ${
               isLastCol
                 ? 'opacity-20 cursor-not-allowed text-slate-400'
-                : 'hover:bg-amber-100 dark:hover:bg-amber-950 text-amber-700 dark:text-amber-400 font-bold'
+                : 'bg-amber-100/80 dark:bg-amber-950/80 hover:bg-amber-200 dark:hover:bg-amber-900 text-amber-800 dark:text-amber-300 font-black'
             }`}
           >
             <span className="text-[10px]">Avançar</span>
@@ -996,15 +923,14 @@ function KanbanCard({
           </button>
         </div>
       )}
-    </Card>
+    </div>
   );
 }
 
 function EmptyColumn() {
   return (
-    <div className="p-6 text-center text-slate-400 text-xs border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
+    <div className="p-6 text-center text-slate-400 text-xs border-2 border-dashed border-slate-200 dark:border-slate-800/80 rounded-2xl font-medium">
       Nenhum item nesta etapa.
     </div>
   );
 }
-
