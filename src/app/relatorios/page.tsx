@@ -135,6 +135,7 @@ export default function ReportsPage() {
           e.entry_number.toLowerCase().includes(term) ||
           (e.customer?.name && e.customer.name.toLowerCase().includes(term)) ||
           (e.customer?.phone && e.customer.phone.includes(term)) ||
+          (e.customer?.secondary_phone && e.customer.secondary_phone.includes(term)) ||
           (e.delivery_info?.receiver_name && e.delivery_info.receiver_name.toLowerCase().includes(term));
         if (!matches) return false;
       }

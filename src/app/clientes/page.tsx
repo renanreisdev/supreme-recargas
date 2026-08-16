@@ -23,7 +23,9 @@ export default function CustomersPage() {
   // Form State
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  const [whatsapp, setWhatsapp] = useState('');
+  const [phoneIsWhatsapp, setPhoneIsWhatsapp] = useState(true);
+  const [secondaryPhone, setSecondaryPhone] = useState('');
+  const [secondaryPhoneIsWhatsapp, setSecondaryPhoneIsWhatsapp] = useState(false);
   const [document, setDocument] = useState('');
   const [email, setEmail] = useState('');
   const [companyName, setCompanyName] = useState('');
@@ -50,6 +52,7 @@ export default function CustomersPage() {
   const filteredCustomers = customers.filter(c => 
     c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     c.phone.includes(searchTerm) ||
+    (c.secondary_phone && c.secondary_phone.includes(searchTerm)) ||
     (c.whatsapp && c.whatsapp.includes(searchTerm)) ||
     (c.document && c.document.includes(searchTerm)) ||
     (c.company_name && c.company_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -60,7 +63,9 @@ export default function CustomersPage() {
     setEditingCustomerId(null);
     setName('');
     setPhone('');
-    setWhatsapp('');
+    setPhoneIsWhatsapp(true);
+    setSecondaryPhone('');
+    setSecondaryPhoneIsWhatsapp(false);
     setDocument('');
     setEmail('');
     setCompanyName('');
@@ -76,7 +81,9 @@ export default function CustomersPage() {
     setEditingCustomerId(customer.id);
     setName(customer.name || '');
     setPhone(customer.phone || '');
-    setWhatsapp(customer.whatsapp || '');
+    setPhoneIsWhatsapp(customer.phone_is_whatsapp ?? (customer.whatsapp ? customer.whatsapp.replace(/\D/g, '') === (customer.phone || '').replace(/\D/g, '') : true));
+    setSecondaryPhone(customer.secondary_phone || '');
+    setSecondaryPhoneIsWhatsapp(customer.secondary_phone_is_whatsapp ?? (customer.whatsapp && customer.secondary_phone ? customer.whatsapp.replace(/\D/g, '') === customer.secondary_phone.replace(/\D/g, '') : false));
     setDocument(customer.document || '');
     setEmail(customer.email || '');
     setCompanyName(customer.company_name || '');
@@ -87,7 +94,7 @@ export default function CustomersPage() {
   const handleSaveCustomer = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !phone.trim()) {
-      alert('Por favor, informe ao menos o Nome e o Telefone do cliente.');
+      alert('Por favor, informe ao menos o Nome e o Telefone Principal do cliente.');
       return;
     }
 
@@ -95,6 +102,12 @@ export default function CustomersPage() {
       alert('Pela política da empresa, o campo CPF ou CNPJ é obrigatório para cadastrar ou editar clientes.');
       return;
     }
+
+    const primaryClean = phone.trim();
+    const secondaryClean = secondaryPhone.trim();
+    const effectiveWhatsapp = phoneIsWhatsapp 
+      ? primaryClean 
+      : (secondaryPhoneIsWhatsapp ? secondaryClean : '');
 
     try {
       if (editingCustomerId) {
@@ -105,8 +118,11 @@ export default function CustomersPage() {
 
         AppStore.updateCustomer(editingCustomerId, {
           name: name.trim(),
-          phone: phone.trim(),
-          whatsapp: (whatsapp || phone).trim(),
+          phone: primaryClean,
+          phone_is_whatsapp: phoneIsWhatsapp,
+          secondary_phone: secondaryClean,
+          secondary_phone_is_whatsapp: secondaryPhoneIsWhatsapp,
+          whatsapp: effectiveWhatsapp,
           document: document.trim(),
           email: email.trim(),
           company_name: companyName.trim(),
@@ -123,8 +139,11 @@ export default function CustomersPage() {
         AppStore.addCustomer({
           tenant_id: currentCompany.id,
           name: name.trim(),
-          phone: phone.trim(),
-          whatsapp: (whatsapp || phone).trim(),
+          phone: primaryClean,
+          phone_is_whatsapp: phoneIsWhatsapp,
+          secondary_phone: secondaryClean,
+          secondary_phone_is_whatsapp: secondaryPhoneIsWhatsapp,
+          whatsapp: effectiveWhatsapp,
           document: document.trim(),
           email: email.trim(),
           company_name: companyName.trim(),
@@ -138,7 +157,9 @@ export default function CustomersPage() {
       setShowModal(false);
       setName('');
       setPhone('');
-      setWhatsapp('');
+      setPhoneIsWhatsapp(true);
+      setSecondaryPhone('');
+      setSecondaryPhoneIsWhatsapp(false);
       setDocument('');
       setEmail('');
       setCompanyName('');
@@ -210,7 +231,7 @@ export default function CustomersPage() {
                   <th className="p-3 rounded-l-lg">Código</th>
                   <th className="p-3">Nome / Razão</th>
                   <th className="p-3">CPF / CNPJ</th>
-                  <th className="p-3">Telefone / WhatsApp</th>
+                  <th className="p-3">Telefones & Contato</th>
                   <th className="p-3">E-mail</th>
                   <th className="p-3">Data Cadastro</th>
                   <th className="p-3">Observações</th>
@@ -228,10 +249,36 @@ export default function CustomersPage() {
                       {cust.company_name && <div className="text-[11px] text-slate-500">{cust.company_name}</div>}
                     </td>
                     <td className="p-3 text-slate-600 dark:text-slate-400 font-mono">{cust.document || '-'}</td>
-                    <td className="p-3 font-semibold text-slate-800 dark:text-slate-200">
-                      <div>{cust.phone}</div>
-                      {cust.whatsapp && cust.whatsapp !== cust.phone && (
-                        <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-normal">Zap: {cust.whatsapp}</div>
+                    <td className="p-3">
+                      <div className="flex items-center gap-1.5 font-semibold text-slate-800 dark:text-slate-200">
+                        <span>{cust.phone}</span>
+                        {cust.phone_is_whatsapp && (
+                          <a
+                            href={`https://wa.me/55${cust.phone.replace(/\D/g, '')}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 rounded text-[9px] font-bold transition-colors border border-emerald-300 dark:border-emerald-800"
+                            title="Conversar no WhatsApp (Principal)"
+                          >
+                            <Phone className="w-2.5 h-2.5" /> WhatsApp
+                          </a>
+                        )}
+                      </div>
+                      {cust.secondary_phone && (
+                        <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                          <span>{cust.secondary_phone}</span>
+                          {cust.secondary_phone_is_whatsapp && (
+                            <a
+                              href={`https://wa.me/55${cust.secondary_phone.replace(/\D/g, '')}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 rounded text-[9px] font-bold transition-colors border border-emerald-300 dark:border-emerald-800"
+                              title="Conversar no WhatsApp (Secundário)"
+                            >
+                              <Phone className="w-2.5 h-2.5" /> WhatsApp
+                            </a>
+                          )}
+                        </div>
                       )}
                     </td>
                     <td className="p-3 text-slate-500">{cust.email || '-'}</td>
@@ -290,24 +337,61 @@ export default function CustomersPage() {
 
             <form onSubmit={handleSaveCustomer} className="space-y-3 flex-1 overflow-y-auto pr-1">
               <div>
-                <label className="text-xs font-semibold mb-1 block">Nome Completo / Razão Social *</label>
+                <label className="text-xs font-semibold mb-1 block text-slate-700 dark:text-slate-300">Nome Completo / Razão Social *</label>
                 <Input required value={name} onChange={e => setName(e.target.value)} placeholder="Nome do cliente" />
               </div>
 
+              {/* Telefone Principal & Telefone Secundário com Checkboxes de WhatsApp em cima de cada um */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-semibold mb-1 block">Telefone Principal *</label>
-                  <Input required value={phone} onChange={e => setPhone(e.target.value)} placeholder="(11) 99999-9999" />
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      Telefone Principal *
+                    </label>
+                    <label className="flex items-center gap-1.5 cursor-pointer text-[11px] font-bold text-emerald-600 dark:text-emerald-400 select-none hover:text-emerald-700">
+                      <input
+                        type="checkbox"
+                        checked={phoneIsWhatsapp}
+                        onChange={(e) => setPhoneIsWhatsapp(e.target.checked)}
+                        className="w-3.5 h-3.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 accent-emerald-600 cursor-pointer"
+                      />
+                      <span>É WhatsApp</span>
+                    </label>
+                  </div>
+                  <Input 
+                    required 
+                    value={phone} 
+                    onChange={e => setPhone(e.target.value)} 
+                    placeholder="(11) 99999-9999" 
+                  />
                 </div>
+
                 <div>
-                  <label className="text-xs font-semibold mb-1 block">WhatsApp</label>
-                  <Input value={whatsapp} onChange={e => setWhatsapp(e.target.value)} placeholder="(11) 99999-9999" />
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      Telefone Secundário
+                    </label>
+                    <label className="flex items-center gap-1.5 cursor-pointer text-[11px] font-bold text-emerald-600 dark:text-emerald-400 select-none hover:text-emerald-700">
+                      <input
+                        type="checkbox"
+                        checked={secondaryPhoneIsWhatsapp}
+                        onChange={(e) => setSecondaryPhoneIsWhatsapp(e.target.checked)}
+                        className="w-3.5 h-3.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 accent-emerald-600 cursor-pointer"
+                      />
+                      <span>É WhatsApp</span>
+                    </label>
+                  </div>
+                  <Input 
+                    value={secondaryPhone} 
+                    onChange={e => setSecondaryPhone(e.target.value)} 
+                    placeholder="(11) 98888-8888 (Opcional)" 
+                  />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-semibold mb-1 block">
+                  <label className="text-xs font-semibold mb-1 block text-slate-700 dark:text-slate-300">
                     CPF ou CNPJ {isDocRequired ? <span className="text-rose-600 font-bold">* (Obrigatório)</span> : <span className="text-slate-400 font-normal">(Opcional)</span>}
                   </label>
                   <Input 
@@ -318,20 +402,20 @@ export default function CustomersPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold mb-1 block">Empresa / Nome Fantasia</label>
+                  <label className="text-xs font-semibold mb-1 block text-slate-700 dark:text-slate-300">Empresa / Nome Fantasia</label>
                   <Input value={companyName} onChange={e => setCompanyName(e.target.value)} placeholder="Ex: Marmoraria Silva" />
                 </div>
               </div>
 
               <div>
-                <label className="text-xs font-semibold mb-1 block">E-mail</label>
+                <label className="text-xs font-semibold mb-1 block text-slate-700 dark:text-slate-300">E-mail</label>
                 <Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="cliente@email.com" />
               </div>
 
               <div>
-                <label className="text-xs font-semibold mb-1 block">Observações Gerais</label>
+                <label className="text-xs font-semibold mb-1 block text-slate-700 dark:text-slate-300">Observações Gerais</label>
                 <textarea
-                  className="w-full h-20 p-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg outline-none focus:ring-1 focus:ring-emerald-500"
+                  className="w-full h-20 p-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg outline-none focus:ring-1 focus:ring-emerald-500 text-slate-900 dark:text-slate-100"
                   value={notes}
                   onChange={e => setNotes(e.target.value)}
                   placeholder="Informações adicionais, endereço ou restrições do cliente..."

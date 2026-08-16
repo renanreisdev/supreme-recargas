@@ -159,6 +159,9 @@ export interface Customer {
   name: string;
   document?: string;
   phone: string;
+  phone_is_whatsapp?: boolean;
+  secondary_phone?: string;
+  secondary_phone_is_whatsapp?: boolean;
   whatsapp?: string;
   email?: string;
   company_name?: string;

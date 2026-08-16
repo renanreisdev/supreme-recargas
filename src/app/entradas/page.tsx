@@ -306,6 +306,7 @@ function EntriesListContent() {
       e.entry_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (e.customer?.name && e.customer.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (e.customer?.phone && e.customer.phone.includes(searchTerm)) ||
+      (e.customer?.secondary_phone && e.customer.secondary_phone.includes(searchTerm)) ||
       (e.cartridges && e.cartridges.some(c => c.serial_number.includes(searchTerm) || c.final_serie.toLowerCase().includes(searchTerm.toLowerCase())));
 
     if (!matchesSearch) return false;

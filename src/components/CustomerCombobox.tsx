@@ -79,7 +79,7 @@ export function CustomerCombobox({
     const queryParts = query.split(/\s+/);
 
     return customers.filter(c => {
-      const targetStr = `${c.name} ${c.phone || ''} ${c.document || ''} ${c.company_name || ''} ${c.email || ''} #${c.internal_code || ''}`.toLowerCase();
+      const targetStr = `${c.name} ${c.phone || ''} ${c.secondary_phone || ''} ${c.document || ''} ${c.company_name || ''} ${c.email || ''} #${c.internal_code || ''}`.toLowerCase();
       return queryParts.every(part => targetStr.includes(part));
     });
   }, [customers, searchQuery, isOpen, selectedCustomer]);
@@ -296,11 +296,16 @@ export function CustomerCombobox({
                           )}
                         </div>
 
-                        <div className="flex items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                        <div className="flex items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 flex-wrap">
                           {c.phone && (
                             <span className="flex items-center gap-1">
                               <Phone className="w-3 h-3 text-emerald-600 shrink-0" />
                               <span>{c.phone}</span>
+                            </span>
+                          )}
+                          {c.secondary_phone && (
+                            <span className="flex items-center gap-1 text-slate-400">
+                              <span>Tel 2: {c.secondary_phone}</span>
                             </span>
                           )}
                           {c.document && (

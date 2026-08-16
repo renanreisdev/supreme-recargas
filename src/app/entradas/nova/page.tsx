@@ -67,6 +67,9 @@ export default function NewEntryPage() {
   const [showQuickCustomerModal, setShowQuickCustomerModal] = useState(false);
   const [newCustName, setNewCustName] = useState('');
   const [newCustPhone, setNewCustPhone] = useState('');
+  const [newCustPhoneIsWhatsapp, setNewCustPhoneIsWhatsapp] = useState(true);
+  const [newCustSecondaryPhone, setNewCustSecondaryPhone] = useState('');
+  const [newCustSecondaryPhoneIsWhatsapp, setNewCustSecondaryPhoneIsWhatsapp] = useState(false);
   const [newCustDoc, setNewCustDoc] = useState('');
 
   // Cartridge Items State
@@ -233,11 +236,21 @@ export default function NewEntryPage() {
       return;
     }
 
+    const primaryClean = newCustPhone.trim();
+    const secondaryClean = newCustSecondaryPhone.trim();
+    const effectiveWhatsapp = newCustPhoneIsWhatsapp 
+      ? primaryClean 
+      : (newCustSecondaryPhoneIsWhatsapp ? secondaryClean : '');
+
     const created = AppStore.addCustomer({
       tenant_id: currentCompany.id,
-      name: newCustName,
-      phone: newCustPhone,
-      document: newCustDoc,
+      name: newCustName.trim(),
+      phone: primaryClean,
+      phone_is_whatsapp: newCustPhoneIsWhatsapp,
+      secondary_phone: secondaryClean,
+      secondary_phone_is_whatsapp: newCustSecondaryPhoneIsWhatsapp,
+      whatsapp: effectiveWhatsapp,
+      document: newCustDoc.trim(),
       notes: 'Cadastrado no balcão de entrada'
     }, currentUser?.full_name || 'Atendente');
 
@@ -247,6 +260,9 @@ export default function NewEntryPage() {
     setShowQuickCustomerModal(false);
     setNewCustName('');
     setNewCustPhone('');
+    setNewCustPhoneIsWhatsapp(true);
+    setNewCustSecondaryPhone('');
+    setNewCustSecondaryPhoneIsWhatsapp(false);
     setNewCustDoc('');
   };
 
@@ -461,6 +477,9 @@ export default function NewEntryPage() {
                   </div>
                   <div className="flex items-center gap-3 text-[11px] text-slate-600 dark:text-slate-300 mt-0.5 flex-wrap">
                     <span>Tel: <strong className="text-emerald-700 dark:text-emerald-400">{selectedCustomer.phone}</strong></span>
+                    {selectedCustomer.secondary_phone && (
+                      <span>Tel 2: <strong>{selectedCustomer.secondary_phone}</strong></span>
+                    )}
                     {selectedCustomer.document && <span>Doc: <strong>{selectedCustomer.document}</strong></span>}
                     {selectedCustomer.company_name && <span>Empresa: <strong>{selectedCustomer.company_name}</strong></span>}
                   </div>
@@ -815,15 +834,54 @@ export default function NewEntryPage() {
                 />
               </div>
 
-              <div>
-                <label className="text-xs font-semibold mb-1 block">Telefone / WhatsApp *</label>
-                <Input
-                  required
-                  placeholder="(11) 99999-9999"
-                  value={newCustPhone}
-                  onChange={(e) => setNewCustPhone(e.target.value)}
-                  className="text-xs"
-                />
+              {/* Telefone Principal & Telefone Secundário com Checkboxes de WhatsApp */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      Telefone Principal *
+                    </label>
+                    <label className="flex items-center gap-1 cursor-pointer text-[10px] font-bold text-emerald-600 dark:text-emerald-400 select-none hover:text-emerald-700">
+                      <input
+                        type="checkbox"
+                        checked={newCustPhoneIsWhatsapp}
+                        onChange={(e) => setNewCustPhoneIsWhatsapp(e.target.checked)}
+                        className="w-3.5 h-3.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 accent-emerald-600 cursor-pointer"
+                      />
+                      <span>É WhatsApp</span>
+                    </label>
+                  </div>
+                  <Input
+                    required
+                    placeholder="(11) 99999-9999"
+                    value={newCustPhone}
+                    onChange={(e) => setNewCustPhone(e.target.value)}
+                    className="text-xs"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      Telefone Secundário
+                    </label>
+                    <label className="flex items-center gap-1 cursor-pointer text-[10px] font-bold text-emerald-600 dark:text-emerald-400 select-none hover:text-emerald-700">
+                      <input
+                        type="checkbox"
+                        checked={newCustSecondaryPhoneIsWhatsapp}
+                        onChange={(e) => setNewCustSecondaryPhoneIsWhatsapp(e.target.checked)}
+                        className="w-3.5 h-3.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 accent-emerald-600 cursor-pointer"
+                      />
+                      <span>É WhatsApp</span>
+                    </label>
+                  </div>
+                  <Input
+                    placeholder="(11) 98888-8888 (Opcional)"
+                    value={newCustSecondaryPhone}
+                    onChange={(e) => setNewCustSecondaryPhone(e.target.value)}
+                    className="text-xs"
+                  />
+                </div>
               </div>
 
               <div>
