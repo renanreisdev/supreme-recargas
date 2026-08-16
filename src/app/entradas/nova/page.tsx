@@ -551,7 +551,20 @@ export default function NovaEntradaPage() {
                         models={categoryModels.length > 0 ? categoryModels : models}
                         selectedModelId={item.model_id}
                         onSelect={modelId => {
-                          setItems(prev => prev.map(it => it.id === item.id ? { ...it, model_id: modelId } : it));
+                          const chosenModel = models.find(m => m.id === modelId);
+                          setItems(prev => prev.map(it => {
+                            if (it.id !== item.id) return it;
+                            const updatedServices = it.services.map(srv => ({
+                              ...srv,
+                              unit_price: AppStore.getServicePriceForModel(srv.service_id, modelId)
+                            }));
+                            return {
+                              ...it,
+                              model_id: modelId,
+                              services: updatedServices,
+                              input_weight_grams: it.input_weight_grams !== undefined ? it.input_weight_grams : chosenModel?.empty_weight_grams
+                            };
+                          }));
                         }}
                         placeholder="Selecione ou busque o modelo..."
                         required

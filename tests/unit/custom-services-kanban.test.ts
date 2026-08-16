@@ -73,4 +73,67 @@ describe('Custom Services, Kanban & Financial Report Suite', () => {
       expect(totalReceived).toBeGreaterThanOrEqual(100.00);
     });
   });
+
+  describe('4. Category & Brand Customization CRUD', () => {
+    it('creates, edits, and deletes user categories and brands', () => {
+      // Category
+      const cat = AppStore.addCategory({
+        tenant_id: tenantId,
+        name: 'Motores Industriais Trifásicos',
+        slug: 'motores-trifasicos',
+        identifier_label: 'Nº de Chassi / Placa',
+        inspection_type: 'CHECKLIST',
+        is_active: true
+      });
+      expect(cat.id).toBeDefined();
+      expect(AppStore.getCategories(tenantId).some(c => c.id === cat.id)).toBe(true);
+
+      const updatedCat = AppStore.updateCategory(cat.id, { name: 'Motores Trifásicos & Bombas' });
+      expect(updatedCat.name).toBe('Motores Trifásicos & Bombas');
+
+      AppStore.deleteCategory(cat.id);
+      expect(AppStore.getCategories(tenantId).some(c => c.id === cat.id)).toBe(false);
+
+      // Brand
+      const brand = AppStore.addBrand({
+        tenant_id: tenantId,
+        name: 'Makita Power Tools',
+        slug: 'makita',
+        is_active: true
+      });
+      expect(brand.id).toBeDefined();
+      expect(AppStore.getBrands(tenantId).some(b => b.id === brand.id)).toBe(true);
+
+      AppStore.deleteBrand(brand.id);
+      expect(AppStore.getBrands(tenantId).some(b => b.id === brand.id)).toBe(false);
+    });
+  });
+
+  describe('5. Model Optionals & Service Price Overrides', () => {
+    it('allows defining custom prices per model for specific services', () => {
+      const srv = AppStore.getServices(tenantId)[0];
+      const standardPrice = srv.default_price;
+
+      const modelWithOverride = AppStore.addModel({
+        tenant_id: tenantId,
+        category_id: 'cat-test',
+        name: 'Cartucho Especial Plotter HP 711',
+        is_xl: true,
+        empty_weight_grams: 45.0,
+        full_weight_grams: 85.0,
+        service_prices: {
+          [srv.id]: 75.00
+        },
+        is_active: true
+      });
+
+      // Price for standard model
+      const normalResolved = AppStore.getServicePriceForModel(srv.id);
+      expect(normalResolved).toBe(standardPrice);
+
+      // Price for model with custom override
+      const customResolved = AppStore.getServicePriceForModel(srv.id, modelWithOverride.id);
+      expect(customResolved).toBe(75.00);
+    });
+  });
 });

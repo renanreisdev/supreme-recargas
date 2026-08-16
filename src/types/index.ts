@@ -193,7 +193,8 @@ export interface ItemCategory {
   slug: string;
   description?: string;
   icon?: string;
-  identifier_label?: string; // e.g. "Final de Série", "IMEI / Serial", "Nº de Série"
+  identifier_label?: string; // e.g. "Final de Série", "IMEI / Serial", "Nº de Série", "Placa / Chassi", "Patrimônio"
+  inspection_type?: 'SCALE' | 'CHECKLIST' | 'STANDARD';
   is_system?: boolean;
   is_active: boolean;
   created_at?: string;
@@ -218,7 +219,7 @@ export interface ItemAttributeDefinition {
   name: string;
   key: string;
   data_type: AttributeDataType;
-  unit?: string; // e.g., "g", "ml", "GB", "V"
+  unit?: string; // e.g., "g", "ml", "GB", "V", "W"
   options?: string[];
   is_required: boolean;
   is_filterable?: boolean;
@@ -234,8 +235,23 @@ export interface ItemModel {
   brand_name?: string;
   name: string;
   internal_code?: string;
+  barcode?: string;
   description?: string;
   technical_notes?: string;
+  
+  // Specific technical attributes & optionals
+  color?: string; // e.g. "Preto", "Tricolor", "Ciano", "Magenta", "Amarelo", "Cinza Espacial"
+  is_xl?: boolean; // XL / Alta Capacidade
+  capacity_ml?: number; // ml ou páginas
+  empty_weight_grams?: number; // Peso vazio / Tara padrão (g)
+  full_weight_grams?: number; // Peso cheio de referência (g)
+  voltage?: string; // "110V", "220V", "Bivolt", "Bateria"
+  power_specs?: string; // Ex: "750W", "12V 2Ah", "3.5 HP"
+  hardware_specs?: string; // Ex: "Core i7, 16GB, SSD 512GB"
+  recommended_accessories?: string; // Ex: "Carregador 65W original"
+  service_prices?: Record<string, number>; // Preços específicos por serviço: { [serviceId]: customPrice }
+  custom_checklist?: string[];
+
   attributes?: Record<string, any>;
   is_active: boolean;
   created_at?: string;

@@ -1369,10 +1369,96 @@ export class AppStore {
     return cats.filter(c => !c.tenant_id || !tenantId || c.tenant_id === tenantId);
   }
 
+  static addCategory(category: Omit<ItemCategory, 'id' | 'created_at' | 'updated_at'>, performedByName?: string): ItemCategory {
+    const data = this.getStoreData();
+    const newCategory: ItemCategory = {
+      ...category,
+      id: generateUUID(),
+      slug: category.slug || category.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
+      is_active: category.is_active !== false,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    if (!Array.isArray(data.categories)) data.categories = [...INITIAL_CATEGORIES];
+    data.categories.push(newCategory);
+    this.saveStoreData(data);
+    return newCategory;
+  }
+
+  static updateCategory(id: string, updates: Partial<ItemCategory>, performedByName?: string): ItemCategory {
+    const data = this.getStoreData();
+    if (!Array.isArray(data.categories)) data.categories = [...INITIAL_CATEGORIES];
+    const idx = data.categories.findIndex((c: ItemCategory) => c.id === id);
+    if (idx === -1) throw new Error('Categoria não encontrada');
+    const updated = { ...data.categories[idx], ...updates, updated_at: new Date().toISOString() };
+    data.categories[idx] = updated;
+    this.saveStoreData(data);
+    return updated;
+  }
+
+  static deleteCategory(id: string, performedByName?: string): boolean {
+    const data = this.getStoreData();
+    if (!Array.isArray(data.categories)) data.categories = [...INITIAL_CATEGORIES];
+    data.categories = data.categories.filter((c: ItemCategory) => c.id !== id);
+    this.saveStoreData(data);
+    return true;
+  }
+
   static getBrands(tenantId?: string): Brand[] {
     const data = this.getStoreData();
     const brands: Brand[] = data.brands || INITIAL_BRANDS;
     return brands.filter(b => !b.tenant_id || !tenantId || b.tenant_id === tenantId);
+  }
+
+  static addBrand(brand: Omit<Brand, 'id' | 'created_at' | 'updated_at'>, performedByName?: string): Brand {
+    const data = this.getStoreData();
+    const newBrand: Brand = {
+      ...brand,
+      id: generateUUID(),
+      slug: brand.slug || brand.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
+      is_active: brand.is_active !== false,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    if (!Array.isArray(data.brands)) data.brands = [...INITIAL_BRANDS];
+    data.brands.push(newBrand);
+    this.saveStoreData(data);
+    return newBrand;
+  }
+
+  static updateBrand(id: string, updates: Partial<Brand>, performedByName?: string): Brand {
+    const data = this.getStoreData();
+    if (!Array.isArray(data.brands)) data.brands = [...INITIAL_BRANDS];
+    const idx = data.brands.findIndex((b: Brand) => b.id === id);
+    if (idx === -1) throw new Error('Marca não encontrada');
+    const updated = { ...data.brands[idx], ...updates, updated_at: new Date().toISOString() };
+    data.brands[idx] = updated;
+    this.saveStoreData(data);
+    return updated;
+  }
+
+  static deleteBrand(id: string, performedByName?: string): boolean {
+    const data = this.getStoreData();
+    if (!Array.isArray(data.brands)) data.brands = [...INITIAL_BRANDS];
+    data.brands = data.brands.filter((b: Brand) => b.id !== id);
+    this.saveStoreData(data);
+    return true;
+  }
+
+  static getServicePriceForModel(serviceId: string, modelId?: string): number {
+    const data = this.getStoreData();
+    const services = data.services || INITIAL_SERVICES;
+    const srv = services.find((s: Service) => s.id === serviceId);
+    if (!srv) return 0;
+    
+    if (modelId) {
+      const models = data.models || INITIAL_MODELS;
+      const model = models.find((m: ItemModel) => m.id === modelId);
+      if (model?.service_prices && model.service_prices[serviceId] !== undefined) {
+        return Number(model.service_prices[serviceId]);
+      }
+    }
+    return Number(srv.default_price || 0);
   }
 
   static getModels(tenantId: string): ItemModel[] {
