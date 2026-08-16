@@ -1329,32 +1329,143 @@ export class AppStore {
 
       const data = this.getStoreData();
 
+      // Intelligently merge Customers (never wipe locally created ones)
       if (custRes.data && custRes.data.length > 0) {
-        data.customers = custRes.data;
+        const custMap = new Map<string, Customer>();
+        (data.customers || []).forEach((c: Customer) => custMap.set(c.id, c));
+        custRes.data.forEach((c: Customer) => {
+          custMap.set(c.id, { ...custMap.get(c.id), ...c });
+        });
+        data.customers = Array.from(custMap.values());
       }
+
+      // Intelligently merge Models
       if (modRes.data && modRes.data.length > 0) {
-        data.models = modRes.data;
+        const modMap = new Map<string, CartridgeModel>();
+        (data.models || []).forEach((m: CartridgeModel) => modMap.set(m.id, m));
+        modRes.data.forEach((m: CartridgeModel) => {
+          modMap.set(m.id, { ...modMap.get(m.id), ...m });
+        });
+        data.models = Array.from(modMap.values());
       }
+
+      // Intelligently merge Service Prices
       if (priceRes.data && priceRes.data.length > 0) {
-        data.servicePrices = priceRes.data;
+        const priceMap = new Map<string, ServicePrice>();
+        (data.servicePrices || []).forEach((s: ServicePrice) => priceMap.set(s.id, s));
+        priceRes.data.forEach((s: ServicePrice) => {
+          priceMap.set(s.id, { ...priceMap.get(s.id), ...s });
+        });
+        data.servicePrices = Array.from(priceMap.values());
       }
+
       if (setRes.data) {
-        data.settings = setRes.data;
+        data.settings = { ...data.settings, ...setRes.data };
       }
+
+      // Intelligently merge Entries (never wipe locally created ones)
+      const entMap = new Map<string, CartridgeEntry>();
+      (data.entries || []).forEach((e: CartridgeEntry) => entMap.set(e.id, e));
       if (entRes.data && entRes.data.length > 0) {
-        data.entries = entRes.data;
+        entRes.data.forEach((e: CartridgeEntry) => {
+          entMap.set(e.id, { ...entMap.get(e.id), ...e });
+        });
       }
+      data.entries = Array.from(entMap.values()).sort((a, b) => (b.entry_sequence || 0) - (a.entry_sequence || 0));
+
+      // Intelligently merge Cartridges (never wipe locally created ones)
+      const cartMap = new Map<string, Cartridge>();
+      (data.cartridges || []).forEach((c: Cartridge) => cartMap.set(c.id, c));
       if (cartRes.data && cartRes.data.length > 0) {
-        data.cartridges = cartRes.data;
+        cartRes.data.forEach((c: Cartridge) => {
+          cartMap.set(c.id, { ...cartMap.get(c.id), ...c });
+        });
       }
+      data.cartridges = Array.from(cartMap.values());
+
+      // Intelligently merge Profiles
       if (profRes.data && profRes.data.length > 0) {
-        data.profiles = profRes.data;
+        const profMap = new Map<string, Profile>();
+        (data.profiles || []).forEach((p: Profile) => profMap.set(p.id, p));
+        profRes.data.forEach((p: Profile) => {
+          profMap.set(p.id, { ...profMap.get(p.id), ...p });
+        });
+        data.profiles = Array.from(profMap.values());
       }
+
+      // Intelligently merge Audit Logs
       if (auditRes.data && auditRes.data.length > 0) {
-        data.auditLogs = auditRes.data;
+        const logMap = new Map<string, AuditLog>();
+        (data.auditLogs || []).forEach((l: AuditLog) => logMap.set(l.id, l));
+        auditRes.data.forEach((l: AuditLog) => {
+          logMap.set(l.id, { ...logMap.get(l.id), ...l });
+        });
+        data.auditLogs = Array.from(logMap.values()).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 500);
       }
 
       this.saveStoreData(data);
+
+      // Background push any locally created entries that don't yet exist in Supabase
+      const cloudEntryIds = new Set((entRes.data || []).map((e: any) => e.id));
+      const unsyncedEntries = (data.entries || []).filter((e: CartridgeEntry) => e.tenant_id === tenantId && !cloudEntryIds.has(e.id));
+      if (unsyncedEntries.length > 0) {
+        unsyncedEntries.forEach((entry: CartridgeEntry) => {
+          const entryPayload = {
+            id: entry.id,
+            tenant_id: entry.tenant_id,
+            entry_number: entry.entry_number,
+            entry_sequence: entry.entry_sequence,
+            entry_year: entry.entry_year,
+            customer_id: entry.customer_id,
+            attendant_id: entry.attendant_id,
+            entry_date: entry.entry_date,
+            subtotal_amount: entry.subtotal_amount,
+            discount_amount: entry.discount_amount || 0,
+            surcharge_amount: entry.surcharge_amount || 0,
+            total_amount: entry.total_amount,
+            payment_status: entry.payment_status || 'PENDENTE',
+            payment_method: entry.payment_method || 'DINHEIRO',
+            payments: entry.payments || null,
+            general_notes: entry.general_notes || null,
+            tracking_token: entry.tracking_token,
+            created_at: entry.created_at,
+            updated_at: entry.updated_at || entry.created_at
+          };
+
+          supabase.from('cartridge_entries').upsert(entryPayload).then(() => {
+            const entryCartridges = (data.cartridges || []).filter((c: Cartridge) => c.entry_id === entry.id).map((c: Cartridge) => ({
+              id: c.id,
+              tenant_id: c.tenant_id,
+              entry_id: c.entry_id,
+              serial_number: c.serial_number,
+              item_index: c.item_index,
+              model_id: c.model_id,
+              service_requested: c.service_requested,
+              color: c.color,
+              is_xl: c.is_xl ?? false,
+              final_serie: c.final_serie || 'S/N',
+              status: c.status || 'AGUARDANDO_VERIFICACAO',
+              result_classification: c.result_classification || 'PENDENTE',
+              input_weight_grams: c.input_weight_grams || null,
+              reception_notes: c.reception_notes || null,
+              original_price: c.original_price || 0,
+              applied_price: c.applied_price || 0,
+              discount_amount: c.discount_amount || 0,
+              surcharge_amount: c.surcharge_amount || 0,
+              final_price: c.final_price || 0,
+              entry_number: c.entry_number,
+              customer_name: c.customer_name || 'Cliente',
+              created_at: c.created_at || new Date().toISOString(),
+              updated_at: c.updated_at || new Date().toISOString()
+            }));
+
+            if (entryCartridges.length > 0) {
+              supabase.from('cartridges').upsert(entryCartridges).then();
+            }
+          });
+        });
+      }
+
       return true;
     } catch (err) {
       console.warn('Supabase sync error, using local cache:', err);
@@ -2542,7 +2653,12 @@ export class AppStore {
     this.saveStoreData(data);
 
     // Push to Supabase
-    supabase.from('customers').insert(newCustomer).then();
+    supabase.from('customers').upsert({
+      ...newCustomer,
+      updated_at: newCustomer.created_at
+    }).then(({ error }) => {
+      if (error) console.warn('Erro ao salvar cliente no Supabase:', error);
+    });
 
     this.logAudit({
       tenant_id: customer.tenant_id,
@@ -3109,12 +3225,16 @@ export class AppStore {
       attendant_id: newEntry.attendant_id,
       entry_date: newEntry.entry_date,
       subtotal_amount: newEntry.subtotal_amount,
-      discount_amount: newEntry.discount_amount,
+      discount_amount: newEntry.discount_amount || 0,
       surcharge_amount: newEntry.surcharge_amount || 0,
       total_amount: newEntry.total_amount,
+      payment_status: newEntry.payment_status || 'PENDENTE',
+      payment_method: newEntry.payment_method || 'DINHEIRO',
+      payments: newEntry.payments || null,
       general_notes: newEntry.general_notes || null,
       tracking_token: newEntry.tracking_token,
-      created_at: newEntry.created_at
+      created_at: newEntry.created_at,
+      updated_at: newEntry.created_at
     };
 
     const supabaseCartridges = newCartridges.map(c => ({
@@ -3126,26 +3246,28 @@ export class AppStore {
       model_id: c.model_id,
       service_requested: c.service_requested,
       color: c.color,
-      is_xl: c.is_xl,
-      final_serie: c.final_serie,
-      status: c.status,
-      result_classification: c.result_classification,
+      is_xl: c.is_xl ?? false,
+      final_serie: c.final_serie || 'S/N',
+      status: c.status || 'AGUARDANDO_VERIFICACAO',
+      result_classification: c.result_classification || 'PENDENTE',
       input_weight_grams: c.input_weight_grams || null,
       reception_notes: c.reception_notes || null,
-      original_price: c.original_price,
-      applied_price: c.applied_price,
+      original_price: c.original_price || 0,
+      applied_price: c.applied_price || 0,
       discount_amount: c.discount_amount || 0,
       surcharge_amount: c.surcharge_amount || 0,
-      final_price: c.final_price,
+      final_price: c.final_price || 0,
+      entry_number: c.entry_number,
+      customer_name: c.customer_name || 'Cliente',
       created_at: c.created_at,
       updated_at: c.updated_at
     }));
 
-    supabase.from('cartridge_entries').insert(supabaseEntry).then(({ error: entryErr }) => {
+    supabase.from('cartridge_entries').upsert(supabaseEntry).then(({ error: entryErr }) => {
       if (entryErr) {
         console.warn('Erro ao sincronizar cartridge_entries com Supabase:', entryErr);
       } else {
-        supabase.from('cartridges').insert(supabaseCartridges).then(({ error: cartErr }) => {
+        supabase.from('cartridges').upsert(supabaseCartridges).then(({ error: cartErr }) => {
           if (cartErr) console.warn('Erro ao sincronizar cartridges com Supabase:', cartErr);
         });
       }
