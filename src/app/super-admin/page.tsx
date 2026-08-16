@@ -676,16 +676,16 @@ Incluso: Emissão com QR Code, Bancada Técnica, Rastreio e Impressão Térmica.
 
           <Card className="p-4 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Volume de Recargas</span>
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Planos & Assinaturas SaaS</span>
               <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-                <TrendingUp className="w-4 h-4" />
+                <Layers className="w-4 h-4" />
               </div>
             </div>
             <div className="flex items-baseline gap-2 mt-2">
-              <span className="text-3xl font-extrabold text-slate-900 dark:text-slate-100">{overview.totalCartridges}</span>
-              <span className="text-xs font-semibold text-slate-500">cartuchos</span>
+              <span className="text-3xl font-extrabold text-slate-900 dark:text-slate-100">{overview.plansCount}</span>
+              <span className="text-xs font-semibold text-slate-500">planos ativos</span>
             </div>
-            <p className="text-[11px] text-slate-400 mt-1">{overview.totalEntries} comandas processadas no total</p>
+            <p className="text-[11px] text-slate-400 mt-1">{overview.subscriptionsCount} contratos vinculados a empresas</p>
           </Card>
         </div>
       )}

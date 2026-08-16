@@ -23,7 +23,10 @@ import {
   Layers,
   ArrowLeft,
   Copy,
-  Check
+  Check,
+  Ban,
+  UserCheck,
+  User
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { AppStore, DemoSandboxConfig } from '@/lib/store';
@@ -36,7 +39,7 @@ export default function DemoPage() {
   const router = useRouter();
   const { login, isAuthenticated, isLoading } = useAuth();
   const [sandbox, setSandbox] = useState<DemoSandboxConfig | null>(null);
-  const [loggingInRole, setLoggingInRole] = useState<string | null>(null);
+  const [loggingInEmail, setLoggingInEmail] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
@@ -46,19 +49,26 @@ export default function DemoPage() {
     setSandbox(cfg);
   }, []);
 
-  const handleQuickLogin = (email: string, pass: string, roleName: string) => {
+  const handleQuickLogin = (email: string, pass: string) => {
     setErrorMsg('');
-    setLoggingInRole(roleName);
+    setLoggingInEmail(email);
 
     setTimeout(() => {
+      // Try primary password, fallback to demo123/123456 handled seamlessly by AppStore.authenticate
       const res = login(email, pass);
       if (res.success) {
         router.push('/dashboard');
       } else {
-        setErrorMsg(res.error || 'Falha ao autenticar na conta de demonstração.');
-        setLoggingInRole(null);
+        // Fallback attempt with standard seed pass if needed
+        const fallbackRes = login(email, '123456');
+        if (fallbackRes.success) {
+          router.push('/dashboard');
+        } else {
+          setErrorMsg(res.error || 'Falha ao autenticar na conta de demonstração.');
+          setLoggingInEmail(null);
+        }
       }
-    }, 300);
+    }, 250);
   };
 
   const handleCopy = (text: string, key: string) => {
@@ -87,7 +97,7 @@ export default function DemoPage() {
           </Link>
           <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-xs px-3 py-1 flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Ambiente Demo Interativo</span>
+            <span>Ambiente Demo Sandbox</span>
           </Badge>
         </div>
 
@@ -97,11 +107,10 @@ export default function DemoPage() {
             <Zap className="w-9 h-9 fill-white" />
           </div>
           <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
-            Experimente o <span className="text-emerald-400">Supreme Recargas</span>
+            Ambiente de Demonstração Interativo
           </h1>
           <p className="text-sm text-slate-400 leading-relaxed">
-            Acesse uma oficina completa em funcionamento. Teste a emissão de comandas térmicas com QR Code, 
-            o Kanban técnico da bancada, pesagem e relatórios gerenciais com <strong>1 clique</strong>.
+            Escolha qualquer um dos <strong>6 usuários fixos abaixo</strong> para entrar instantaneamente com 1 clique e testar a oficina na prática:
           </p>
         </div>
 
@@ -111,7 +120,7 @@ export default function DemoPage() {
           </div>
         )}
 
-        {/* 3 Main Role Login Cards */}
+        {/* 3 Main Role Categories with 1-Click Buttons */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           {/* 1. ADMINISTRATOR CARD */}
           <Card className="bg-slate-900/90 border-slate-800 hover:border-purple-500/50 transition-all shadow-xl flex flex-col justify-between group">
@@ -121,77 +130,63 @@ export default function DemoPage() {
                   <Crown className="w-5 h-5" />
                 </div>
                 <Badge className="bg-purple-500/15 text-purple-300 border-purple-500/30 text-[10px]">
-                  Acesso Total
+                  1 Conta Fixa
                 </Badge>
               </div>
               <div>
                 <CardTitle className="text-base font-bold text-white group-hover:text-purple-300 transition-colors">
-                  Administrador
+                  Administrador (Dono)
                 </CardTitle>
                 <CardDescription className="text-xs text-slate-400">
-                  Carlos Oliveira (Dono da Oficina)
+                  Visão total do negócio e faturamento
                 </CardDescription>
               </div>
             </CardHeader>
 
             <CardContent className="space-y-4 pt-0">
-              <div className="space-y-2 text-xs text-slate-300 border-t border-slate-800/80 pt-3">
-                <p className="font-semibold text-slate-400 text-[11px] uppercase tracking-wider">Recursos Liberados:</p>
+              <div className="space-y-2 text-xs border-t border-slate-800/80 pt-3">
+                <p className="font-semibold text-slate-400 text-[11px] uppercase tracking-wider">Permissões:</p>
                 <ul className="space-y-1.5 text-[11px] text-slate-300">
                   <li className="flex items-center gap-2">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                     <span>Relatórios e Faturamento</span>
                   </li>
                   <li className="flex items-center gap-2">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-                    <span>Tabela de Preços & Catálogo</span>
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <span>Tabela de Preços & Modelos</span>
                   </li>
                   <li className="flex items-center gap-2">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-                    <span>Auditoria Geral e Usuários</span>
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <span>Auditoria & Gestão de Equipe</span>
                   </li>
                 </ul>
               </div>
 
-              {/* Account Details & Password */}
-              <div className="p-2.5 bg-slate-950/80 border border-slate-800 rounded-lg space-y-1.5 text-xs font-mono">
-                <div className="flex items-center justify-between text-slate-400">
-                  <span className="text-[10px]">E-mail:</span>
-                  <span className="text-white text-[11px]">admin@supreme.com.br</span>
-                </div>
-                <div className="flex items-center justify-between text-slate-400">
-                  <span className="text-[10px]">Senha Semanal:</span>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-purple-300 font-bold text-[11px]">{adminPass}</span>
-                    <button 
-                      onClick={() => handleCopy(adminPass, 'admin')} 
-                      className="text-slate-500 hover:text-white transition-colors"
-                      title="Copiar Senha"
-                    >
-                      {copiedKey === 'admin' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                    </button>
-                  </div>
-                </div>
+              {/* Password Box */}
+              <div className="p-2 bg-slate-950/80 border border-slate-800 rounded-lg flex items-center justify-between text-xs font-mono">
+                <span className="text-[10px] text-slate-500">Senha:</span>
+                <span className="text-purple-300 font-bold text-[11px]">{adminPass}</span>
               </div>
 
+              {/* 1-Click Button */}
               <Button
-                onClick={() => handleQuickLogin('admin@supreme.com.br', adminPass, 'ADMIN')}
-                disabled={!!loggingInRole}
+                onClick={() => handleQuickLogin('admin@supreme.com.br', adminPass)}
+                disabled={!!loggingInEmail}
                 className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold h-10 gap-2 shadow-lg shadow-purple-950/50 text-xs transition-all"
               >
-                {loggingInRole === 'ADMIN' ? (
-                  <span>Acessando como Admin...</span>
+                {loggingInEmail === 'admin@supreme.com.br' ? (
+                  <span>Acessando Oficina...</span>
                 ) : (
                   <>
-                    <span>Entrar como Administrador</span>
-                    <ArrowRight className="w-4 h-4" />
+                    <UserCheck className="w-4 h-4" />
+                    <span>Entrar como Carlos Oliveira</span>
                   </>
                 )}
               </Button>
             </CardContent>
           </Card>
 
-          {/* 2. ATTENDANT CARD */}
+          {/* 2. ATTENDANTS CARD (3 FIXOS) */}
           <Card className="bg-slate-900/90 border-slate-800 hover:border-teal-500/50 transition-all shadow-xl flex flex-col justify-between group">
             <CardHeader className="space-y-3 pb-4">
               <div className="flex items-center justify-between">
@@ -199,77 +194,81 @@ export default function DemoPage() {
                   <Inbox className="w-5 h-5" />
                 </div>
                 <Badge className="bg-teal-500/15 text-teal-300 border-teal-500/30 text-[10px]">
-                  Recepção & Balcão
+                  3 Contas Fixas
                 </Badge>
               </div>
               <div>
                 <CardTitle className="text-base font-bold text-white group-hover:text-teal-300 transition-colors">
-                  Atendente de Balcão
+                  Atendentes de Balcão
                 </CardTitle>
                 <CardDescription className="text-xs text-slate-400">
-                  Mariana Santos (3 Contas Fixas)
+                  Recepção de clientes e comandas
                 </CardDescription>
               </div>
             </CardHeader>
 
             <CardContent className="space-y-4 pt-0">
-              <div className="space-y-2 text-xs text-slate-300 border-t border-slate-800/80 pt-3">
-                <p className="font-semibold text-slate-400 text-[11px] uppercase tracking-wider">Recursos Liberados:</p>
-                <ul className="space-y-1.5 text-[11px] text-slate-300">
-                  <li className="flex items-center gap-2">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+              <div className="space-y-2 text-xs border-t border-slate-800/80 pt-3">
+                <p className="font-semibold text-slate-400 text-[11px] uppercase tracking-wider">Permissões & Travas:</p>
+                <ul className="space-y-1 text-[11px]">
+                  <li className="flex items-center gap-1.5 text-slate-300">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                     <span>Nova Entrada de Cartuchos</span>
                   </li>
-                  <li className="flex items-center gap-2">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-teal-400 shrink-0" />
-                    <span>Impressão Térmica com QR Code</span>
+                  <li className="flex items-center gap-1.5 text-slate-300">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <span>Comanda Térmica com QR Code</span>
                   </li>
-                  <li className="flex items-center gap-2">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                  <li className="flex items-center gap-1.5 text-slate-300">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                     <span>Baixa Financeira & Entrega</span>
+                  </li>
+                  <li className="flex items-center gap-1.5 text-rose-400 font-medium">
+                    <Ban className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                    <span>Sem acesso ao Kanban da Oficina</span>
                   </li>
                 </ul>
               </div>
 
-              {/* Account Details & Password */}
-              <div className="p-2.5 bg-slate-950/80 border border-slate-800 rounded-lg space-y-1.5 text-xs font-mono">
-                <div className="flex items-center justify-between text-slate-400">
-                  <span className="text-[10px]">E-mail:</span>
-                  <span className="text-white text-[11px]">mariana.atendente@...</span>
-                </div>
-                <div className="flex items-center justify-between text-slate-400">
-                  <span className="text-[10px]">Senha Semanal:</span>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-teal-300 font-bold text-[11px]">{attendantPass}</span>
-                    <button 
-                      onClick={() => handleCopy(attendantPass, 'attendant')} 
-                      className="text-slate-500 hover:text-white transition-colors"
-                      title="Copiar Senha"
-                    >
-                      {copiedKey === 'attendant' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                    </button>
-                  </div>
-                </div>
+              {/* Password Box */}
+              <div className="p-2 bg-slate-950/80 border border-slate-800 rounded-lg flex items-center justify-between text-xs font-mono">
+                <span className="text-[10px] text-slate-500">Senha:</span>
+                <span className="text-teal-300 font-bold text-[11px]">{attendantPass}</span>
               </div>
 
-              <Button
-                onClick={() => handleQuickLogin('mariana.atendente@supreme.com.br', attendantPass, 'ATTENDANT')}
-                disabled={!!loggingInRole}
-                className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold h-10 gap-2 shadow-lg shadow-teal-950/50 text-xs transition-all"
-              >
-                {loggingInRole === 'ATTENDANT' ? (
-                  <span>Acessando como Atendente...</span>
-                ) : (
-                  <>
-                    <span>Entrar como Atendente</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
-              </Button>
+              {/* 3 Individual 1-Click Buttons */}
+              <div className="space-y-1.5">
+                <Button
+                  onClick={() => handleQuickLogin('mariana.atendente@supreme.com.br', attendantPass)}
+                  disabled={!!loggingInEmail}
+                  className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold h-8 gap-1.5 text-[11px] shadow-sm transition-all"
+                >
+                  <User className="w-3.5 h-3.5" />
+                  <span>1. Mariana Santos (Atendente)</span>
+                </Button>
+
+                <Button
+                  onClick={() => handleQuickLogin('lucas.atendente@supreme.com.br', attendantPass)}
+                  disabled={!!loggingInEmail}
+                  className="w-full bg-teal-700/80 hover:bg-teal-700 text-white font-bold h-8 gap-1.5 text-[11px] shadow-sm transition-all"
+                >
+                  <User className="w-3.5 h-3.5" />
+                  <span>2. Lucas Lima (Atendente)</span>
+                </Button>
+
+                <Button
+                  onClick={() => handleQuickLogin('beatriz.atendente@supreme.com.br', attendantPass)}
+                  disabled={!!loggingInEmail}
+                  className="w-full bg-teal-800/80 hover:bg-teal-700 text-white font-bold h-8 gap-1.5 text-[11px] shadow-sm transition-all"
+                >
+                  <User className="w-3.5 h-3.5" />
+                  <span>3. Beatriz Costa (Atendente)</span>
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
-          {/* 3. TECHNICIAN CARD */}
+          {/* 3. TECHNICIANS CARD (2 FIXOS) */}
           <Card className="bg-slate-900/90 border-slate-800 hover:border-amber-500/50 transition-all shadow-xl flex flex-col justify-between group">
             <CardHeader className="space-y-3 pb-4">
               <div className="flex items-center justify-between">
@@ -277,73 +276,68 @@ export default function DemoPage() {
                   <Wrench className="w-5 h-5" />
                 </div>
                 <Badge className="bg-amber-500/15 text-amber-300 border-amber-500/30 text-[10px]">
-                  Oficina & Bancada
+                  2 Contas Fixas
                 </Badge>
               </div>
               <div>
                 <CardTitle className="text-base font-bold text-white group-hover:text-amber-300 transition-colors">
-                  Técnico de Recarga
+                  Técnicos de Oficina
                 </CardTitle>
                 <CardDescription className="text-xs text-slate-400">
-                  Rafael Souza (2 Contas Fixas)
+                  Bancada, testes e pesagem
                 </CardDescription>
               </div>
             </CardHeader>
 
             <CardContent className="space-y-4 pt-0">
-              <div className="space-y-2 text-xs text-slate-300 border-t border-slate-800/80 pt-3">
-                <p className="font-semibold text-slate-400 text-[11px] uppercase tracking-wider">Recursos Liberados:</p>
-                <ul className="space-y-1.5 text-[11px] text-slate-300">
-                  <li className="flex items-center gap-2">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                    <span>Quadro Kanban de Bancada</span>
+              <div className="space-y-2 text-xs border-t border-slate-800/80 pt-3">
+                <p className="font-semibold text-slate-400 text-[11px] uppercase tracking-wider">Permissões & Travas:</p>
+                <ul className="space-y-1 text-[11px]">
+                  <li className="flex items-center gap-1.5 text-slate-300">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <span>Quadro Kanban da Bancada</span>
                   </li>
-                  <li className="flex items-center gap-2">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                    <span>Controle de Peso Injetado (g)</span>
+                  <li className="flex items-center gap-1.5 text-slate-300">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <span>Pesagem Injetada & Diagnóstico</span>
                   </li>
-                  <li className="flex items-center gap-2">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                    <span>Diagnóstico de Queimado/OK</span>
+                  <li className="flex items-center gap-1.5 text-slate-300">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <span>Testes Elétricos & Aprovação</span>
+                  </li>
+                  <li className="flex items-center gap-1.5 text-rose-400 font-medium">
+                    <Ban className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                    <span>Sem emissão de entradas de balcão</span>
                   </li>
                 </ul>
               </div>
 
-              {/* Account Details & Password */}
-              <div className="p-2.5 bg-slate-950/80 border border-slate-800 rounded-lg space-y-1.5 text-xs font-mono">
-                <div className="flex items-center justify-between text-slate-400">
-                  <span className="text-[10px]">E-mail:</span>
-                  <span className="text-white text-[11px]">rafael.tecnico@...</span>
-                </div>
-                <div className="flex items-center justify-between text-slate-400">
-                  <span className="text-[10px]">Senha Semanal:</span>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-amber-300 font-bold text-[11px]">{techPass}</span>
-                    <button 
-                      onClick={() => handleCopy(techPass, 'tech')} 
-                      className="text-slate-500 hover:text-white transition-colors"
-                      title="Copiar Senha"
-                    >
-                      {copiedKey === 'tech' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                    </button>
-                  </div>
-                </div>
+              {/* Password Box */}
+              <div className="p-2 bg-slate-950/80 border border-slate-800 rounded-lg flex items-center justify-between text-xs font-mono">
+                <span className="text-[10px] text-slate-500">Senha:</span>
+                <span className="text-amber-300 font-bold text-[11px]">{techPass}</span>
               </div>
 
-              <Button
-                onClick={() => handleQuickLogin('rafael.tecnico@supreme.com.br', techPass, 'TECH')}
-                disabled={!!loggingInRole}
-                className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold h-10 gap-2 shadow-lg shadow-amber-950/50 text-xs transition-all"
-              >
-                {loggingInRole === 'TECH' ? (
-                  <span>Acessando como Técnico...</span>
-                ) : (
-                  <>
-                    <span>Entrar como Técnico</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
-              </Button>
+              {/* 2 Individual 1-Click Buttons */}
+              <div className="space-y-1.5">
+                <Button
+                  onClick={() => handleQuickLogin('rafael.tecnico@supreme.com.br', techPass)}
+                  disabled={!!loggingInEmail}
+                  className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold h-9 gap-1.5 text-[11px] shadow-sm transition-all"
+                >
+                  <User className="w-3.5 h-3.5" />
+                  <span>1. Rafael Souza (Técnico)</span>
+                </Button>
+
+                <Button
+                  onClick={() => handleQuickLogin('marcos.tecnico@supreme.com.br', techPass)}
+                  disabled={!!loggingInEmail}
+                  className="w-full bg-amber-700/80 hover:bg-amber-700 text-white font-bold h-9 gap-1.5 text-[11px] shadow-sm transition-all"
+                >
+                  <User className="w-3.5 h-3.5" />
+                  <span>2. Marcos Silva (Técnico)</span>
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>

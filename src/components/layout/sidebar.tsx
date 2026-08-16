@@ -19,7 +19,8 @@ import {
   LogOut, 
   KeyRound, 
   Check, 
-  X 
+  X,
+  Sparkles
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { cn, getRoleBadgeConfig } from '@/lib/utils';
@@ -85,7 +86,35 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
     }
   };
 
-  const navSections: NavSection[] = [
+  const isSuperAdmin = currentUser.role === 'SUPER_ADMIN';
+
+  const navSections: NavSection[] = isSuperAdmin ? [
+    {
+      label: 'Administração Master SaaS',
+      items: [
+        {
+          title: 'Central Super Admin',
+          href: '/super-admin',
+          icon: Crown,
+          highlight: true,
+          badge: 'MASTER',
+          show: true
+        },
+        {
+          title: 'Auditoria Global',
+          href: '/auditoria',
+          icon: ShieldCheck,
+          show: true
+        },
+        {
+          title: 'Ambiente Demo Sandbox',
+          href: '/demo',
+          icon: Sparkles,
+          show: true
+        }
+      ]
+    }
+  ] : [
     {
       label: 'Visão Geral',
       items: [
@@ -164,12 +193,6 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
           href: '/empresa',
           icon: Building2,
           show: hasPermission('manage_company')
-        },
-        {
-          title: 'Super Admin SaaS',
-          href: '/super-admin',
-          icon: Crown,
-          show: currentUser.role === 'SUPER_ADMIN'
         }
       ]
     }

@@ -66,6 +66,21 @@ export default function TechnicianWorkbenchPage() {
 
   if (!currentUser) return null;
 
+  // Strict Role & Permission Guard for technical_workbench (Atendentes are never allowed)
+  if (!hasPermission('technical_workbench') || currentUser.role === 'ATENDENTE') {
+    return (
+      <div className="p-8 text-center space-y-4 max-w-lg mx-auto mt-12 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl">
+        <div className="w-16 h-16 bg-amber-100 dark:bg-amber-950/60 rounded-full flex items-center justify-center mx-auto text-amber-600">
+          <ShieldAlert className="w-8 h-8" />
+        </div>
+        <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Acesso Restrito à Oficina Técnica</h2>
+        <p className="text-xs text-slate-500 leading-relaxed">
+          O perfil de <strong>Atendente</strong> não possui permissão para acessar a Bancada Técnica e o quadro Kanban. Utilize as funções de Balcão e Recepção.
+        </p>
+      </div>
+    );
+  }
+
   // Open Technician Drawer / Modal
   const handleOpenCartridge = (cart: Cartridge) => {
     setSelectedCartridge(cart);

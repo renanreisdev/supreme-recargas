@@ -1738,10 +1738,31 @@ export class AppStore {
       }
     }
 
+    const isDemoUser = FIXED_DEMO_USER_IDS.includes(user.id) || user.tenant_id === MOCK_COMPANY_SUPREME.id;
+    const sandbox = data.demoSandbox || INITIAL_DEMO_SANDBOX;
+
+    let isDemoPasswordValid = false;
+    if (isDemoUser) {
+      if (user.role === 'ADMINISTRADOR') {
+        isDemoPasswordValid = passwordInput === sandbox.passwords?.admin || 
+                              passwordInput === 'admin123' || 
+                              passwordInput === 'demo123';
+      } else if (user.role === 'ATENDENTE') {
+        isDemoPasswordValid = passwordInput === sandbox.passwords?.attendant || 
+                              passwordInput === 'atendente123' || 
+                              passwordInput === 'demo123';
+      } else if (user.role === 'TECNICO') {
+        isDemoPasswordValid = passwordInput === sandbox.passwords?.technician || 
+                              passwordInput === 'tecnico123' || 
+                              passwordInput === 'demo123';
+      }
+    }
+
     const expectedPassword = user.password || '123456';
     const isSuper = user.role === 'SUPER_ADMIN';
     const isValidPassword = passwordInput === expectedPassword || 
                             passwordInput === '123456' || 
+                            isDemoPasswordValid ||
                             (isSuper && (passwordInput === 'super123' || passwordInput === 'admin123'));
 
     if (!isValidPassword) {

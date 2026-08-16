@@ -100,7 +100,7 @@ export default function NewEntryPage() {
   if (!currentUser) return null;
 
   // Role Protection: Technician cannot make reception entries
-  if (!hasPermission('create_entry')) {
+  if (!hasPermission('create_entry') || currentUser.role === 'TECNICO') {
     return (
       <div className="max-w-2xl mx-auto mt-10 p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm text-center space-y-4">
         <div className="w-14 h-14 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-600 flex items-center justify-center mx-auto">
