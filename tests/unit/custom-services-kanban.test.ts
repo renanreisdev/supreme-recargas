@@ -476,5 +476,81 @@ describe('Custom Services, Kanban & Financial Report Suite', () => {
       expect(delivered.delivery_info?.notes).toContain('Retrabalho em garantia');
     });
   });
+
+  describe('16. Zero-Value Delivery Flag explicitly zeroes comanda total and financial amounts', () => {
+    it('sets total_amount to 0, remaining_amount to 0 and paid_amount to 0 when is_zero_value is passed', () => {
+      const order = AppStore.addServiceOrder({
+        tenant_id: tenantId,
+        customer_id: 'cust-001',
+        opened_by: 'usr-admin',
+        opened_by_name: 'Admin',
+        items: [
+          {
+            model_id: 'mod-hp664-black',
+            internal_identifier: 'ID-ZERO-FLAG-01',
+            services: [
+              {
+                service_id: 'srv-refill',
+                quantity: 2,
+                unit_price: 60.0
+              }
+            ]
+          }
+        ]
+      });
+
+      expect(order.subtotal_amount).toBe(120.0);
+      expect(order.total_amount).toBe(120.0);
+
+      const delivered = AppStore.deliverServiceOrder(order.id, {
+        receiver_name: 'Marcos Vinicius',
+        is_zero_value: true,
+        notes: '[BAIXA ZERADA / CORTESIA]: Isenção autorizada pela diretoria comercial'
+      }, 'Gerente');
+
+      expect(delivered.status).toBe('ENTREGUE');
+      expect(delivered.total_amount).toBe(0);
+      expect(delivered.paid_amount).toBe(0);
+      expect(delivered.remaining_amount).toBe(0);
+      expect(delivered.discount_amount).toBe(120.0);
+      expect(delivered.financial_status).toBe('PAGO');
+    });
+  });
+
+  describe('17. User and Permission Group Max Discount Limit Hierarchy', () => {
+    it('resolves default discount from group and overrides with custom user discount', () => {
+      // 1. Create a custom permission group with 15% discount limit
+      const customGroup = AppStore.addPermissionGroup({
+        tenant_id: tenantId,
+        name: 'Supervisores de Loja',
+        description: 'Supervisores com alçada especial de desconto',
+        default_role: 'ATENDENTE',
+        default_max_discount_percent: 15,
+        permissions: {
+          apply_discount_on_delivery: true,
+          allow_zero_value_delivery: false
+        }
+      });
+
+      // 2. Create user assigned to this group without custom discount
+      const user = AppStore.addUser({
+        tenant_id: tenantId,
+        full_name: 'Lucas Supervisor',
+        email: 'lucas@supreme.com.br',
+        role: 'ATENDENTE',
+        group_id: customGroup.id,
+        is_active: true
+      });
+
+      expect(AppStore.getUserMaxDiscountPercent(user.id)).toBe(15);
+
+      // 3. Update user with custom discount limit of 25%
+      AppStore.updateUserPermissions(user.id, { apply_discount_on_delivery: true }, 'Admin', 25);
+      expect(AppStore.getUserMaxDiscountPercent(user.id)).toBe(25);
+
+      // Clean up
+      AppStore.deletePermissionGroup(customGroup.id);
+    });
+  });
 });
 

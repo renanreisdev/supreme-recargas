@@ -476,6 +476,7 @@ export const DEFAULT_PERMISSION_GROUPS: PermissionGroup[] = [
     description: 'Controle total da empresa, gestão financeira, relatórios, equipe e configurações.',
     is_system_default: true,
     default_role: 'ADMINISTRADOR',
+    default_max_discount_percent: 100,
     permissions: {
       orders_create: true,
       orders_view: true,
@@ -498,11 +499,15 @@ export const DEFAULT_PERMISSION_GROUPS: PermissionGroup[] = [
       create_entry: true,
       view_entries: true,
       register_delivery: true,
+      close_uncompleted_entry: true,
+      apply_discount_on_delivery: true,
+      allow_zero_value_delivery: true,
       print_ticket: true,
       view_customers: true,
       create_customer: true,
       edit_customer: true,
       update_tech_status: true,
+      customize_kanban: true,
       reopen_entry: true,
       delete_entry: true,
       manage_models: true,
@@ -518,6 +523,7 @@ export const DEFAULT_PERMISSION_GROUPS: PermissionGroup[] = [
     description: 'Abertura de ordens de serviço, emissão de tickets, cadastro de clientes e baixa de entrega.',
     is_system_default: true,
     default_role: 'ATENDENTE',
+    default_max_discount_percent: 10,
     permissions: {
       orders_create: true,
       orders_view: true,
@@ -530,6 +536,8 @@ export const DEFAULT_PERMISSION_GROUPS: PermissionGroup[] = [
       create_entry: true,
       view_entries: true,
       register_delivery: true,
+      apply_discount_on_delivery: true,
+      allow_zero_value_delivery: false,
       print_ticket: true,
       view_customers: true,
       create_customer: true,
@@ -542,11 +550,14 @@ export const DEFAULT_PERMISSION_GROUPS: PermissionGroup[] = [
     description: 'Acesso à bancada técnica Kanban, execução de testes, pesagem e diagnóstico de itens.',
     is_system_default: true,
     default_role: 'TECNICO',
+    default_max_discount_percent: 0,
     permissions: {
       technical_workbench: true,
       technical_update: true,
       // Backward-compat keys
-      update_tech_status: true
+      update_tech_status: true,
+      apply_discount_on_delivery: false,
+      allow_zero_value_delivery: false
     }
   }
 ];
@@ -560,6 +571,7 @@ export const MOCK_PROFILES: Profile[] = [
     password: 'superadminmaster',
     phone: '(11) 99999-0000',
     role: 'SUPER_ADMIN',
+    max_discount_percent: 100,
     is_active: true,
     created_at: new Date('2026-01-01').toISOString()
   },
@@ -573,6 +585,7 @@ export const MOCK_PROFILES: Profile[] = [
     role: 'ADMINISTRADOR',
     group_id: 'default-admin-group',
     group_name: 'Administrador (Acesso Total)',
+    max_discount_percent: 100,
     is_active: true,
     created_at: new Date('2026-01-01').toISOString()
   },
@@ -586,6 +599,7 @@ export const MOCK_PROFILES: Profile[] = [
     role: 'ATENDENTE',
     group_id: 'default-attendant-group',
     group_name: 'Atendente (Balcão de Atendimento)',
+    max_discount_percent: 10,
     is_active: true,
     created_at: new Date('2026-01-01').toISOString()
   },
@@ -599,6 +613,7 @@ export const MOCK_PROFILES: Profile[] = [
     role: 'TECNICO',
     group_id: 'default-tech-group',
     group_name: 'Técnico (Bancada & Oficina)',
+    max_discount_percent: 0,
     is_active: true,
     created_at: new Date('2026-01-01').toISOString()
   }
@@ -1309,13 +1324,34 @@ export class AppStore {
     return updated;
   }
 
-  static updateUserPermissions(id: string, permissions: Record<string, boolean>, performedByName?: string): Profile {
+  static updateUserPermissions(id: string, permissions: Record<string, boolean>, performedByName?: string, maxDiscountPercent?: number): Profile {
     const data = this.getStoreData();
     const idx = data.profiles.findIndex((p: Profile) => p.id === id);
     if (idx === -1) throw new Error('Usuário não encontrado');
     data.profiles[idx].custom_permissions = permissions;
+    if (maxDiscountPercent !== undefined) {
+      data.profiles[idx].max_discount_percent = maxDiscountPercent;
+    }
     this.saveStoreData(data);
     return data.profiles[idx];
+  }
+
+  static getUserMaxDiscountPercent(userId: string): number {
+    const data = this.getStoreData();
+    const user = (data.profiles || []).find((p: Profile) => p.id === userId);
+    if (!user) return 0;
+    if (user.role === 'ADMINISTRADOR' || user.role === 'SUPER_ADMIN') return 100;
+    if (user.max_discount_percent !== undefined && user.max_discount_percent !== null) {
+      return Number(user.max_discount_percent);
+    }
+    if (user.group_id) {
+      const group = (data.permissionGroups || []).find((g: PermissionGroup) => g.id === user.group_id);
+      if (group && group.default_max_discount_percent !== undefined && group.default_max_discount_percent !== null) {
+        return Number(group.default_max_discount_percent);
+      }
+    }
+    if (user.role === 'ATENDENTE') return 10;
+    return 0;
   }
 
   // --------------------------------------------------------------------------
@@ -1932,6 +1968,7 @@ export class AppStore {
       notes?: string;
       payments?: Array<{ payment_method: PaymentMethod; amount: number }>;
       apply_discount?: number;
+      is_zero_value?: boolean;
     },
     performedByName?: string
   ): ServiceOrder {
@@ -1964,16 +2001,26 @@ export class AppStore {
       }
     }
 
-    // Apply Discount on Delivery if provided
-    if (deliveryData.apply_discount && deliveryData.apply_discount > 0) {
-      order.discount_amount = (order.discount_amount || 0) + deliveryData.apply_discount;
-      order.total_amount = Math.max(0, order.subtotal_amount - order.discount_amount);
+    // Se for baixa com valor zerado (cortesia / isenção total)
+    if (deliveryData.is_zero_value) {
+      order.discount_amount = order.subtotal_amount;
+      order.total_amount = 0;
+      order.paid_amount = 0;
+      order.remaining_amount = 0;
+      order.financial_status = 'PAGO';
+    } else {
+      // Apply Discount on Delivery if provided
+      if (deliveryData.apply_discount && deliveryData.apply_discount > 0) {
+        order.discount_amount = (order.discount_amount || 0) + deliveryData.apply_discount;
+        order.total_amount = Math.max(0, order.subtotal_amount - order.discount_amount);
+      }
+
+      const totalPaidAllTime = (order.paid_amount || 0) + totalPaidInCheckout;
+      order.paid_amount = totalPaidAllTime;
+      order.remaining_amount = Math.max(0, order.total_amount - totalPaidAllTime);
+      order.financial_status = order.paid_amount >= order.total_amount ? 'PAGO' : order.paid_amount > 0 ? 'PAGO_PARCIAL' : 'PENDENTE';
     }
 
-    const totalPaidAllTime = (order.paid_amount || 0) + totalPaidInCheckout;
-    order.paid_amount = totalPaidAllTime;
-    order.remaining_amount = Math.max(0, order.total_amount - totalPaidAllTime);
-    order.financial_status = order.paid_amount >= order.total_amount ? 'PAGO' : order.paid_amount > 0 ? 'PAGO_PARCIAL' : 'PENDENTE';
     order.status = 'ENTREGUE';
     order.delivered_at = deliveredAt;
     order.closed_at = deliveredAt;

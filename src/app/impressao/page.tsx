@@ -18,9 +18,13 @@ function ThermalPrintContent() {
   const orderIdParam = searchParams.get('orderId') || searchParams.get('entry');
   const { currentCompany, hasPermission } = useAuth();
 
+  const [settings, setSettings] = useState(() => AppStore.getSettings(currentCompany.id));
   const [orders, setOrders] = useState<ServiceOrder[]>([]);
   const [selectedOrderId, setSelectedOrderId] = useState<string>(orderIdParam || '');
-  const [paperWidth, setPaperWidth] = useState<number>(80);
+  const [paperWidth, setPaperWidth] = useState<number>(() => {
+    const s = AppStore.getSettings(currentCompany.id);
+    return s.printer_paper_width === '58mm' ? 58 : 80;
+  });
   const [showPrices, setShowPrices] = useState<boolean>(true);
   const [printMode, setPrintMode] = useState<'receipt' | 'label'>('receipt');
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
@@ -28,6 +32,13 @@ function ThermalPrintContent() {
   useEffect(() => {
     const data = AppStore.getServiceOrders(currentCompany.id);
     setOrders(data);
+    const sets = AppStore.getSettings(currentCompany.id);
+    setSettings(sets);
+    if (sets.printer_paper_width === '58mm') {
+      setPaperWidth(58);
+    } else if (sets.printer_paper_width === '80mm') {
+      setPaperWidth(80);
+    }
     if (!selectedOrderId && data.length > 0) {
       setSelectedOrderId(data[0].id);
     }
@@ -218,10 +229,15 @@ function ThermalPrintContent() {
             className="bg-white text-black p-4 font-mono text-[11px] leading-tight border border-slate-300 shadow-xl print:border-none print:shadow-none print:m-0 print:p-2"
           >
             {/* Header */}
-            <div className="text-center pb-2 border-b border-dashed border-black">
-              <h2 className="text-sm font-bold uppercase tracking-wider">{currentCompany.trade_name}</h2>
+            <div className="text-center pb-2 border-b border-dashed border-black space-y-1">
+              <h2 className="text-sm font-black uppercase tracking-wider">{currentCompany.trade_name}</h2>
+              {(settings.receipt_header || settings.receipt_header_note) && (
+                <p className="text-[10px] font-bold text-gray-900 uppercase whitespace-pre-line leading-snug">
+                  {settings.receipt_header || settings.receipt_header_note}
+                </p>
+              )}
               {currentCompany.cnpj && <p className="text-[10px]">CNPJ: {currentCompany.cnpj}</p>}
-              {currentCompany.phone && <p className="text-[10px]">Tel: {currentCompany.phone}</p>}
+              {currentCompany.phone && <p className="text-[10px]">Tel: {currentCompany.phone}{currentCompany.whatsapp ? ` • WhatsApp: ${currentCompany.whatsapp}` : ''}</p>}
               {currentCompany.address && <p className="text-[9px]">{currentCompany.address} - {currentCompany.city}/{currentCompany.state}</p>}
             </div>
 
@@ -252,31 +268,37 @@ function ThermalPrintContent() {
             <div className="py-2 border-b border-dashed border-black space-y-2">
               <p className="font-bold text-[10px] uppercase">ITENS / EQUIPAMENTOS ({currentOrder.items?.length || 0}):</p>
 
-              {currentOrder.items?.map((it, idx) => (
-                <div key={idx} className="space-y-0.5 text-[10px]">
-                  <div className="flex justify-between font-bold">
-                    <span>#{idx + 1} {it.model?.name}</span>
-                    {showPrices && <span>{formatCurrency(it.total_amount)}</span>}
-                  </div>
-                  <div className="flex justify-between text-[9px] text-gray-700">
-                    <span>Identificador / Serial:</span>
-                    <span className="font-bold">{it.internal_identifier}</span>
-                  </div>
-                  {it.services && it.services.length > 0 && (
-                    <div className="pl-2 text-[9px] text-gray-800">
-                      {it.services.map((s, sIdx) => (
-                        <div key={sIdx} className="flex justify-between">
-                          <span>• {s.service_name}</span>
-                          {showPrices && <span>{formatCurrency(s.total_amount)}</span>}
-                        </div>
-                      ))}
+              {currentOrder.items?.map((it, idx) => {
+                const itemName = settings.item_description_display_mode === 'FULL'
+                  ? (it.model?.description || it.model?.name || 'Item')
+                  : (it.model?.name || 'Item');
+
+                return (
+                  <div key={idx} className="space-y-0.5 text-[10px]">
+                    <div className="flex justify-between font-bold">
+                      <span>#{idx + 1} {itemName}</span>
+                      {showPrices && <span>{formatCurrency(it.total_amount)}</span>}
                     </div>
-                  )}
-                  {it.reported_issue && (
-                    <p className="text-[9px] text-gray-600 italic">Defeito: {it.reported_issue}</p>
-                  )}
-                </div>
-              ))}
+                    <div className="flex justify-between text-[9px] text-gray-700">
+                      <span>Identificador / Serial:</span>
+                      <span className="font-bold">{it.internal_identifier}</span>
+                    </div>
+                    {it.services && it.services.length > 0 && (
+                      <div className="pl-2 text-[9px] text-gray-800">
+                        {it.services.map((s, sIdx) => (
+                          <div key={sIdx} className="flex justify-between">
+                            <span>• {s.service_name}</span>
+                            {showPrices && <span>{formatCurrency(s.total_amount)}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {it.reported_issue && (
+                      <p className="text-[9px] text-gray-600 italic">Defeito: {it.reported_issue}</p>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             {/* Totals */}
@@ -294,7 +316,7 @@ function ThermalPrintContent() {
                 )}
                 <div className="flex justify-between font-bold text-xs pt-1 border-t border-dotted border-black">
                   <span>VALOR TOTAL:</span>
-                  <span>{formatCurrency(currentOrder.total_amount)}</span>
+                  <span>{currentOrder.total_amount === 0 ? 'R$ 0,00 (ISENTO / CORTESIA)' : formatCurrency(currentOrder.total_amount)}</span>
                 </div>
                 {currentOrder.paid_amount > 0 && (
                   <div className="flex justify-between text-[10px] text-gray-800">
@@ -328,10 +350,18 @@ function ThermalPrintContent() {
             </div>
 
             {/* Footer Notes */}
-            <div className="pt-2 border-t border-dashed border-black text-center text-[8px] space-y-0.5">
-              <p>Obrigado pela preferência!</p>
-              <p>Garantia legal de 90 dias conforme CDC.</p>
-              <p>Equipamentos não retirados em 90 dias poderão ser descartados.</p>
+            <div className="pt-2 border-t border-dashed border-black text-center text-[8.5px] space-y-1 leading-snug">
+              {(settings.receipt_footer || settings.receipt_footer_note) ? (
+                <p className="font-semibold whitespace-pre-line text-black">
+                  {settings.receipt_footer || settings.receipt_footer_note}
+                </p>
+              ) : (
+                <>
+                  <p className="font-bold">Obrigado pela preferência!</p>
+                  <p>Garantia legal de 90 dias conforme CDC.</p>
+                  <p>Equipamentos não retirados em 90 dias poderão ser descartados.</p>
+                </>
+              )}
             </div>
           </div>
         </div>

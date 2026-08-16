@@ -42,7 +42,8 @@ const AVAILABLE_PERMISSIONS: PermissionOption[] = [
   { key: 'view_entries', label: 'Entradas & Entregas (Listar Comandas)', description: 'Permite acessar a lista geral de comandas e conferência', category: 'Balcão' },
   { key: 'register_delivery', label: 'Registrar Baixa Financeira & Entrega', description: 'Permite receber pagamentos e concluir entregas de itens', category: 'Balcão' },
   { key: 'close_uncompleted_entry', label: 'Encerrar Comanda sem Conclusão Técnica (Desistência)', description: 'Permite dar baixa ou finalizar comandas mesmo com itens não finalizados na bancada técnica (desistência ou devolução)', category: 'Balcão' },
-  { key: 'apply_discount_on_delivery', label: 'Conceder Desconto na Baixa / Pagamento', description: 'Permite receber valor menor do que o total da comanda e aplicar a diferença como desconto financeiro', category: 'Balcão' },
+  { key: 'apply_discount_on_delivery', label: 'Conceder Desconto na Baixa / Pagamento', description: 'Permite receber valor menor do que o total da comanda e aplicar a diferença como desconto financeiro (respeitando o limite de % do usuário/grupo)', category: 'Balcão' },
+  { key: 'allow_zero_value_delivery', label: 'Dar Baixa com Valor Zerado (Cortesia / Isenção)', description: 'Permite concluir a entrega de itens sem recebimento de pagamento (cortesia/isenção total) mediante justificativa obrigatória de no mínimo 10 caracteres', category: 'Balcão' },
   { key: 'print_ticket', label: 'Impressão de Comandas Térmicas', description: 'Permite imprimir comandas e etiquetas térmicas em 58mm/80mm', category: 'Balcão' },
   { key: 'view_customers', label: 'Ver Clientes', description: 'Permite visualizar o catálogo de clientes e telefones', category: 'Balcão' },
   { key: 'create_customer', label: 'Cadastrar Novos Clientes', description: 'Permite cadastrar novos clientes no balcão e na recepção', category: 'Balcão' },
@@ -73,6 +74,7 @@ export default function CompanySettingsPage() {
   const [editingUser, setEditingUser] = useState<Profile | null>(null);
   const [showPermissionsModal, setShowPermissionsModal] = useState(false);
   const [userPermissions, setUserPermissions] = useState<Record<string, boolean>>({});
+  const [userMaxDiscount, setUserMaxDiscount] = useState<number>(10);
 
   // Group Modal State
   const [showGroupModal, setShowGroupModal] = useState(false);
@@ -80,6 +82,7 @@ export default function CompanySettingsPage() {
   const [groupName, setGroupName] = useState('');
   const [groupDescription, setGroupDescription] = useState('');
   const [groupDefaultRole, setGroupDefaultRole] = useState<UserRole>('ATENDENTE');
+  const [groupMaxDiscount, setGroupMaxDiscount] = useState<number>(10);
   const [groupPermissions, setGroupPermissions] = useState<Record<string, boolean>>({});
 
   // Add User Form State
@@ -274,12 +277,15 @@ export default function CompanySettingsPage() {
     setGroupName('');
     setGroupDescription('');
     setGroupDefaultRole('ATENDENTE');
+    setGroupMaxDiscount(10);
     
     // Default checked permissions for attendant
     const initialPerms: Record<string, boolean> = {
       create_entry: true,
       view_entries: true,
       register_delivery: true,
+      apply_discount_on_delivery: true,
+      allow_zero_value_delivery: false,
       print_ticket: true,
       view_customers: true,
       create_customer: true,
@@ -294,6 +300,7 @@ export default function CompanySettingsPage() {
     setGroupName(group.name);
     setGroupDescription(group.description || '');
     setGroupDefaultRole(group.default_role || 'ATENDENTE');
+    setGroupMaxDiscount(group.default_max_discount_percent !== undefined ? group.default_max_discount_percent : (group.default_role === 'ADMINISTRADOR' ? 100 : 10));
     setGroupPermissions(group.permissions || {});
     setShowGroupModal(true);
   };
@@ -308,6 +315,7 @@ export default function CompanySettingsPage() {
           name: groupName.trim(),
           description: groupDescription.trim(),
           default_role: groupDefaultRole,
+          default_max_discount_percent: Math.min(100, Math.max(0, Number(groupMaxDiscount) || 0)),
           permissions: groupPermissions
         }, currentUser.full_name);
       } else {
@@ -316,6 +324,7 @@ export default function CompanySettingsPage() {
           name: groupName.trim(),
           description: groupDescription.trim(),
           default_role: groupDefaultRole,
+          default_max_discount_percent: Math.min(100, Math.max(0, Number(groupMaxDiscount) || 0)),
           permissions: groupPermissions
         }, currentUser.full_name);
       }
@@ -420,12 +429,22 @@ export default function CompanySettingsPage() {
     });
 
     setUserPermissions(initialPerms);
+    setUserMaxDiscount(
+      u.max_discount_percent !== undefined && u.max_discount_percent !== null
+        ? u.max_discount_percent
+        : (userGroup?.default_max_discount_percent ?? (u.role === 'ADMINISTRADOR' ? 100 : 10))
+    );
     setShowPermissionsModal(true);
   };
 
   const handleSavePermissions = () => {
     if (!editingUser) return;
-    AppStore.updateUserPermissions(editingUser.id, userPermissions, currentUser.full_name);
+    AppStore.updateUserPermissions(
+      editingUser.id,
+      userPermissions,
+      currentUser.full_name,
+      Math.min(100, Math.max(0, Number(userMaxDiscount) || 0))
+    );
     loadData();
     refreshUser();
     setShowPermissionsModal(false);
@@ -1301,6 +1320,30 @@ export default function CompanySettingsPage() {
                 <Input value={groupDescription} onChange={e => setGroupDescription(e.target.value)} placeholder="Ex: Acesso total à oficina com restrição financeira" className="text-xs rounded-xl" />
               </div>
 
+              {/* Limite de Desconto Padrão do Grupo */}
+              <div className="p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Limite Máximo de Desconto Padrão do Grupo (%)
+                  </label>
+                  <span className="text-xs font-mono font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                    {groupMaxDiscount}% Máx
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-400">
+                  Desconto percentual padrão permitido para usuários deste grupo no momento da baixa/entrega.
+                </p>
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={groupMaxDiscount}
+                  onChange={e => setGroupMaxDiscount(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
+                  className="h-8 text-xs font-bold rounded-lg"
+                  placeholder="Ex: 10"
+                />
+              </div>
+
               {/* Permissions Checklist */}
               <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800">
                 <div className="flex items-center justify-between">
@@ -1372,8 +1415,32 @@ export default function CompanySettingsPage() {
 
             <div className="space-y-3 flex-1 overflow-y-auto pr-1">
               <p className="text-xs text-slate-500">
-                Você pode conceder ou revogar permissões individualmente para este colaborador:
+                Você pode conceder ou revogar permissões e ajustar o limite de desconto deste colaborador:
               </p>
+
+              {/* Limite de Desconto Individual */}
+              <div className="p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Limite Máximo de Desconto deste Usuário (%)
+                  </label>
+                  <span className="text-xs font-mono font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                    {userMaxDiscount}% Máx
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-400">
+                  Sobrescreve o limite do grupo apenas para este usuário específico na baixa de comandas.
+                </p>
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={userMaxDiscount}
+                  onChange={e => setUserMaxDiscount(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
+                  className="h-8 text-xs font-bold rounded-lg"
+                  placeholder="Ex: 15"
+                />
+              </div>
 
               <div className="space-y-2">
                 {(['Balcão', 'Oficina', 'Gestão'] as const).map(cat => (

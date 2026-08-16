@@ -141,6 +141,7 @@ export interface PermissionGroup {
   description?: string;
   is_system_default?: boolean;
   default_role: UserRole;
+  default_max_discount_percent?: number; // Limite de desconto padrão do grupo (ex: 10%, 20%, 100%)
   permissions: Record<string, boolean>;
   created_at?: string;
   updated_at?: string;
@@ -159,6 +160,7 @@ export interface Profile {
   avatar_url?: string;
   is_active: boolean;
   custom_permissions?: Record<string, boolean>;
+  max_discount_percent?: number; // Limite de desconto personalizado do usuário (ex: 15%, 50%, 100%)
   created_at: string;
   company?: Company;
 }

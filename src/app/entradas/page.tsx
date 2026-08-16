@@ -86,6 +86,7 @@ function EntriesListContent() {
 
   const canRegisterDelivery = hasPermission('register_delivery') || hasPermission('orders_deliver') || currentUser?.role === 'ADMINISTRADOR';
   const canApplyDiscount = hasPermission('apply_discount_on_delivery') || hasPermission('orders_discount') || currentUser?.role === 'ADMINISTRADOR';
+  const canAllowZeroValue = hasPermission('allow_zero_value_delivery') || currentUser?.role === 'ADMINISTRADOR';
   const canReopenEntry = hasPermission('reopen_entry') || hasPermission('orders_reopen') || currentUser?.role === 'ADMINISTRADOR';
   const canDeleteEntry = hasPermission('delete_entry') || hasPermission('orders_cancel') || currentUser?.role === 'ADMINISTRADOR';
 
@@ -191,7 +192,7 @@ function EntriesListContent() {
   const liveChange = diff > 0 ? diff : 0;
   const liveRemaining = diff < 0 ? Math.abs(diff) : 0;
 
-  const executeDelivery = (options: { applyDiscount: number; customNotes?: string }) => {
+  const executeDelivery = (options: { applyDiscount: number; isZeroValue?: boolean; customNotes?: string }) => {
     if (!selectedOrderForDelivery) return;
 
     try {
@@ -200,8 +201,9 @@ function EntriesListContent() {
         receiver_document: receiverDoc.trim(),
         receiver_relation: receiverRelation,
         notes: options.customNotes || deliveryNotes,
-        payments: payments.filter(p => Number(p.amount) > 0).map(p => ({ payment_method: p.method, amount: Number(p.amount) })),
-        apply_discount: options.applyDiscount
+        payments: options.isZeroValue ? [] : payments.filter(p => Number(p.amount) > 0).map(p => ({ payment_method: p.method, amount: Number(p.amount) })),
+        apply_discount: options.applyDiscount,
+        is_zero_value: options.isZeroValue
       }, currentUser?.full_name || 'Atendente');
 
       loadData();
@@ -232,13 +234,13 @@ function EntriesListContent() {
 
     // Cenário 1: Valor Zerado (totalPaidSum === 0) e ainda existe saldo a pagar
     if (modalRemainingToPay > 0 && totalPaidSum === 0) {
-      if (!canApplyDiscount) {
+      if (!canAllowZeroValue) {
         setDialogModal({
           isOpen: true,
           type: 'warning',
           title: 'Permissão Insuficiente',
-          subtitle: 'Baixa sem pagamento não autorizada',
-          message: 'Você não possui permissão para dar baixa com valor zerado (isenção/cortesia). Solicite autorização a um administrador do sistema.',
+          subtitle: 'Baixa com valor zerado não autorizada',
+          message: 'Seu perfil de usuário não possui a permissão "Dar Baixa com Valor Zerado" (cortesia/isenção total). Solicite autorização a um administrador do sistema.',
           isAlertOnly: true,
           confirmLabel: 'Entendido',
           onConfirm: () => setDialogModal(null)
@@ -255,6 +257,8 @@ function EntriesListContent() {
     // Cenário 2: Valor Pago Menor que o Total (0 < totalPaidSum < modalRemainingToPay)
     if (modalRemainingToPay > 0 && totalPaidSum > 0 && totalPaidSum < modalRemainingToPay) {
       const discountAmount = modalRemainingToPay - totalPaidSum;
+      const discountPercent = (discountAmount / modalRemainingToPay) * 100;
+      const userMaxDiscountPercent = currentUser ? AppStore.getUserMaxDiscountPercent(currentUser.id) : 0;
 
       if (!canApplyDiscount) {
         setDialogModal({
@@ -270,12 +274,26 @@ function EntriesListContent() {
         return;
       }
 
+      if (discountPercent > userMaxDiscountPercent) {
+        setDialogModal({
+          isOpen: true,
+          type: 'warning',
+          title: 'Limite de Desconto Excedido',
+          subtitle: `Limite autorizado: ${userMaxDiscountPercent}% • Solicitado: ${discountPercent.toFixed(1)}%`,
+          message: `O desconto de ${formatCurrency(discountAmount)} (${discountPercent.toFixed(1)}%) ultrapassa o limite máximo permitido de ${userMaxDiscountPercent}% para o seu usuário. Solicite autorização de um administrador.`,
+          isAlertOnly: true,
+          confirmLabel: 'Entendido',
+          onConfirm: () => setDialogModal(null)
+        });
+        return;
+      }
+
       // Perguntar se deseja conceder o desconto
       setDialogModal({
         isOpen: true,
         type: 'warning',
         title: `Conceder Desconto de ${formatCurrency(discountAmount)}?`,
-        subtitle: `Valor pago: ${formatCurrency(totalPaidSum)} • Saldo: ${formatCurrency(modalRemainingToPay)}`,
+        subtitle: `Valor pago: ${formatCurrency(totalPaidSum)} • Saldo: ${formatCurrency(modalRemainingToPay)} (${discountPercent.toFixed(1)}% de desconto)`,
         message: `O valor pago (${formatCurrency(totalPaidSum)}) é menor que o total da comanda (${formatCurrency(modalRemainingToPay)}). Deseja aplicar a diferença de ${formatCurrency(discountAmount)} como desconto financeiro e liquidar a comanda?`,
         confirmLabel: 'Sim, Conceder Desconto e Liquidar',
         cancelLabel: 'Cancelar',
@@ -319,6 +337,7 @@ function EntriesListContent() {
     const combinedNotes = `[BAIXA ZERADA / CORTESIA]: ${zeroValueReason.trim()}${deliveryNotes.trim() ? ` | ${deliveryNotes.trim()}` : ''}`;
     executeDelivery({
       applyDiscount: modalRemainingToPay,
+      isZeroValue: true,
       customNotes: combinedNotes
     });
   };
