@@ -24,7 +24,8 @@ import {
   Subscription,
   BusinessSegment,
   SegmentCustomization,
-  KanbanColumnConfig
+  KanbanColumnConfig,
+  PermissionGroup
 } from '@/types';
 import { supabase } from '@/lib/supabase';
 
@@ -179,22 +180,120 @@ export const MOCK_COMPANIES: Company[] = [
 
 export const MOCK_COMPANY_SUPREME: Company = MOCK_COMPANIES[0];
 
+export const DEFAULT_PERMISSION_GROUPS: PermissionGroup[] = [
+  {
+    id: 'default-admin-group',
+    tenant_id: '',
+    name: 'Administrador',
+    description: 'Acesso irrestrito a todas as funções, relatórios, configurações e gestão da empresa',
+    is_system_default: true,
+    default_role: 'ADMINISTRADOR',
+    permissions: {
+      create_entry: true,
+      view_entries: true,
+      register_delivery: true,
+      close_uncompleted_entry: true,
+      apply_discount_on_delivery: true,
+      print_ticket: true,
+      view_customers: true,
+      create_customer: true,
+      edit_customer: true,
+      technical_workbench: true,
+      register_weight: true,
+      register_diagnosis: true,
+      update_tech_status: true,
+      customize_kanban: true,
+      reopen_entry: true,
+      delete_entry: true,
+      manage_models: true,
+      manage_services: true,
+      view_financial_reports: true,
+      view_audit_logs: true,
+      manage_company: true
+    }
+  },
+  {
+    id: 'default-attendant-group',
+    tenant_id: '',
+    name: 'Atendente (Balcão)',
+    description: 'Recepção no balcão, abertura de comandas, cadastro de clientes, baixa e entrega',
+    is_system_default: true,
+    default_role: 'ATENDENTE',
+    permissions: {
+      create_entry: true,
+      view_entries: true,
+      register_delivery: true,
+      close_uncompleted_entry: true,
+      apply_discount_on_delivery: false,
+      print_ticket: true,
+      view_customers: true,
+      create_customer: true,
+      edit_customer: true,
+      technical_workbench: false,
+      register_weight: false,
+      register_diagnosis: false,
+      update_tech_status: false,
+      customize_kanban: false,
+      reopen_entry: false,
+      delete_entry: false,
+      manage_models: false,
+      manage_services: false,
+      view_financial_reports: false,
+      view_audit_logs: false,
+      manage_company: false
+    }
+  },
+  {
+    id: 'default-tech-group',
+    tenant_id: '',
+    name: 'Técnico (Bancada)',
+    description: 'Oficina técnica, fila Kanban, pesagem, testes de impressão e diagnóstico de defeitos',
+    is_system_default: true,
+    default_role: 'TECNICO',
+    permissions: {
+      create_entry: false,
+      view_entries: true,
+      register_delivery: false,
+      close_uncompleted_entry: false,
+      apply_discount_on_delivery: false,
+      print_ticket: true,
+      view_customers: false,
+      create_customer: false,
+      edit_customer: false,
+      technical_workbench: true,
+      register_weight: true,
+      register_diagnosis: true,
+      update_tech_status: true,
+      customize_kanban: false,
+      reopen_entry: false,
+      delete_entry: false,
+      manage_models: false,
+      manage_services: false,
+      view_financial_reports: false,
+      view_audit_logs: false,
+      manage_company: false
+    }
+  }
+];
+
 export const MOCK_PLANS: Plan[] = [
   {
     id: 'a1000000-0000-0000-0000-000000000001',
     name: 'Plano Inicial (Free)',
     code: 'INICIAL',
-    description: '1 Administrador, 2 Atendentes e 1 Técnico incluídos.',
-    max_administrators: 1,
-    max_attendants: 2,
-    max_technicians: 1,
+    description: 'Até 4 usuários incluídos no total (Admin, Técnico ou Atendente).',
+    max_users: 4,
+    max_administrators: 4,
+    max_attendants: 4,
+    max_technicians: 4,
     max_total_users: 4,
     monthly_price: 0,
+    extra_user_price: 15.00,
     extra_attendant_price: 15.00,
-    extra_technician_price: 20.00,
-    extra_admin_price: 30.00,
+    extra_technician_price: 15.00,
+    extra_admin_price: 15.00,
     features: [
-      'Até 4 usuários incluídos',
+      'Até 4 usuários no total',
       'Entradas e Comandas com QR Code',
       'Bancada Técnica (Kanban)',
       'Impressão Térmica e A4',
@@ -207,17 +306,19 @@ export const MOCK_PLANS: Plan[] = [
     id: 'a1000000-0000-0000-0000-000000000002',
     name: 'Plano Básico',
     code: 'BASICO',
-    description: 'Para assistências de 10 a 20 cartuchos/dia. 1 Admin, 4 Atendentes e 2 Técnicos.',
-    max_administrators: 1,
-    max_attendants: 4,
-    max_technicians: 2,
-    max_total_users: 7,
+    description: 'Para assistências de 10 a 20 cartuchos/dia. Até 8 usuários incluídos no total.',
+    max_users: 8,
+    max_administrators: 8,
+    max_attendants: 8,
+    max_technicians: 8,
+    max_total_users: 8,
     monthly_price: 69.90,
+    extra_user_price: 15.00,
     extra_attendant_price: 15.00,
-    extra_technician_price: 20.00,
-    extra_admin_price: 25.00,
+    extra_technician_price: 15.00,
+    extra_admin_price: 15.00,
     features: [
-      'Até 7 usuários incluídos',
+      'Até 8 usuários no total',
       'Relatórios e Indicadores Financeiros',
       'Rastreio online para clientes',
       'Registro de Auditoria de Ações',
@@ -230,17 +331,19 @@ export const MOCK_PLANS: Plan[] = [
     id: 'a1000000-0000-0000-0000-000000000003',
     name: 'Plano Profissional',
     code: 'PROFISSIONAL',
-    description: 'Para operações em expansão. 2 Admins, 8 Atendentes e 4 Técnicos.',
-    max_administrators: 2,
-    max_attendants: 8,
-    max_technicians: 4,
-    max_total_users: 14,
+    description: 'Para operações em expansão. Até 15 usuários incluídos no total.',
+    max_users: 15,
+    max_administrators: 15,
+    max_attendants: 15,
+    max_technicians: 15,
+    max_total_users: 15,
     monthly_price: 139.90,
-    extra_attendant_price: 12.00,
-    extra_technician_price: 18.00,
-    extra_admin_price: 25.00,
+    extra_user_price: 15.00,
+    extra_attendant_price: 15.00,
+    extra_technician_price: 15.00,
+    extra_admin_price: 15.00,
     features: [
-      'Até 14 usuários incluídos',
+      'Até 15 usuários no total',
       'Gestão avançada de perdas e garantias',
       'Múltiplos terminais simultâneos',
       'Exportação de dados e relatórios em tempo real',
@@ -253,17 +356,19 @@ export const MOCK_PLANS: Plan[] = [
     id: 'a1000000-0000-0000-0000-000000000004',
     name: 'Plano Enterprise / Ilimitado',
     code: 'ENTERPRISE',
-    description: 'Para redes e franquias. 5 Admins, 20 Atendentes e 10 Técnicos.',
-    max_administrators: 5,
-    max_attendants: 20,
-    max_technicians: 10,
+    description: 'Para redes e franquias. Até 35 usuários incluídos no total.',
+    max_users: 35,
+    max_administrators: 35,
+    max_attendants: 35,
+    max_technicians: 35,
     max_total_users: 35,
     monthly_price: 249.90,
-    extra_attendant_price: 10.00,
+    extra_user_price: 15.00,
+    extra_attendant_price: 15.00,
     extra_technician_price: 15.00,
-    extra_admin_price: 20.00,
+    extra_admin_price: 15.00,
     features: [
-      'Até 35 usuários incluídos',
+      'Até 35 usuários no total',
       'Limites customizáveis sob demanda',
       'Painel consolidado multi-unidades',
       'Onboarding e treinamento personalizado'
@@ -1212,6 +1317,7 @@ export class AppStore {
           companies: [...MOCK_COMPANIES],
           plans: [...MOCK_PLANS],
           subscriptions: [...MOCK_SUBSCRIPTIONS],
+          permissionGroups: [...DEFAULT_PERMISSION_GROUPS],
           demoSandbox: { ...INITIAL_DEMO_SANDBOX },
           auditLogs: [...INITIAL_AUDIT_LOGS]
         };
@@ -1233,6 +1339,7 @@ export class AppStore {
         companies: MOCK_COMPANIES,
         plans: MOCK_PLANS,
         subscriptions: MOCK_SUBSCRIPTIONS,
+        permissionGroups: DEFAULT_PERMISSION_GROUPS,
         demoSandbox: INITIAL_DEMO_SANDBOX,
         auditLogs: INITIAL_AUDIT_LOGS
       };
@@ -1268,6 +1375,7 @@ export class AppStore {
       if (!Array.isArray(parsed.companies) || parsed.companies.length === 0) parsed.companies = MOCK_COMPANIES;
       if (!Array.isArray(parsed.plans) || parsed.plans.length === 0) parsed.plans = MOCK_PLANS;
       if (!Array.isArray(parsed.subscriptions) || parsed.subscriptions.length === 0) parsed.subscriptions = MOCK_SUBSCRIPTIONS;
+      if (!Array.isArray(parsed.permissionGroups) || parsed.permissionGroups.length === 0) parsed.permissionGroups = DEFAULT_PERMISSION_GROUPS;
       if (!parsed.demoSandbox) parsed.demoSandbox = INITIAL_DEMO_SANDBOX;
       if (!Array.isArray(parsed.auditLogs)) parsed.auditLogs = INITIAL_AUDIT_LOGS;
       return parsed;
@@ -1284,6 +1392,7 @@ export class AppStore {
         companies: MOCK_COMPANIES,
         plans: MOCK_PLANS,
         subscriptions: MOCK_SUBSCRIPTIONS,
+        permissionGroups: DEFAULT_PERMISSION_GROUPS,
         demoSandbox: INITIAL_DEMO_SANDBOX,
         auditLogs: INITIAL_AUDIT_LOGS
       };
@@ -1860,9 +1969,11 @@ export class AppStore {
     tenantId: string,
     planId: string,
     extras?: {
+      extra_users?: number;
       extra_attendants?: number;
       extra_technicians?: number;
       extra_administrators?: number;
+      custom_max_users?: number;
       custom_max_administrators?: number;
       custom_max_attendants?: number;
       custom_max_technicians?: number;
@@ -1880,14 +1991,20 @@ export class AppStore {
     const idx = data.subscriptions.findIndex((s: Subscription) => s.tenant_id === tenantId);
     let sub: Subscription;
 
+    const resolvedExtraUsers = extras?.extra_users !== undefined 
+      ? extras.extra_users 
+      : ((extras?.extra_attendants || 0) + (extras?.extra_technicians || 0) + (extras?.extra_administrators || 0));
+
     if (idx !== -1) {
       sub = {
         ...data.subscriptions[idx],
         plan_id: planId,
         plan,
+        extra_users: resolvedExtraUsers,
         extra_attendants: extras?.extra_attendants !== undefined ? extras.extra_attendants : data.subscriptions[idx].extra_attendants || 0,
         extra_technicians: extras?.extra_technicians !== undefined ? extras.extra_technicians : data.subscriptions[idx].extra_technicians || 0,
         extra_administrators: extras?.extra_administrators !== undefined ? extras.extra_administrators : data.subscriptions[idx].extra_administrators || 0,
+        custom_max_users: extras?.custom_max_users !== undefined ? extras.custom_max_users : data.subscriptions[idx].custom_max_users,
         custom_max_administrators: extras?.custom_max_administrators,
         custom_max_attendants: extras?.custom_max_attendants,
         custom_max_technicians: extras?.custom_max_technicians,
@@ -1903,9 +2020,11 @@ export class AppStore {
         plan,
         status: extras?.status || 'ACTIVE',
         starts_at: new Date().toISOString(),
+        extra_users: resolvedExtraUsers,
         extra_attendants: extras?.extra_attendants || 0,
         extra_technicians: extras?.extra_technicians || 0,
         extra_administrators: extras?.extra_administrators || 0,
+        custom_max_users: extras?.custom_max_users,
         custom_max_administrators: extras?.custom_max_administrators,
         custom_max_attendants: extras?.custom_max_attendants,
         custom_max_technicians: extras?.custom_max_technicians,
@@ -1925,13 +2044,13 @@ export class AppStore {
       action: 'ATRIBUICAO_PLANO_SAAS',
       resource: 'subscriptions',
       resource_id: sub.id,
-      details: `Atribuído plano ${plan.name} para a empresa. Extras configurados: Atendentes: ${sub.extra_attendants}, Técnicos: ${sub.extra_technicians}, Admins: ${sub.extra_administrators}`
+      details: `Atribuído plano ${plan.name} para a empresa. Usuários extras: ${sub.extra_users || 0}`
     });
 
     return sub;
   }
 
-  // Calculate Effective User Limits and Pricing for any Company
+  // Calculate Effective User Limits and Pricing for any Company (Unified Max Users)
   static getEffectiveLimits(tenantId: string) {
     const data = this.getStoreData();
     const plans: Plan[] = data.plans || MOCK_PLANS;
@@ -1944,6 +2063,7 @@ export class AppStore {
       plan_id: plans[0]?.id || 'default',
       status: 'ACTIVE' as const,
       starts_at: new Date().toISOString(),
+      extra_users: 0,
       extra_attendants: 0,
       extra_technicians: 0,
       extra_administrators: 0
@@ -1951,52 +2071,57 @@ export class AppStore {
 
     const plan = plans.find(p => p.id === sub.plan_id) || plans[0] || MOCK_PLANS[0];
 
-    const maxAdmins = sub.custom_max_administrators !== undefined
-      ? sub.custom_max_administrators
-      : (plan.max_administrators || 1) + (sub.extra_administrators || 0);
+    // Unified total users calculation
+    const extraUsers = sub.extra_users !== undefined 
+      ? sub.extra_users 
+      : ((sub.extra_administrators || 0) + (sub.extra_attendants || 0) + (sub.extra_technicians || 0));
 
-    const maxAttendants = sub.custom_max_attendants !== undefined
-      ? sub.custom_max_attendants
-      : (plan.max_attendants || 2) + (sub.extra_attendants || 0);
+    const maxUsers = sub.custom_max_users !== undefined
+      ? sub.custom_max_users
+      : (plan.max_users || plan.max_total_users || 4) + extraUsers;
 
-    const maxTechs = sub.custom_max_technicians !== undefined
-      ? sub.custom_max_technicians
-      : (plan.max_technicians || 1) + (sub.extra_technicians || 0);
+    const tenantProfiles = profiles.filter(p => p.tenant_id === tenantId && p.is_active !== false && p.role !== 'SUPER_ADMIN');
+    const usedUsers = tenantProfiles.length;
+    const availableUsers = Math.max(0, maxUsers - usedUsers);
+    const canAddUser = usedUsers < maxUsers;
 
-    const maxTotal = maxAdmins + maxAttendants + maxTechs;
-
-    const tenantProfiles = profiles.filter(p => p.tenant_id === tenantId && p.is_active !== false);
     const usedAdmins = tenantProfiles.filter(p => p.role === 'ADMINISTRADOR').length;
     const usedAttendants = tenantProfiles.filter(p => p.role === 'ATENDENTE').length;
     const usedTechs = tenantProfiles.filter(p => p.role === 'TECNICO').length;
-    const usedTotal = usedAdmins + usedAttendants + usedTechs;
 
-    // Monthly pricing calculation
+    // Standard extra user pricing calculation
     const basePrice = plan.monthly_price || 0;
-    const extraAttPrice = (sub.extra_attendants || 0) * (plan.extra_attendant_price || 15);
-    const extraTechPrice = (sub.extra_technicians || 0) * (plan.extra_technician_price || 20);
-    const extraAdmPrice = (sub.extra_administrators || 0) * (plan.extra_admin_price || 25);
-    const calculatedPrice = basePrice + extraAttPrice + extraTechPrice + extraAdmPrice;
+    const extraUserPrice = plan.extra_user_price || 15.00;
+    const extraUsersTotalCost = extraUsers * extraUserPrice;
+    const calculatedPrice = basePrice + extraUsersTotalCost;
     const finalMonthlyPrice = sub.custom_price !== undefined ? sub.custom_price : calculatedPrice;
 
     return {
       subscription: sub,
       plan,
-      maxAdmins,
-      maxAttendants,
-      maxTechs,
-      maxTotal,
+      maxUsers,
+      usedUsers,
+      availableUsers,
+      canAddUser,
+      extraUsers,
+      extraUserPrice,
+      extraUsersTotalCost,
+      // Backward-compatibility aliases
+      maxTotal: maxUsers,
+      usedTotal: usedUsers,
+      canAddAdmin: canAddUser,
+      canAddAttendant: canAddUser,
+      canAddTech: canAddUser,
+      maxAdmins: maxUsers,
+      maxAttendants: maxUsers,
+      maxTechs: maxUsers,
       usedAdmins,
       usedAttendants,
       usedTechs,
-      usedTotal,
-      canAddAdmin: usedAdmins < maxAdmins,
-      canAddAttendant: usedAttendants < maxAttendants,
-      canAddTech: usedTechs < maxTechs,
       basePrice,
-      extraAttPrice,
-      extraTechPrice,
-      extraAdmPrice,
+      extraAttPrice: 0,
+      extraTechPrice: 0,
+      extraAdmPrice: 0,
       finalMonthlyPrice
     };
   }
@@ -2220,21 +2345,114 @@ export class AppStore {
     return (data.profiles || MOCK_PROFILES).filter((p: Profile) => p.tenant_id === tenantId);
   }
 
+  // Permission Groups Management
+  static getPermissionGroups(tenantId?: string): PermissionGroup[] {
+    const data = this.getStoreData();
+    const groups: PermissionGroup[] = Array.isArray(data.permissionGroups) && data.permissionGroups.length > 0 
+      ? data.permissionGroups 
+      : DEFAULT_PERMISSION_GROUPS;
+    
+    // Return system defaults + tenant custom groups
+    return groups.filter(g => !g.tenant_id || !tenantId || g.tenant_id === tenantId);
+  }
+
+  static addPermissionGroup(
+    group: Omit<PermissionGroup, 'id' | 'created_at' | 'updated_at'>, 
+    performedByName?: string
+  ): PermissionGroup {
+    const data = this.getStoreData();
+    if (!Array.isArray(data.permissionGroups)) data.permissionGroups = [...DEFAULT_PERMISSION_GROUPS];
+
+    const newGroup: PermissionGroup = {
+      ...group,
+      id: generateUUID(),
+      is_system_default: false,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    data.permissionGroups.push(newGroup);
+    this.saveStoreData(data);
+
+    this.logAudit({
+      tenant_id: group.tenant_id,
+      user_name: performedByName || 'Administrador',
+      action: 'CRIACAO_GRUPO_PERMISSAO',
+      resource: 'permission_groups',
+      resource_id: newGroup.id,
+      details: `Criado novo grupo de permissões "${newGroup.name}"`
+    });
+
+    return newGroup;
+  }
+
+  static updatePermissionGroup(
+    groupId: string, 
+    updates: Partial<PermissionGroup>, 
+    performedByName?: string
+  ): PermissionGroup {
+    const data = this.getStoreData();
+    if (!Array.isArray(data.permissionGroups)) data.permissionGroups = [...DEFAULT_PERMISSION_GROUPS];
+
+    const idx = data.permissionGroups.findIndex((g: PermissionGroup) => g.id === groupId);
+    if (idx === -1) throw new Error('Grupo de permissões não encontrado.');
+
+    const old = data.permissionGroups[idx];
+    const updated: PermissionGroup = {
+      ...old,
+      ...updates,
+      updated_at: new Date().toISOString()
+    };
+
+    data.permissionGroups[idx] = updated;
+    this.saveStoreData(data);
+
+    this.logAudit({
+      tenant_id: updated.tenant_id,
+      user_name: performedByName || 'Administrador',
+      action: 'EDICAO_GRUPO_PERMISSAO',
+      resource: 'permission_groups',
+      resource_id: groupId,
+      details: `Atualizado grupo de permissões "${updated.name}"`
+    });
+
+    return updated;
+  }
+
+  static deletePermissionGroup(groupId: string, performedByName?: string): boolean {
+    const data = this.getStoreData();
+    if (!Array.isArray(data.permissionGroups)) data.permissionGroups = [...DEFAULT_PERMISSION_GROUPS];
+
+    const group = data.permissionGroups.find((g: PermissionGroup) => g.id === groupId);
+    if (!group) throw new Error('Grupo não encontrado.');
+    if (group.is_system_default) {
+      throw new Error('Grupos padrão do sistema (Administrador, Técnico, Atendente) não podem ser excluídos.');
+    }
+
+    data.permissionGroups = data.permissionGroups.filter((g: PermissionGroup) => g.id !== groupId);
+    this.saveStoreData(data);
+
+    this.logAudit({
+      tenant_id: group.tenant_id,
+      user_name: performedByName || 'Administrador',
+      action: 'EXCLUSAO_GRUPO_PERMISSAO',
+      resource: 'permission_groups',
+      resource_id: groupId,
+      details: `Excluído grupo de permissões "${group.name}"`
+    });
+
+    return true;
+  }
+
   static addUser(user: Omit<Profile, 'id' | 'created_at'>, performedByName?: string): Profile {
     const data = this.getStoreData();
     if (!data.profiles) data.profiles = MOCK_PROFILES;
 
-    // Validate limits
+    // Validate unified limit
     if (user.tenant_id) {
       const limits = this.getEffectiveLimits(user.tenant_id);
-      if (user.role === 'ADMINISTRADOR' && !limits.canAddAdmin) {
-        throw new Error(`Limite de Administradores atingido para esta empresa (Máximo: ${limits.maxAdmins}). Contate o Administrador Central.`);
-      }
-      if (user.role === 'ATENDENTE' && !limits.canAddAttendant) {
-        throw new Error(`Limite de Atendentes atingido para esta empresa (Máximo: ${limits.maxAttendants}). Contate o Administrador Central.`);
-      }
-      if (user.role === 'TECNICO' && !limits.canAddTech) {
-        throw new Error(`Limite de Técnicos atingido para esta empresa (Máximo: ${limits.maxTechs}). Contate o Administrador Central.`);
+      if (!limits.canAddUser) {
+        throw new Error(`Limite máximo de usuários atingido para esta empresa (Máximo: ${limits.maxUsers} usuários ativos). Adquira usuários adicionais ou faça upgrade de plano.`);
       }
     }
 

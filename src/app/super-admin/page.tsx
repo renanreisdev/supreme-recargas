@@ -106,32 +106,22 @@ export default function SuperAdminPage() {
 
   // Manage Tenant Subscription / Extras Form State
   const [subSelectedPlanId, setSubSelectedPlanId] = useState('');
-  const [subExtraAttendants, setSubExtraAttendants] = useState(0);
-  const [subExtraTechs, setSubExtraTechs] = useState(0);
-  const [subExtraAdmins, setSubExtraAdmins] = useState(0);
+  const [subExtraUsers, setSubExtraUsers] = useState(0);
   const [subCustomPrice, setSubCustomPrice] = useState<string>('');
-  const [subCustomMaxAdmins, setSubCustomMaxAdmins] = useState<string>('');
-  const [subCustomMaxAtts, setSubCustomMaxAtts] = useState<string>('');
-  const [subCustomMaxTechs, setSubCustomMaxTechs] = useState<string>('');
+  const [subCustomMaxUsers, setSubCustomMaxUsers] = useState<string>('');
 
   // Plan Form State (Create / Edit Plan)
   const [planName, setPlanName] = useState('');
   const [planCode, setPlanCode] = useState('');
   const [planDescription, setPlanDescription] = useState('');
   const [planMonthlyPrice, setPlanMonthlyPrice] = useState(0);
-  const [planMaxAdmins, setPlanMaxAdmins] = useState(1);
-  const [planMaxAtts, setPlanMaxAtts] = useState(3);
-  const [planMaxTechs, setPlanMaxTechs] = useState(1);
-  const [planExtraAttPrice, setPlanExtraAttPrice] = useState(15);
-  const [planExtraTechPrice, setPlanExtraTechPrice] = useState(20);
-  const [planExtraAdminPrice, setPlanExtraAdminPrice] = useState(25);
+  const [planMaxUsers, setPlanMaxUsers] = useState(5);
+  const [planExtraUserPrice, setPlanExtraUserPrice] = useState(15);
   const [planFeatures, setPlanFeatures] = useState('');
 
   // Calculator / Simulator State
   const [calcPlanId, setCalcPlanId] = useState('');
-  const [calcExtraAtts, setCalcExtraAtts] = useState(0);
-  const [calcExtraTechs, setCalcExtraTechs] = useState(0);
-  const [calcExtraAdmins, setCalcExtraAdmins] = useState(0);
+  const [calcExtraUsers, setCalcExtraUsers] = useState(0);
   const [calcDiscount, setCalcDiscount] = useState(0);
   const [calcCopied, setCalcCopied] = useState(false);
 
@@ -358,13 +348,9 @@ Olá! Conforme solicitado, aqui estão os dados para você testar nosso sistema 
     const limits = AppStore.getEffectiveLimits(c.id);
     setTenantForPlanManage(c);
     setSubSelectedPlanId(limits.subscription.plan_id || limits.plan.id);
-    setSubExtraAttendants(limits.subscription.extra_attendants || 0);
-    setSubExtraTechs(limits.subscription.extra_technicians || 0);
-    setSubExtraAdmins(limits.subscription.extra_administrators || 0);
+    setSubExtraUsers(limits.subscription.extra_users || (limits.subscription.extra_attendants || 0) + (limits.subscription.extra_technicians || 0) + (limits.subscription.extra_administrators || 0));
     setSubCustomPrice(limits.subscription.custom_price !== undefined ? String(limits.subscription.custom_price) : '');
-    setSubCustomMaxAdmins(limits.subscription.custom_max_administrators !== undefined ? String(limits.subscription.custom_max_administrators) : '');
-    setSubCustomMaxAtts(limits.subscription.custom_max_attendants !== undefined ? String(limits.subscription.custom_max_attendants) : '');
-    setSubCustomMaxTechs(limits.subscription.custom_max_technicians !== undefined ? String(limits.subscription.custom_max_technicians) : '');
+    setSubCustomMaxUsers(limits.subscription.custom_max_users !== undefined ? String(limits.subscription.custom_max_users) : '');
     setShowManagePlanModal(true);
   };
 
@@ -377,13 +363,9 @@ Olá! Conforme solicitado, aqui estão os dados para você testar nosso sistema 
         tenantForPlanManage.id,
         subSelectedPlanId,
         {
-          extra_attendants: Number(subExtraAttendants) || 0,
-          extra_technicians: Number(subExtraTechs) || 0,
-          extra_administrators: Number(subExtraAdmins) || 0,
+          extra_users: Number(subExtraUsers) || 0,
           custom_price: subCustomPrice !== '' ? Number(subCustomPrice) : undefined,
-          custom_max_administrators: subCustomMaxAdmins !== '' ? Number(subCustomMaxAdmins) : undefined,
-          custom_max_attendants: subCustomMaxAtts !== '' ? Number(subCustomMaxAtts) : undefined,
-          custom_max_technicians: subCustomMaxTechs !== '' ? Number(subCustomMaxTechs) : undefined
+          custom_max_users: subCustomMaxUsers !== '' ? Number(subCustomMaxUsers) : undefined
         },
         currentUser.full_name
       );
@@ -403,12 +385,8 @@ Olá! Conforme solicitado, aqui estão os dados para você testar nosso sistema 
     setPlanCode('');
     setPlanDescription('');
     setPlanMonthlyPrice(79.90);
-    setPlanMaxAdmins(1);
-    setPlanMaxAtts(4);
-    setPlanMaxTechs(2);
-    setPlanExtraAttPrice(15);
-    setPlanExtraTechPrice(20);
-    setPlanExtraAdminPrice(25);
+    setPlanMaxUsers(5);
+    setPlanExtraUserPrice(15);
     setPlanFeatures('Emissão de Comandas\nBancada Técnica Kanban\nRelatórios Financeiros\nRastreio via QR Code');
     setShowPlanFormModal(true);
   };
@@ -419,12 +397,8 @@ Olá! Conforme solicitado, aqui estão os dados para você testar nosso sistema 
     setPlanCode(p.code);
     setPlanDescription(p.description || '');
     setPlanMonthlyPrice(p.monthly_price);
-    setPlanMaxAdmins(p.max_administrators);
-    setPlanMaxAtts(p.max_attendants);
-    setPlanMaxTechs(p.max_technicians);
-    setPlanExtraAttPrice(p.extra_attendant_price || 15);
-    setPlanExtraTechPrice(p.extra_technician_price || 20);
-    setPlanExtraAdminPrice(p.extra_admin_price || 25);
+    setPlanMaxUsers(p.max_users || p.max_total_users || 5);
+    setPlanExtraUserPrice(p.extra_user_price || 15);
     setPlanFeatures(p.features ? p.features.join('\n') : '');
     setShowPlanFormModal(true);
   };
@@ -448,13 +422,15 @@ Olá! Conforme solicitado, aqui estão os dados para você testar nosso sistema 
           code: planCode || planName.toUpperCase().replace(/\s+/g, '_'),
           description: planDescription,
           monthly_price: Number(planMonthlyPrice),
-          max_administrators: Number(planMaxAdmins),
-          max_attendants: Number(planMaxAtts),
-          max_technicians: Number(planMaxTechs),
-          max_total_users: Number(planMaxAdmins) + Number(planMaxAtts) + Number(planMaxTechs),
-          extra_attendant_price: Number(planExtraAttPrice),
-          extra_technician_price: Number(planExtraTechPrice),
-          extra_admin_price: Number(planExtraAdminPrice),
+          max_users: Number(planMaxUsers),
+          extra_user_price: Number(planExtraUserPrice),
+          max_administrators: Number(planMaxUsers),
+          max_attendants: Number(planMaxUsers),
+          max_technicians: Number(planMaxUsers),
+          max_total_users: Number(planMaxUsers),
+          extra_attendant_price: Number(planExtraUserPrice),
+          extra_technician_price: Number(planExtraUserPrice),
+          extra_admin_price: Number(planExtraUserPrice),
           features: featureList
         }, currentUser.full_name);
         showToast(`Plano "${planName}" atualizado com sucesso!`);
@@ -464,13 +440,15 @@ Olá! Conforme solicitado, aqui estão os dados para você testar nosso sistema 
           code: planCode || planName.toUpperCase().replace(/\s+/g, '_'),
           description: planDescription,
           monthly_price: Number(planMonthlyPrice),
-          max_administrators: Number(planMaxAdmins),
-          max_attendants: Number(planMaxAtts),
-          max_technicians: Number(planMaxTechs),
-          max_total_users: Number(planMaxAdmins) + Number(planMaxAtts) + Number(planMaxTechs),
-          extra_attendant_price: Number(planExtraAttPrice),
-          extra_technician_price: Number(planExtraTechPrice),
-          extra_admin_price: Number(planExtraAdminPrice),
+          max_users: Number(planMaxUsers),
+          extra_user_price: Number(planExtraUserPrice),
+          max_administrators: Number(planMaxUsers),
+          max_attendants: Number(planMaxUsers),
+          max_technicians: Number(planMaxUsers),
+          max_total_users: Number(planMaxUsers),
+          extra_attendant_price: Number(planExtraUserPrice),
+          extra_technician_price: Number(planExtraUserPrice),
+          extra_admin_price: Number(planExtraUserPrice),
           features: featureList,
           is_active: true
         }, currentUser.full_name);
@@ -527,24 +505,20 @@ Olá! Conforme solicitado, aqui estão os dados para você testar nosso sistema 
   }, [plans, calcPlanId]);
 
   const calcResults = useMemo(() => {
-    if (!selectedCalcPlan) return { base: 0, extraAtt: 0, extraTech: 0, extraAdm: 0, subtotal: 0, total: 0 };
+    if (!selectedCalcPlan) return { base: 0, extraUsersCost: 0, subtotal: 0, total: 0, totalUsers: 0 };
     const base = selectedCalcPlan.monthly_price;
-    const extraAtt = calcExtraAtts * (selectedCalcPlan.extra_attendant_price || 15);
-    const extraTech = calcExtraTechs * (selectedCalcPlan.extra_technician_price || 20);
-    const extraAdm = calcExtraAdmins * (selectedCalcPlan.extra_admin_price || 25);
-    const subtotal = base + extraAtt + extraTech + extraAdm;
+    const extraUsersCost = calcExtraUsers * (selectedCalcPlan.extra_user_price || 15);
+    const subtotal = base + extraUsersCost;
     const total = Math.max(0, subtotal - Number(calcDiscount || 0));
 
     return {
       base,
-      extraAtt,
-      extraTech,
-      extraAdm,
+      extraUsersCost,
       subtotal,
       total,
-      totalUsers: selectedCalcPlan.max_administrators + calcExtraAdmins + selectedCalcPlan.max_attendants + calcExtraAtts + selectedCalcPlan.max_technicians + calcExtraTechs
+      totalUsers: (selectedCalcPlan.max_users || selectedCalcPlan.max_total_users || 5) + calcExtraUsers
     };
-  }, [selectedCalcPlan, calcExtraAtts, calcExtraTechs, calcExtraAdmins, calcDiscount]);
+  }, [selectedCalcPlan, calcExtraUsers, calcDiscount]);
 
   const copyProposalToClipboard = () => {
     if (!selectedCalcPlan) return;
@@ -552,13 +526,12 @@ Olá! Conforme solicitado, aqui estão os dados para você testar nosso sistema 
 Plano Escolhido: ${selectedCalcPlan.name}
 ----------------------------------------
 • Mensalidade Base: ${formatCurrency(calcResults.base)}
-• Atendentes Inclusos: ${selectedCalcPlan.max_attendants}${calcExtraAtts > 0 ? ` (+${calcExtraAtts} extras: ${formatCurrency(calcResults.extraAtt)})` : ''}
-• Técnicos Inclusos: ${selectedCalcPlan.max_technicians}${calcExtraTechs > 0 ? ` (+${calcExtraTechs} extras: ${formatCurrency(calcResults.extraTech)})` : ''}
-• Administradores Inclusos: ${selectedCalcPlan.max_administrators}${calcExtraAdmins > 0 ? ` (+${calcExtraAdmins} extras: ${formatCurrency(calcResults.extraAdm)})` : ''}
+• Usuários Inclusos: ${selectedCalcPlan.max_users || 5} usuários
+${calcExtraUsers > 0 ? `• Usuários Adicionais: +${calcExtraUsers} extras (${formatCurrency(calcResults.extraUsersCost)})\n` : ''}
 ${calcDiscount > 0 ? `• Desconto Especial: -${formatCurrency(calcDiscount)}\n` : ''}
 *VALOR TOTAL MENSAL: ${formatCurrency(calcResults.total)} / mês*
-Total de Acessos Simultâneos: ${calcResults.totalUsers} usuários
-Incluso: Emissão com QR Code, Bancada Técnica, Rastreio e Impressão Térmica.`;
+Capacidade Total: ${calcResults.totalUsers} usuários simultâneos
+Incluso: Emissão de Comandas, Bancada Técnica Kanban, Rastreio e Impressão Térmica.`;
 
     navigator.clipboard.writeText(text);
     setCalcCopied(true);
@@ -1004,20 +977,15 @@ Incluso: Emissão com QR Code, Bancada Técnica, Rastreio e Impressão Térmica.
                     {/* Limits Included */}
                     <div className="p-5 space-y-4">
                       <div>
-                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Limites Inclusos no Plano</p>
-                        <div className="grid grid-cols-3 gap-2 text-center">
-                          <div className="p-2 bg-blue-50 dark:bg-blue-950/40 rounded-lg border border-blue-200 dark:border-blue-900/50">
-                            <span className="text-xs text-slate-500 block">Admins</span>
-                            <span className="text-base font-bold text-blue-600 dark:text-blue-400">{p.max_administrators}</span>
+                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Capacidade Inclusa</p>
+                        <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-200 dark:border-emerald-900/50 flex items-center justify-between">
+                          <div>
+                            <span className="text-xs text-slate-500 block">Usuários Inclusos no Plano</span>
+                            <span className="text-xl font-black text-emerald-600 dark:text-emerald-400">{p.max_users || p.max_total_users || 5} usuários</span>
                           </div>
-                          <div className="p-2 bg-emerald-50 dark:bg-emerald-950/40 rounded-lg border border-emerald-200 dark:border-emerald-900/50">
-                            <span className="text-xs text-slate-500 block">Atendentes</span>
-                            <span className="text-base font-bold text-emerald-600 dark:text-emerald-400">{p.max_attendants}</span>
-                          </div>
-                          <div className="p-2 bg-amber-50 dark:bg-amber-950/40 rounded-lg border border-amber-200 dark:border-amber-900/50">
-                            <span className="text-xs text-slate-500 block">Técnicos</span>
-                            <span className="text-base font-bold text-amber-600 dark:text-amber-400">{p.max_technicians}</span>
-                          </div>
+                          <Badge className="bg-emerald-600 text-white font-bold text-[10px]">
+                            Sem limite por cargo
+                          </Badge>
                         </div>
                       </div>
 
@@ -1025,21 +993,11 @@ Incluso: Emissão com QR Code, Bancada Técnica, Rastreio e Impressão Térmica.
                       <div className="p-3 bg-purple-50/50 dark:bg-purple-950/30 rounded-xl border border-purple-200/60 dark:border-purple-900/40">
                         <p className="text-[11px] font-bold text-purple-900 dark:text-purple-300 mb-1.5 flex items-center gap-1">
                           <PlusCircle className="w-3.5 h-3.5 text-purple-600" />
-                          <span>Tabela de Usuários Adicionais</span>
+                          <span>Usuário Adicional / Extra</span>
                         </p>
-                        <div className="space-y-1 text-xs">
-                          <div className="flex justify-between text-slate-600 dark:text-slate-300">
-                            <span>+ 1 Atendente extra:</span>
-                            <span className="font-bold text-emerald-600">+{formatCurrency(p.extra_attendant_price || 15)}/mês</span>
-                          </div>
-                          <div className="flex justify-between text-slate-600 dark:text-slate-300">
-                            <span>+ 1 Técnico extra:</span>
-                            <span className="font-bold text-amber-600">+{formatCurrency(p.extra_technician_price || 20)}/mês</span>
-                          </div>
-                          <div className="flex justify-between text-slate-600 dark:text-slate-300">
-                            <span>+ 1 Administrador extra:</span>
-                            <span className="font-bold text-blue-600">+{formatCurrency(p.extra_admin_price || 25)}/mês</span>
-                          </div>
+                        <div className="flex justify-between text-xs text-slate-600 dark:text-slate-300">
+                          <span>Valor por usuário extra:</span>
+                          <span className="font-bold text-emerald-600">+{formatCurrency(p.extra_user_price || 15.00)}/mês</span>
                         </div>
                       </div>
 
@@ -1205,45 +1163,17 @@ Incluso: Emissão com QR Code, Bancada Técnica, Rastreio e Impressão Térmica.
                     2. Contratação de Usuários Extras / Adicionais
                   </p>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div>
-                      <label className="text-xs text-slate-600 dark:text-slate-400 font-semibold mb-1 block">
-                        + Atendentes Extras (+{formatCurrency(selectedCalcPlan?.extra_attendant_price || 15)}/un)
-                      </label>
-                      <Input
-                        type="number"
-                        min="0"
-                        value={calcExtraAtts}
-                        onChange={e => setCalcExtraAtts(Math.max(0, parseInt(e.target.value) || 0))}
-                        className="text-xs font-bold"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-xs text-slate-600 dark:text-slate-400 font-semibold mb-1 block">
-                        + Técnicos Extras (+{formatCurrency(selectedCalcPlan?.extra_technician_price || 20)}/un)
-                      </label>
-                      <Input
-                        type="number"
-                        min="0"
-                        value={calcExtraTechs}
-                        onChange={e => setCalcExtraTechs(Math.max(0, parseInt(e.target.value) || 0))}
-                        className="text-xs font-bold"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-xs text-slate-600 dark:text-slate-400 font-semibold mb-1 block">
-                        + Admins Extras (+{formatCurrency(selectedCalcPlan?.extra_admin_price || 25)}/un)
-                      </label>
-                      <Input
-                        type="number"
-                        min="0"
-                        value={calcExtraAdmins}
-                        onChange={e => setCalcExtraAdmins(Math.max(0, parseInt(e.target.value) || 0))}
-                        className="text-xs font-bold"
-                      />
-                    </div>
+                  <div>
+                    <label className="text-xs text-slate-600 dark:text-slate-400 font-semibold mb-1 block">
+                      + Usuários Adicionais Extras (+{formatCurrency(selectedCalcPlan?.extra_user_price || 15.00)}/mês cada)
+                    </label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={calcExtraUsers}
+                      onChange={e => setCalcExtraUsers(Math.max(0, parseInt(e.target.value) || 0))}
+                      className="text-xs font-bold"
+                    />
                   </div>
                 </div>
 
@@ -1285,24 +1215,10 @@ Incluso: Emissão com QR Code, Bancada Técnica, Rastreio e Impressão Térmica.
                     <span className="font-bold text-white">{formatCurrency(calcResults.base)}</span>
                   </div>
 
-                  {calcResults.extraAtt > 0 && (
+                  {calcResults.extraUsersCost > 0 && (
                     <div className="flex justify-between text-purple-200">
-                      <span>{calcExtraAtts} Atendente(s) Extra(s):</span>
-                      <span className="font-bold text-emerald-400">+{formatCurrency(calcResults.extraAtt)}</span>
-                    </div>
-                  )}
-
-                  {calcResults.extraTech > 0 && (
-                    <div className="flex justify-between text-purple-200">
-                      <span>{calcExtraTechs} Técnico(s) Extra(s):</span>
-                      <span className="font-bold text-amber-400">+{formatCurrency(calcResults.extraTech)}</span>
-                    </div>
-                  )}
-
-                  {calcResults.extraAdm > 0 && (
-                    <div className="flex justify-between text-purple-200">
-                      <span>{calcExtraAdmins} Administrador(es) Extra(s):</span>
-                      <span className="font-bold text-blue-400">+{formatCurrency(calcResults.extraAdm)}</span>
+                      <span>{calcExtraUsers} Usuário(s) Adicional(is):</span>
+                      <span className="font-bold text-emerald-400">+{formatCurrency(calcResults.extraUsersCost)}</span>
                     </div>
                   )}
 
@@ -1887,51 +1803,26 @@ Incluso: Emissão com QR Code, Bancada Técnica, Rastreio e Impressão Térmica.
                 </Select>
               </div>
 
-              {/* Extras by Role */}
+              {/* Extras by Unified Users */}
               <div className="p-4 bg-purple-50/50 dark:bg-purple-950/30 rounded-xl border border-purple-200/60 dark:border-purple-900/40 space-y-3">
                 <p className="font-bold text-purple-900 dark:text-purple-300 uppercase tracking-wider text-[11px]">
                   Contratação de Usuários Extras (Add-ons Mensais)
                 </p>
 
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="text-[11px] text-slate-600 dark:text-slate-400 font-semibold mb-1 block">
-                      + Atendentes Extras
-                    </label>
-                    <Input
-                      type="number"
-                      min="0"
-                      value={subExtraAttendants}
-                      onChange={e => setSubExtraAttendants(Math.max(0, parseInt(e.target.value) || 0))}
-                      className="text-xs font-bold bg-white dark:bg-slate-900"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[11px] text-slate-600 dark:text-slate-400 font-semibold mb-1 block">
-                      + Técnicos Extras
-                    </label>
-                    <Input
-                      type="number"
-                      min="0"
-                      value={subExtraTechs}
-                      onChange={e => setSubExtraTechs(Math.max(0, parseInt(e.target.value) || 0))}
-                      className="text-xs font-bold bg-white dark:bg-slate-900"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[11px] text-slate-600 dark:text-slate-400 font-semibold mb-1 block">
-                      + Admins Extras
-                    </label>
-                    <Input
-                      type="number"
-                      min="0"
-                      value={subExtraAdmins}
-                      onChange={e => setSubExtraAdmins(Math.max(0, parseInt(e.target.value) || 0))}
-                      className="text-xs font-bold bg-white dark:bg-slate-900"
-                    />
-                  </div>
+                <div>
+                  <label className="text-[11px] text-slate-600 dark:text-slate-400 font-semibold mb-1 block">
+                    + Usuários Adicionais Contratados
+                  </label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={subExtraUsers}
+                    onChange={e => setSubExtraUsers(Math.max(0, parseInt(e.target.value) || 0))}
+                    className="text-xs font-bold bg-white dark:bg-slate-900"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Cada usuário adicional acrescenta o valor contratado ao faturamento mensal da empresa.
+                  </p>
                 </div>
               </div>
 
@@ -1941,18 +1832,32 @@ Incluso: Emissão com QR Code, Bancada Técnica, Rastreio e Impressão Térmica.
                   Overrides Especiais (Exceções & Negociação Direta)
                 </p>
 
-                <div>
-                  <label className="text-[11px] text-slate-600 dark:text-slate-400 font-semibold mb-1 block">
-                    Mensalidade Fixa Customizada (R$) — Deixe vazio para cálculo automático
-                  </label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    placeholder="Ex: 99.90 (ou vazio)"
-                    value={subCustomPrice}
-                    onChange={e => setSubCustomPrice(e.target.value)}
-                    className="text-xs bg-white dark:bg-slate-900"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] text-slate-600 dark:text-slate-400 font-semibold mb-1 block">
+                      Mensalidade Fixa Customizada (R$)
+                    </label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      placeholder="Ex: 99.90 (ou vazio)"
+                      value={subCustomPrice}
+                      onChange={e => setSubCustomPrice(e.target.value)}
+                      className="text-xs bg-white dark:bg-slate-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-slate-600 dark:text-slate-400 font-semibold mb-1 block">
+                      Capacidade Máx. Customizada (Total)
+                    </label>
+                    <Input
+                      type="number"
+                      placeholder="Ex: 10 (ou vazio)"
+                      value={subCustomMaxUsers}
+                      onChange={e => setSubCustomMaxUsers(e.target.value)}
+                      className="text-xs bg-white dark:bg-slate-900"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -2011,7 +1916,7 @@ Incluso: Emissão com QR Code, Bancada Técnica, Rastreio e Impressão Térmica.
               <div>
                 <label className="font-bold mb-1 block">Descrição do Plano</label>
                 <Input
-                  placeholder="Ex: Para assistências com 10 a 20 recargas diárias"
+                  placeholder="Ex: Para assistências com 10 a 20 atendimentos diários"
                   value={planDescription}
                   onChange={e => setPlanDescription(e.target.value)}
                 />
@@ -2019,11 +1924,11 @@ Incluso: Emissão com QR Code, Bancada Técnica, Rastreio e Impressão Térmica.
 
               <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3">
                 <p className="font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider text-[11px]">
-                  Limites Inclusos na Mensalidade Base
+                  Limites & Precificação do Plano
                 </p>
-                <div className="grid grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <label className="font-semibold text-slate-600 dark:text-slate-400 mb-1 block">Preço Base (R$)</label>
+                    <label className="font-semibold text-slate-600 dark:text-slate-400 mb-1 block">Preço Base (R$/mês)</label>
                     <Input
                       type="number"
                       step="0.01"
@@ -2034,75 +1939,24 @@ Incluso: Emissão com QR Code, Bancada Técnica, Rastreio e Impressão Térmica.
                     />
                   </div>
                   <div>
-                    <label className="font-semibold text-slate-600 dark:text-slate-400 mb-1 block">Max Admins</label>
+                    <label className="font-semibold text-slate-600 dark:text-slate-400 mb-1 block">Capacidade de Usuários Inclusos</label>
                     <Input
                       type="number"
                       min="1"
-                      value={planMaxAdmins}
-                      onChange={e => setPlanMaxAdmins(parseInt(e.target.value) || 1)}
-                      className="bg-white dark:bg-slate-900"
+                      value={planMaxUsers}
+                      onChange={e => setPlanMaxUsers(parseInt(e.target.value) || 1)}
+                      className="bg-white dark:bg-slate-900 font-bold"
                     />
                   </div>
                   <div>
-                    <label className="font-semibold text-slate-600 dark:text-slate-400 mb-1 block">Max Atendentes</label>
-                    <Input
-                      type="number"
-                      min="1"
-                      value={planMaxAtts}
-                      onChange={e => setPlanMaxAtts(parseInt(e.target.value) || 1)}
-                      className="bg-white dark:bg-slate-900"
-                    />
-                  </div>
-                  <div>
-                    <label className="font-semibold text-slate-600 dark:text-slate-400 mb-1 block">Max Técnicos</label>
-                    <Input
-                      type="number"
-                      min="1"
-                      value={planMaxTechs}
-                      onChange={e => setPlanMaxTechs(parseInt(e.target.value) || 1)}
-                      className="bg-white dark:bg-slate-900"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Extra pricing rules */}
-              <div className="p-3.5 bg-purple-50/50 dark:bg-purple-950/30 rounded-xl border border-purple-200/60 dark:border-purple-900/40 space-y-3">
-                <p className="font-bold text-purple-900 dark:text-purple-300 uppercase tracking-wider text-[11px]">
-                  Precificação de Usuários Extras / Adicionais (R$/mês cada)
-                </p>
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="font-semibold text-slate-600 dark:text-slate-400 mb-1 block">Atendente Extra (R$)</label>
+                    <label className="font-semibold text-slate-600 dark:text-slate-400 mb-1 block">Valor por Usuário Extra (R$/mês)</label>
                     <Input
                       type="number"
                       step="0.01"
                       min="0"
-                      value={planExtraAttPrice}
-                      onChange={e => setPlanExtraAttPrice(parseFloat(e.target.value) || 0)}
-                      className="bg-white dark:bg-slate-900"
-                    />
-                  </div>
-                  <div>
-                    <label className="font-semibold text-slate-600 dark:text-slate-400 mb-1 block">Técnico Extra (R$)</label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={planExtraTechPrice}
-                      onChange={e => setPlanExtraTechPrice(parseFloat(e.target.value) || 0)}
-                      className="bg-white dark:bg-slate-900"
-                    />
-                  </div>
-                  <div>
-                    <label className="font-semibold text-slate-600 dark:text-slate-400 mb-1 block">Admin Extra (R$)</label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={planExtraAdminPrice}
-                      onChange={e => setPlanExtraAdminPrice(parseFloat(e.target.value) || 0)}
-                      className="bg-white dark:bg-slate-900"
+                      value={planExtraUserPrice}
+                      onChange={e => setPlanExtraUserPrice(parseFloat(e.target.value) || 0)}
+                      className="bg-white dark:bg-slate-900 font-bold"
                     />
                   </div>
                 </div>

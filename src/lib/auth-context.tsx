@@ -121,13 +121,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!currentUser) return false;
     if (currentUser.role === 'SUPER_ADMIN') return true;
 
-    // Check if user has explicit granular override in custom_permissions
+    // 1. Check if user has explicit granular override in custom_permissions
     if (currentUser.custom_permissions && typeof currentUser.custom_permissions[permission] === 'boolean') {
       return currentUser.custom_permissions[permission];
     }
 
+    // 2. Check if user belongs to a permission group
+    if (currentUser.group_id) {
+      try {
+        const groups = AppStore.getPermissionGroups(currentUser.tenant_id);
+        const group = groups.find(g => g.id === currentUser.group_id);
+        if (group && group.permissions && typeof group.permissions[permission] === 'boolean') {
+          return group.permissions[permission];
+        }
+      } catch (e) {
+        // fallback to role
+      }
+    }
+
+    // 3. Fallback to base role permissions
     switch (permission) {
-      // Admin exclusive permissions (can be granted to others via custom_permissions)
+      // Admin exclusive permissions (can be granted to others via custom_permissions or group)
       case 'manage_company':
       case 'manage_users':
       case 'manage_models':

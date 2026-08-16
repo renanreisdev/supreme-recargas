@@ -72,19 +72,33 @@ export interface SegmentCustomization {
   iconName?: string;
 }
 
+export interface PermissionGroup {
+  id: string;
+  tenant_id: string;
+  name: string;
+  description?: string;
+  is_system_default?: boolean;
+  default_role: UserRole;
+  permissions: Record<string, boolean>;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface Plan {
   id: string;
   name: string;
   code: string;
   description: string;
-  max_administrators: number;
-  max_attendants: number;
-  max_technicians: number;
-  max_total_users?: number;
+  max_users: number;
   monthly_price: number;
-  extra_attendant_price: number;
-  extra_technician_price: number;
-  extra_admin_price: number;
+  extra_user_price: number;
+  max_administrators?: number;
+  max_attendants?: number;
+  max_technicians?: number;
+  max_total_users?: number;
+  extra_attendant_price?: number;
+  extra_technician_price?: number;
+  extra_admin_price?: number;
   features?: string[];
   is_active: boolean;
   created_at?: string;
@@ -118,6 +132,8 @@ export interface Subscription {
   status: SubscriptionStatus;
   starts_at: string;
   expires_at?: string;
+  custom_max_users?: number;
+  extra_users?: number;
   custom_max_administrators?: number;
   custom_max_attendants?: number;
   custom_max_technicians?: number;
@@ -145,6 +161,8 @@ export interface Profile {
   password?: string;
   phone?: string;
   role: UserRole;
+  group_id?: string;
+  group_name?: string;
   avatar_url?: string;
   is_active: boolean;
   custom_permissions?: Record<string, boolean>;
