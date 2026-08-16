@@ -67,6 +67,14 @@ export default function CatalogAndModelsPage() {
   const [brandFilter, setBrandFilter] = useState('ALL');
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
+  // Unsaved Changes Confirmation Modal State
+  const [unsavedConfirmModal, setUnsavedConfirmModal] = useState<{
+    isOpen: boolean;
+    onConfirm: () => void;
+    title?: string;
+    message?: string;
+  } | null>(null);
+
   // ==========================================
   // MODEL MODAL STATE & OPTIONALS
   // ==========================================
@@ -186,6 +194,99 @@ export default function CatalogAndModelsPage() {
   const isScaleCategory = activeSelectedCategory?.inspection_type === 'SCALE';
 
   // ==========================================
+  // CONFIRMATION CLOSE HELPERS (UNSAVED CHANGES)
+  // ==========================================
+  const handleRequestCloseModelModal = () => {
+    const isDirty = Boolean(
+      modelName.trim() ||
+      modelInternalCode.trim() ||
+      modelBarcode.trim() ||
+      modelDesc.trim() ||
+      Object.keys(modelCustomAttributes).length > 0 ||
+      modelEmptyWeight ||
+      modelFullWeight ||
+      Object.keys(modelServicePrices).length > 0
+    );
+
+    if (isDirty) {
+      setUnsavedConfirmModal({
+        isOpen: true,
+        title: 'Descartar Alterações do Modelo?',
+        message: 'Você possui dados preenchidos ou modificados neste formulário. Tem certeza de que deseja sair sem salvar?',
+        onConfirm: () => setShowModelModal(false)
+      });
+    } else {
+      setShowModelModal(false);
+    }
+  };
+
+  const handleRequestCloseCategoryModal = () => {
+    const isDirty = Boolean(
+      catName.trim() ||
+      catDesc.trim() ||
+      catChecklistItems.length > 0 ||
+      catCustomFields.length > 0 ||
+      catTechnicalVerdicts.length > 0 ||
+      newFieldName.trim() ||
+      newChecklistInput.trim() ||
+      newVerdictInput.trim()
+    );
+
+    if (isDirty) {
+      setUnsavedConfirmModal({
+        isOpen: true,
+        title: 'Descartar Alterações da Categoria?',
+        message: 'As alterações feitas nesta categoria (opcionais, especificações, pareceres ou checklists) serão perdidas. Deseja realmente sair sem salvar?',
+        onConfirm: () => setShowCategoryModal(false)
+      });
+    } else {
+      setShowCategoryModal(false);
+    }
+  };
+
+  const handleRequestCloseServiceModal = () => {
+    const isDirty = Boolean(serviceName.trim() || serviceDesc.trim() || serviceCode.trim());
+    if (isDirty) {
+      setUnsavedConfirmModal({
+        isOpen: true,
+        title: 'Descartar Alterações do Serviço?',
+        message: 'Você tem informações não salvas neste serviço. Tem certeza de que deseja sair sem salvar?',
+        onConfirm: () => setShowServiceModal(false)
+      });
+    } else {
+      setShowServiceModal(false);
+    }
+  };
+
+  const handleRequestCloseBrandModal = () => {
+    const isDirty = Boolean(brandName.trim() || brandSlug.trim());
+    if (isDirty) {
+      setUnsavedConfirmModal({
+        isOpen: true,
+        title: 'Descartar Alterações da Marca?',
+        message: 'Você preencheu dados para esta marca. Deseja sair sem salvar?',
+        onConfirm: () => setShowBrandModal(false)
+      });
+    } else {
+      setShowBrandModal(false);
+    }
+  };
+
+  const handleRequestCloseStateModal = () => {
+    const isDirty = Boolean(stateName.trim() || stateCode.trim());
+    if (isDirty) {
+      setUnsavedConfirmModal({
+        isOpen: true,
+        title: 'Descartar Alterações da Etapa?',
+        message: 'Você preencheu dados para esta etapa do Kanban. Deseja sair sem salvar?',
+        onConfirm: () => setShowStateModal(false)
+      });
+    } else {
+      setShowStateModal(false);
+    }
+  };
+
+  // ==========================================
   // MODEL HANDLERS
   // ==========================================
   const handleOpenAddModel = () => {
@@ -241,7 +342,7 @@ export default function CatalogAndModelsPage() {
     setShowModelModal(true);
   };
 
-  // Helper to compose automatic description from name + attributes marked for description
+  // Helper to compose automatic description from name + attributes marked for description without '-'
   const handleAutoComposeDescription = () => {
     if (!modelName.trim()) return;
     const cat = categories.find(c => c.id === modelCategoryId);
@@ -249,7 +350,7 @@ export default function CatalogAndModelsPage() {
 
     if (cat?.custom_fields) {
       cat.custom_fields.forEach(f => {
-        if (f.include_in_description && modelCustomAttributes[f.name]) {
+        if (f.include_in_description && modelCustomAttributes[f.name] !== undefined && modelCustomAttributes[f.name] !== '' && modelCustomAttributes[f.name] !== null) {
           const val = modelCustomAttributes[f.name];
           if (typeof val === 'boolean') {
             if (val) parts.push(f.name);
@@ -260,7 +361,9 @@ export default function CatalogAndModelsPage() {
       });
     }
 
-    setModelDesc(parts.join(' - '));
+    // Single space separation without dashes
+    const fullDesc = parts.join(' ').replace(/\s+/g, ' ').trim();
+    setModelDesc(fullDesc);
   };
 
   const handleSaveModel = (e: React.FormEvent) => {
@@ -442,6 +545,8 @@ export default function CatalogAndModelsPage() {
       'Orçamento Reprovado / Devolvido'
     ]);
     setEditingFieldId(null);
+    setEditingVerdictIndex(null);
+    setEditingVerdictOldText(null);
     setNewChecklistInput('');
     setNewFieldName('');
     setNewFieldType('select');
@@ -513,6 +618,8 @@ export default function CatalogAndModelsPage() {
     setCatTechnicalVerdicts(verdicts);
 
     setEditingFieldId(null);
+    setEditingVerdictIndex(null);
+    setEditingVerdictOldText(null);
     setNewChecklistInput('');
     setNewFieldName('');
     setNewFieldType('select');
@@ -713,6 +820,59 @@ export default function CatalogAndModelsPage() {
 
   const handleToggleFieldIncludeInDescription = (fieldId: string) => {
     setCatCustomFields(catCustomFields.map(f => f.id === fieldId ? { ...f, include_in_description: !f.include_in_description } : f));
+  };
+
+  // Reorder Custom Field in Category
+  const handleMoveCustomField = (index: number, direction: 'UP' | 'DOWN') => {
+    const targetIndex = direction === 'UP' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= catCustomFields.length) return;
+    const updated = [...catCustomFields];
+    const [moved] = updated.splice(index, 1);
+    updated.splice(targetIndex, 0, moved);
+    setCatCustomFields(updated);
+  };
+
+  // Batch update model descriptions for all models in this category
+  const handleBatchUpdateModelDescriptions = () => {
+    if (!editingCategoryId) {
+      showToast('Salve a categoria primeiro para poder atualizar os modelos em lote.', 'error');
+      return;
+    }
+
+    const linkedModels = models.filter(m => m.category_id === editingCategoryId);
+    if (linkedModels.length === 0) {
+      showToast('Nenhum produto cadastrado nesta categoria para atualizar.', 'error');
+      return;
+    }
+
+    const confirmed = confirm(
+      `Deseja atualizar a Descrição Completa de todos os ${linkedModels.length} produtos desta categoria de acordo com a ordem atual dos opcionais?`
+    );
+    if (!confirmed) return;
+
+    let updatedCount = 0;
+    linkedModels.forEach(m => {
+      const parts: string[] = [m.name.trim()];
+      const attrs = m.custom_attributes || (m as any).attributes || {};
+
+      catCustomFields.forEach(f => {
+        if (f.include_in_description && attrs[f.name] !== undefined && attrs[f.name] !== '' && attrs[f.name] !== null) {
+          const val = attrs[f.name];
+          if (typeof val === 'boolean') {
+            if (val) parts.push(f.name);
+          } else {
+            parts.push(f.unit ? `${val}${f.unit}` : String(val));
+          }
+        }
+      });
+
+      const newDesc = parts.join(' ').replace(/\s+/g, ' ').trim();
+      AppStore.updateModel(m.id, { description: newDesc }, currentUser.full_name);
+      updatedCount++;
+    });
+
+    loadData();
+    showToast(`Descrição de ${updatedCount} produto(s) atualizada com sucesso!`);
   };
 
   const handleSaveCategory = (e: React.FormEvent) => {
@@ -956,6 +1116,50 @@ export default function CatalogAndModelsPage() {
         )}>
           {notification.type === 'success' ? <Check className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
           <span>{notification.message}</span>
+        </div>
+      )}
+
+      {/* Unsaved Changes Confirmation Modal */}
+      {unsavedConfirmModal && unsavedConfirmModal.isOpen && (
+        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4 animate-in zoom-in-95">
+            <div className="flex items-center gap-3 text-amber-600 dark:text-amber-400">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center border border-amber-500/20">
+                <AlertCircle className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-900 dark:text-slate-100">
+                  {unsavedConfirmModal.title || 'Sair sem Salvar?'}
+                </h3>
+                <p className="text-xs text-slate-500">Alterações não salvas serão perdidas.</p>
+              </div>
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-300">
+              {unsavedConfirmModal.message || 'Você realizou edições neste formulário. Tem certeza de que deseja fechar sem salvar as alterações?'}
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setUnsavedConfirmModal(null)}
+                className="text-xs font-semibold"
+              >
+                Continuar Editando
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => {
+                  const cb = unsavedConfirmModal.onConfirm;
+                  setUnsavedConfirmModal(null);
+                  cb();
+                }}
+                className="text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white"
+              >
+                Sim, Descartar e Sair
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1688,7 +1892,7 @@ export default function CatalogAndModelsPage() {
                   {editingModelId ? 'Editar Modelo de Equipamento' : 'Cadastrar Novo Modelo de Equipamento'}
                 </h3>
               </div>
-              <button onClick={() => setShowModelModal(false)} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+              <button onClick={handleRequestCloseModelModal} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1786,7 +1990,7 @@ export default function CatalogAndModelsPage() {
                     <Input
                       value={modelDesc}
                       onChange={e => setModelDesc(e.target.value)}
-                      placeholder="Ex: Cartucho HP 664 Preto Original ou Notebook Dell i5 16GB SSD 512GB"
+                      placeholder="Ex: HP 664 Tricolor Versão XL (Alta Capacidade) 32ml"
                       className="text-xs"
                     />
                   </div>
@@ -2002,7 +2206,7 @@ export default function CatalogAndModelsPage() {
 
               {/* Modal Actions */}
               <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
-                <Button type="button" variant="outline" onClick={() => setShowModelModal(false)} className="text-xs">
+                <Button type="button" variant="outline" onClick={handleRequestCloseModelModal} className="text-xs">
                   Cancelar
                 </Button>
                 <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5">
@@ -2028,7 +2232,7 @@ export default function CatalogAndModelsPage() {
                   {editingServiceId ? 'Editar Serviço / Procedimento' : 'Novo Serviço / Procedimento'}
                 </h3>
               </div>
-              <button onClick={() => setShowServiceModal(false)} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+              <button onClick={handleRequestCloseServiceModal} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -2158,7 +2362,7 @@ export default function CatalogAndModelsPage() {
 
               {/* Modal Actions */}
               <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
-                <Button type="button" variant="outline" onClick={() => setShowServiceModal(false)} className="text-xs">
+                <Button type="button" variant="outline" onClick={handleRequestCloseServiceModal} className="text-xs">
                   Cancelar
                 </Button>
                 <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5">
@@ -2184,7 +2388,7 @@ export default function CatalogAndModelsPage() {
                   {editingCategoryId ? 'Editar Categoria & Engenharia' : 'Nova Categoria de Equipamentos'}
                 </h3>
               </div>
-              <button onClick={() => setShowCategoryModal(false)} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+              <button onClick={handleRequestCloseCategoryModal} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -2268,7 +2472,7 @@ export default function CatalogAndModelsPage() {
                 </div>
               </div>
 
-              {/* Dynamic Optionals & Specifications Builder with EDIT support */}
+              {/* Dynamic Optionals & Specifications Builder with EDIT support & REORDERING & BATCH UPDATE */}
               <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
                 <div className="flex items-center justify-between">
                   <div>
@@ -2277,7 +2481,7 @@ export default function CatalogAndModelsPage() {
                       <span>2. Opcionais & Especificações Técnicas Desta Categoria</span>
                     </h4>
                     <p className="text-[11px] text-slate-400">
-                      Crie, edite ou exclua campos técnicos que o usuário preencherá nos produtos desta categoria (ex: Cor, Voltagem, RAM, Potência).
+                      Crie, edite e ordene os campos técnicos que compõem a descrição completa do produto.
                     </p>
                   </div>
                   <span className="text-[11px] text-purple-600 font-bold">{catCustomFields.length} campos</span>
@@ -2381,14 +2585,14 @@ export default function CatalogAndModelsPage() {
                   </div>
                 </div>
 
-                {/* List of Custom Fields Configured for this Category */}
+                {/* List of Custom Fields Configured for this Category with REORDERING */}
                 <div className="space-y-2 max-h-48 overflow-y-auto">
                   {catCustomFields.length === 0 ? (
                     <p className="text-[11px] text-slate-400 text-center py-2">
                       Nenhum opcional configurado nesta categoria.
                     </p>
                   ) : (
-                    catCustomFields.map((field) => (
+                    catCustomFields.map((field, idx) => (
                       <div 
                         key={field.id} 
                         className={cn(
@@ -2398,23 +2602,57 @@ export default function CatalogAndModelsPage() {
                             : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
                         )}
                       >
-                        <div>
-                          <div className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                            <span>{field.name}</span>
-                            <Badge className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[9px]">
-                              {field.type === 'select' ? 'Seleção' : field.type === 'number' ? `Número${field.unit ? ` (${field.unit})` : ''}` : field.type === 'checkbox' ? 'Checkbox (Sim/Não)' : 'Texto'}
-                            </Badge>
-                            {field.include_in_description && (
-                              <Badge className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-[9px]">
-                                Compõe descrição
+                        <div className="flex items-center gap-2">
+                          {/* Reorder Buttons */}
+                          <div className="flex items-center gap-0.5">
+                            <button
+                              type="button"
+                              onClick={() => handleMoveCustomField(idx, 'UP')}
+                              disabled={idx === 0}
+                              className={cn(
+                                "p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200",
+                                idx === 0 ? "opacity-20 cursor-not-allowed" : "hover:bg-slate-100 dark:hover:bg-slate-800"
+                              )}
+                              title="Mover para cima"
+                            >
+                              <ArrowUp className="w-3 h-3" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleMoveCustomField(idx, 'DOWN')}
+                              disabled={idx === catCustomFields.length - 1}
+                              className={cn(
+                                "p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200",
+                                idx === catCustomFields.length - 1 ? "opacity-20 cursor-not-allowed" : "hover:bg-slate-100 dark:hover:bg-slate-800"
+                              )}
+                              title="Mover para baixo"
+                            >
+                              <ArrowDown className="w-3 h-3" />
+                            </button>
+                          </div>
+
+                          <span className="text-[10px] font-mono font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
+                            #{idx + 1}
+                          </span>
+
+                          <div>
+                            <div className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                              <span>{field.name}</span>
+                              <Badge className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[9px]">
+                                {field.type === 'select' ? 'Seleção' : field.type === 'number' ? `Número${field.unit ? ` (${field.unit})` : ''}` : field.type === 'checkbox' ? 'Checkbox (Sim/Não)' : 'Texto'}
                               </Badge>
+                              {field.include_in_description && (
+                                <Badge className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-[9px]">
+                                  Compõe descrição
+                                </Badge>
+                              )}
+                            </div>
+                            {field.options && field.options.length > 0 && (
+                              <p className="text-[10px] text-slate-400 mt-0.5">
+                                Opções: {field.options.join(', ')}
+                              </p>
                             )}
                           </div>
-                          {field.options && field.options.length > 0 && (
-                            <p className="text-[10px] text-slate-400 mt-0.5">
-                              Opções: {field.options.join(', ')}
-                            </p>
-                          )}
                         </div>
 
                         <div className="flex items-center gap-1">
@@ -2447,6 +2685,22 @@ export default function CatalogAndModelsPage() {
                     ))
                   )}
                 </div>
+
+                {/* Batch Update Model Descriptions Button */}
+                {editingCategoryId && (
+                  <div className="pt-2 flex justify-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleBatchUpdateModelDescriptions}
+                      className="text-xs text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 hover:bg-purple-50 dark:hover:bg-purple-950/40 font-bold gap-1.5"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                      Atualizar Descrição de Todos os Produtos Desta Categoria
+                    </Button>
+                  </div>
+                )}
               </div>
 
               {/* Section 3: Technical Verdicts / Resultados Personalizados por Categoria */}
@@ -2645,7 +2899,7 @@ export default function CatalogAndModelsPage() {
 
               {/* Modal Actions */}
               <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
-                <Button type="button" variant="outline" onClick={() => setShowCategoryModal(false)} className="text-xs">
+                <Button type="button" variant="outline" onClick={handleRequestCloseCategoryModal} className="text-xs">
                   Cancelar
                 </Button>
                 <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5">
@@ -2671,7 +2925,7 @@ export default function CatalogAndModelsPage() {
                   {editingBrandId ? 'Editar Marca' : 'Nova Marca / Fabricante'}
                 </h3>
               </div>
-              <button onClick={() => setShowBrandModal(false)} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+              <button onClick={handleRequestCloseBrandModal} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -2704,7 +2958,7 @@ export default function CatalogAndModelsPage() {
 
               {/* Modal Actions */}
               <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
-                <Button type="button" variant="outline" onClick={() => setShowBrandModal(false)} className="text-xs">
+                <Button type="button" variant="outline" onClick={handleRequestCloseBrandModal} className="text-xs">
                   Cancelar
                 </Button>
                 <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5">
@@ -2730,7 +2984,7 @@ export default function CatalogAndModelsPage() {
                   {editingStateId ? 'Editar Etapa do Kanban' : 'Nova Etapa / Coluna do Kanban'}
                 </h3>
               </div>
-              <button onClick={() => setShowStateModal(false)} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+              <button onClick={handleRequestCloseStateModal} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -2822,7 +3076,7 @@ export default function CatalogAndModelsPage() {
 
               {/* Modal Actions */}
               <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
-                <Button type="button" variant="outline" onClick={() => setShowStateModal(false)} className="text-xs">
+                <Button type="button" variant="outline" onClick={handleRequestCloseStateModal} className="text-xs">
                   Cancelar
                 </Button>
                 <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5">

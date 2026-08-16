@@ -286,5 +286,49 @@ describe('Custom Services, Kanban & Financial Report Suite', () => {
       AppStore.deleteCategory(cat.id);
     });
   });
+
+  describe('11. Batch Updating Model Descriptions from Ordered Custom Fields', () => {
+    it('composes full model description using space-separated ordered custom fields', () => {
+      const cat = AppStore.addCategory({
+        tenant_id: tenantId,
+        name: 'Cartuchos Especiais',
+        slug: 'cartuchos-especiais',
+        inspection_type: 'SCALE',
+        custom_fields: [
+          { id: 'f-1', name: 'Cor', type: 'select', include_in_description: true },
+          { id: 'f-2', name: 'Versão', type: 'select', include_in_description: true },
+          { id: 'f-3', name: 'Capacidade', type: 'number', unit: 'ml', include_in_description: true }
+        ],
+        is_active: true
+      });
+
+      const model = AppStore.addModel({
+        tenant_id: tenantId,
+        category_id: cat.id,
+        name: 'HP 664',
+        custom_attributes: {
+          'Cor': 'Tricolor',
+          'Versão': 'Versão XL (Alta Capacidade)',
+          'Capacidade': '32'
+        },
+        is_active: true
+      });
+
+      const parts = [model.name];
+      cat.custom_fields!.forEach(f => {
+        if (f.include_in_description && model.custom_attributes?.[f.name]) {
+          const val = model.custom_attributes[f.name];
+          parts.push(f.unit ? `${val}${f.unit}` : String(val));
+        }
+      });
+      const composed = parts.join(' ').replace(/\s+/g, ' ').trim();
+
+      expect(composed).toBe('HP 664 Tricolor Versão XL (Alta Capacidade) 32ml');
+      expect(composed).not.toContain(' - ');
+
+      AppStore.deleteModel(model.id);
+      AppStore.deleteCategory(cat.id);
+    });
+  });
 });
 
