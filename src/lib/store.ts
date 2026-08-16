@@ -908,7 +908,8 @@ export const MOCK_COMPANY_SETTINGS: CompanySettings = {
   receipt_footer_note: 'Acompanhe online com o QR Code ao lado.',
   thermal_paper_width_mm: 80,
   require_customer_document: false,
-  require_item_serial: true
+  require_item_serial: true,
+  item_description_display_mode: 'BASIC'
 };
 
 // ============================================================================

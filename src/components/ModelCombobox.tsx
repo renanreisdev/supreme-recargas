@@ -15,6 +15,7 @@ interface ModelComboboxProps {
   disabled?: boolean;
   itemLabelSingular?: string;
   className?: string;
+  displayMode?: 'BASIC' | 'FULL';
 }
 
 export function ModelCombobox({
@@ -25,7 +26,8 @@ export function ModelCombobox({
   required = false,
   disabled = false,
   itemLabelSingular = 'Modelo / Item',
-  className = ''
+  className = '',
+  displayMode = 'BASIC'
 }: ModelComboboxProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -39,10 +41,10 @@ export function ModelCombobox({
 
   const getModelDisplayName = (m?: ItemModel) => {
     if (!m) return '';
-    const name = m.name || (m as any).model_name || '';
-    const colorTag = m.attributes?.color ? ` (${m.attributes.color})` : (m as any).color ? ` (${(m as any).color})` : '';
-    const xlTag = m.attributes?.is_xl || (m as any).is_xl ? ' [XL]' : '';
-    return `${name}${colorTag}${xlTag}`.trim();
+    if (displayMode === 'FULL') {
+      return m.description || m.name || (m as any).model_name || '';
+    }
+    return m.name || (m as any).model_name || '';
   };
 
   // Sync display value when selectedModel changes and dropdown is closed
@@ -54,7 +56,7 @@ export function ModelCombobox({
         setSearchQuery('');
       }
     }
-  }, [selectedModel, isOpen]);
+  }, [selectedModel, isOpen, displayMode]);
 
   // Click outside listener to close dropdown
   useEffect(() => {
@@ -71,7 +73,7 @@ export function ModelCombobox({
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [selectedModel]);
+  }, [selectedModel, displayMode]);
 
   // Filter models based on search query
   const filteredModels = useMemo(() => {
@@ -84,9 +86,10 @@ export function ModelCombobox({
 
     return models.filter(m => {
       const modelName = m.name || (m as any).model_name || '';
+      const modelDesc = m.description || '';
       const brandName = m.brand_name || '';
       const cat = m.category?.name || (m as any).category || '';
-      const targetStr = `${brandName} ${modelName} ${cat} ${m.internal_code || ''}`.toLowerCase();
+      const targetStr = `${brandName} ${modelName} ${modelDesc} ${cat} ${m.internal_code || ''}`.toLowerCase();
       return queryParts.every(part => targetStr.includes(part));
     });
   }, [models, searchQuery, isOpen, selectedModel]);
@@ -215,7 +218,8 @@ export function ModelCombobox({
               filteredModels.map((model, idx) => {
                 const isSelected = model.id === selectedModelId;
                 const isHighlighted = idx === highlightedIndex;
-                const modelName = model.name || (model as any).model_name || '';
+                const displayName = getModelDisplayName(model);
+                const isFullDifferent = displayMode === 'FULL' && model.description && model.description !== model.name;
 
                 return (
                   <li
@@ -236,13 +240,18 @@ export function ModelCombobox({
                       </div>
                       <div className="truncate">
                         <div className="flex items-center gap-1.5 truncate">
-                          <span className="truncate font-medium">{modelName}</span>
+                          <span className="truncate font-medium">{displayName}</span>
                           {model.internal_code && (
                             <span className="text-[10px] text-slate-400 font-mono">
                               ({model.internal_code})
                             </span>
                           )}
                         </div>
+                        {isFullDifferent && (
+                          <div className="text-[10px] text-slate-400 font-normal">
+                            Modelo Base: {model.name}
+                          </div>
+                        )}
                       </div>
                     </div>
 

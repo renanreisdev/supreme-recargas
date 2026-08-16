@@ -656,6 +656,9 @@ export interface CompanySettings {
   sku_start_number?: number; // Padrão inicial, ex: 1, 100, 1000
   sku_current_number?: number; // Número atual de sequência
   sku_digits?: number; // Dígitos preenchidos com zero à esquerda, ex: 4 (0001)
+
+  // Item Description Display Mode across views:
+  item_description_display_mode?: 'BASIC' | 'FULL'; // 'BASIC' = nome do modelo; 'FULL' = descrição completa com opcionais
 }
 
 // ============================================================================

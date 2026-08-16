@@ -639,6 +639,7 @@ export default function NovaEntradaPage() {
                           }));
                         }}
                         placeholder="Selecione ou busque o modelo..."
+                        displayMode={settings.item_description_display_mode || 'BASIC'}
                         required
                       />
                     </div>

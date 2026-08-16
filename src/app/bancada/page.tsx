@@ -21,7 +21,8 @@ import {
   Trash2,
   ArrowUp,
   ArrowDown,
-  Kanban
+  Kanban,
+  GripVertical
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { AppStore } from '@/lib/store';
@@ -124,6 +125,10 @@ export default function TechnicianWorkbenchPage() {
 
   // Global Dialog Modal (Replaces standard browser alert & confirm)
   const [dialogModal, setDialogModal] = useState<DialogModalProps | null>(null);
+
+  // Drag & Drop Kanban State
+  const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
+  const [dragOverColumnCode, setDragOverColumnCode] = useState<string | null>(null);
 
   const canEditTech = hasPermission('update_tech_status') || hasPermission('technical_update') || currentUser?.role === 'ADMINISTRADOR';
   const canManageKanban = hasPermission('customize_kanban') || currentUser?.role === 'ADMINISTRADOR';
@@ -244,6 +249,78 @@ export default function TechnicianWorkbenchPage() {
     }, currentUser.full_name);
 
     setSelectedItem(null);
+  };
+
+  // ==========================================
+  // KANBAN DRAG & DROP HANDLERS
+  // ==========================================
+  const handleDragStart = (e: React.DragEvent, itemId: string) => {
+    if (!canEditTech) return;
+    e.dataTransfer.setData('text/plain', itemId);
+    e.dataTransfer.effectAllowed = 'move';
+    setDraggedItemId(itemId);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedItemId(null);
+    setDragOverColumnCode(null);
+  };
+
+  const handleDragOverColumn = (e: React.DragEvent, stateCode: string) => {
+    if (!canEditTech) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverColumnCode !== stateCode) {
+      setDragOverColumnCode(stateCode);
+    }
+  };
+
+  const handleDragLeaveColumn = (e: React.DragEvent) => {
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setDragOverColumnCode(null);
+  };
+
+  const handleDropOnColumn = (e: React.DragEvent, targetStateCode: string) => {
+    if (!canEditTech) return;
+    e.preventDefault();
+    const itemId = e.dataTransfer.getData('text/plain') || draggedItemId;
+    setDragOverColumnCode(null);
+    setDraggedItemId(null);
+
+    if (!itemId) return;
+
+    const item = items.find(it => it.id === itemId);
+    if (!item) return;
+
+    // Don't update if already in target column
+    if (item.status === targetStateCode) return;
+
+    const targetState = workflowStates.find(s => s.code === targetStateCode);
+    if (!targetState) return;
+
+    try {
+      AppStore.updateOrderItemStatus(
+        itemId,
+        {
+          status: targetStateCode,
+          current_state_id: targetState.id,
+          assigned_technician_id: currentUser?.id,
+          technical_notes: item.technical_notes || `Movido para ${targetState.name} no Kanban`
+        },
+        currentUser?.full_name || 'Técnico'
+      );
+      loadData();
+    } catch (err: any) {
+      setDialogModal({
+        isOpen: true,
+        type: 'danger',
+        title: 'Erro ao Mover Item',
+        message: err?.message || 'Não foi possível mover o item para a coluna selecionada.',
+        isAlertOnly: true,
+        confirmLabel: 'Entendido',
+        onConfirm: () => setDialogModal(null)
+      });
+    }
   };
 
   // ==========================================
@@ -408,11 +485,17 @@ export default function TechnicianWorkbenchPage() {
         {workflowStates.map(state => {
           const colItems = getItemsForState(state.code);
           const colorStyles = COLOR_MAP[state.color] || COLOR_MAP.slate;
+          const isDragOver = dragOverColumnCode === state.code;
 
           return (
             <div
               key={state.code}
-              className={`w-80 shrink-0 rounded-2xl border ${colorStyles.border} ${colorStyles.bg} flex flex-col max-h-[calc(100vh-220px)] shadow-sm`}
+              onDragOver={(e) => handleDragOverColumn(e, state.code)}
+              onDragLeave={handleDragLeaveColumn}
+              onDrop={(e) => handleDropOnColumn(e, state.code)}
+              className={`w-80 shrink-0 rounded-2xl border transition-all duration-150 flex flex-col max-h-[calc(100vh-220px)] shadow-sm ${colorStyles.border} ${colorStyles.bg} ${
+                isDragOver ? 'ring-2 ring-emerald-500 border-emerald-500 bg-emerald-500/10 shadow-lg scale-[1.01]' : ''
+              }`}
             >
               {/* Column Header */}
               <div className={`p-3.5 ${colorStyles.headerBg} rounded-t-2xl flex items-center justify-between`}>
@@ -430,33 +513,55 @@ export default function TechnicianWorkbenchPage() {
               {/* Column Content / Cards List */}
               <div className="p-3 space-y-3 overflow-y-auto flex-1 scrollbar-thin">
                 {colItems.length === 0 ? (
-                  <div className="py-8 text-center border border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
-                    <p className="text-[11px] text-slate-400 font-medium">Nenhum item nesta etapa</p>
+                  <div className={`py-8 text-center border border-dashed rounded-xl transition-colors ${
+                    isDragOver 
+                      ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/30' 
+                      : 'border-slate-200 dark:border-slate-800'
+                  }`}>
+                    <p className={`text-[11px] font-medium ${isDragOver ? 'text-emerald-600 font-bold' : 'text-slate-400'}`}>
+                      {isDragOver ? 'Soltar item aqui' : 'Nenhum item nesta etapa'}
+                    </p>
                   </div>
                 ) : (
                   colItems.map(item => {
                     const inW = item.custom_field_values?.input_weight_grams;
                     const outW = item.custom_field_values?.output_weight_grams;
                     const diffW = (outW !== undefined && inW !== undefined) ? (outW - inW).toFixed(1) : null;
+                    const isBeingDragged = draggedItemId === item.id;
+                    const displayModelName = settings.item_description_display_mode === 'FULL'
+                      ? (item.model?.description || item.model?.name || 'Modelo não especificado')
+                      : (item.model?.name || 'Modelo não especificado');
 
                     return (
                       <div
                         key={item.id}
+                        draggable={canEditTech}
+                        onDragStart={(e) => handleDragStart(e, item.id)}
+                        onDragEnd={handleDragEnd}
                         onClick={() => handleOpenItem(item)}
-                        className="bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-sm hover:shadow-md hover:border-emerald-500/40 transition-all cursor-pointer space-y-2.5 group"
+                        className={`bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-sm hover:shadow-md hover:border-emerald-500/40 transition-all space-y-2.5 group select-none ${
+                          canEditTech ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
+                        } ${
+                          isBeingDragged ? 'opacity-40 scale-95 border-dashed border-emerald-500 ring-2 ring-emerald-500/30' : ''
+                        }`}
                       >
                         {/* OS Header & Identifier */}
                         <div className="flex items-start justify-between gap-1">
-                          <div>
-                            <span className="text-[10px] font-mono font-bold text-slate-400 block">
-                              OS #{item.order_number || '2026-000000'}
-                            </span>
-                            <div className="text-xs font-extrabold text-slate-900 dark:text-slate-100 group-hover:text-emerald-600 transition-colors">
-                              {item.model?.name || 'Modelo não especificado'}
+                          <div className="flex items-start gap-1.5 overflow-hidden">
+                            {canEditTech && (
+                              <GripVertical className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 group-hover:text-emerald-500 shrink-0 mt-0.5 transition-colors" />
+                            )}
+                            <div className="overflow-hidden">
+                              <span className="text-[10px] font-mono font-bold text-slate-400 block">
+                                OS #{item.order_number || '2026-000000'}
+                              </span>
+                              <div className="text-xs font-extrabold text-slate-900 dark:text-slate-100 group-hover:text-emerald-600 transition-colors truncate" title={displayModelName}>
+                                {displayModelName}
+                              </div>
                             </div>
                           </div>
                           {item.internal_identifier && (
-                            <Badge className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono text-[10px] uppercase">
+                            <Badge className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono text-[10px] uppercase shrink-0">
                               {item.internal_identifier}
                             </Badge>
                           )}
@@ -511,6 +616,9 @@ export default function TechnicianWorkbenchPage() {
       {selectedItem && (() => {
         const itemCat = categories.find(c => c.id === selectedItem.category_id || c.id === selectedItem.model?.category_id);
         const isScaleInspection = itemCat?.inspection_type === 'SCALE';
+        const modalModelName = settings.item_description_display_mode === 'FULL'
+          ? (selectedItem.model?.description || selectedItem.model?.name || 'Equipamento')
+          : (selectedItem.model?.name || 'Equipamento');
         const availableVerdicts: string[] = (itemCat?.technical_verdicts && itemCat.technical_verdicts.length > 0)
           ? itemCat.technical_verdicts
           : isScaleInspection
@@ -536,8 +644,8 @@ export default function TechnicianWorkbenchPage() {
               <div className="p-4 md:p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/40">
                 <div>
                   <span className="text-[10px] font-mono font-bold text-slate-400">OS #{selectedItem.order_number}</span>
-                  <h3 className="font-black text-slate-900 dark:text-slate-100 text-base">
-                    {selectedItem.model?.name || 'Equipamento'}
+                  <h3 className="font-black text-slate-900 dark:text-slate-100 text-base" title={modalModelName}>
+                    {modalModelName}
                   </h3>
                 </div>
                 <button onClick={() => setSelectedItem(null)} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">

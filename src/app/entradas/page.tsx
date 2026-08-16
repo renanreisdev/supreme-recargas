@@ -37,7 +37,7 @@ import {
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { AppStore } from '@/lib/store';
-import { ServiceOrder, PaymentMethod, PaymentStatus, PaymentSplit } from '@/types';
+import { ServiceOrder, PaymentMethod, PaymentStatus, PaymentSplit, CompanySettings } from '@/types';
 import { formatCurrency, formatDateTime, getPaymentMethodLabel, getPaymentStatusBadge, getStatusBadgeConfig } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -52,6 +52,7 @@ function EntriesListContent() {
 
   const { currentCompany, currentUser, hasPermission } = useAuth();
   const [orders, setOrders] = useState<ServiceOrder[]>([]);
+  const [settings, setSettings] = useState<CompanySettings>(AppStore.getSettings(currentCompany.id));
   const [searchTerm, setSearchTerm] = useState(initialSearch);
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'READY' | 'DELIVERED' | 'PROCESSING'>('ALL');
   
@@ -86,7 +87,9 @@ function EntriesListContent() {
 
   const loadData = () => {
     const data = AppStore.getServiceOrders(currentCompany.id);
+    const sets = AppStore.getSettings(currentCompany.id);
     setOrders(data);
+    setSettings(sets);
   };
 
   useEffect(() => {
@@ -452,12 +455,18 @@ function EntriesListContent() {
                       {/* Items Summary */}
                       <td className="py-3.5 px-4">
                         <div className="space-y-0.5 max-w-xs">
-                          {order.items?.map((it, i) => (
-                            <div key={i} className="text-[11px] text-slate-700 dark:text-slate-300 truncate">
-                              <span className="font-semibold text-slate-900 dark:text-white">{it.model?.name}</span>
-                              <span className="font-mono text-slate-400 ml-1">({it.internal_identifier})</span>
-                            </div>
-                          ))}
+                          {order.items?.map((it, i) => {
+                            const itemDisplayName = settings.item_description_display_mode === 'FULL'
+                              ? (it.model?.description || it.model?.name || 'Item')
+                              : (it.model?.name || 'Item');
+
+                            return (
+                              <div key={i} className="text-[11px] text-slate-700 dark:text-slate-300 truncate">
+                                <span className="font-semibold text-slate-900 dark:text-white">{itemDisplayName}</span>
+                                <span className="font-mono text-slate-400 ml-1">({it.internal_identifier})</span>
+                              </div>
+                            );
+                          })}
                         </div>
                       </td>
 

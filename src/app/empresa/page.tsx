@@ -117,6 +117,9 @@ export default function CompanySettingsPage() {
   const [skuStartNumber, setSkuStartNumber] = useState<string>(String(settings.sku_start_number || 1));
   const [skuDigits, setSkuDigits] = useState<string>(String(settings.sku_digits || 4));
 
+  // Item Description Display Mode State
+  const [itemDescriptionDisplayMode, setItemDescriptionDisplayMode] = useState<'BASIC' | 'FULL'>(settings.item_description_display_mode || 'BASIC');
+
   const [policySaveSuccess, setPolicySaveSuccess] = useState(false);
 
   // Reset Password Modal State
@@ -148,6 +151,7 @@ export default function CompanySettingsPage() {
     setSkuPrefix(sets.sku_prefix !== undefined ? sets.sku_prefix : 'MOD-');
     setSkuStartNumber(String(sets.sku_start_number || 1));
     setSkuDigits(String(sets.sku_digits || 4));
+    setItemDescriptionDisplayMode(sets.item_description_display_mode || 'BASIC');
 
     setTradeName(comp.trade_name || '');
     setCorporateName(comp.corporate_name || '');
@@ -180,7 +184,8 @@ export default function CompanySettingsPage() {
       sku_mode: skuMode,
       sku_prefix: skuPrefix.trim(),
       sku_start_number: parseInt(skuStartNumber, 10) || 1,
-      sku_digits: parseInt(skuDigits, 10) || 4
+      sku_digits: parseInt(skuDigits, 10) || 4,
+      item_description_display_mode: itemDescriptionDisplayMode
     }, currentUser?.full_name || 'Administrador');
     setSettings(updated);
     setPolicySaveSuccess(true);
@@ -1112,6 +1117,79 @@ export default function CompanySettingsPage() {
                     </div>
                   </div>
                 )}
+              </div>
+            </div>
+
+            {/* Modo de Exibição dos Produtos / Itens nas Telas */}
+            <div className="p-4 bg-slate-50 dark:bg-slate-900/60 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                    <FileText className="w-4 h-4 text-emerald-600" />
+                    <span>Exibição dos Itens / Produtos nas Telas do Sistema</span>
+                  </h4>
+                  <p className="text-[11px] text-slate-500">
+                    Escolha se as listagens de recepção, bancada Kanban e comandas devem mostrar a descrição básica (nome do modelo) ou completa (com opcionais técnicos).
+                  </p>
+                </div>
+
+                <Badge className={itemDescriptionDisplayMode === 'FULL' ? 'bg-emerald-600 text-white text-[10px]' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px]'}>
+                  {itemDescriptionDisplayMode === 'FULL' ? 'Descrição Completa' : 'Descrição Básica'}
+                </Badge>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${
+                  itemDescriptionDisplayMode === 'BASIC'
+                    ? 'bg-emerald-50/50 dark:bg-emerald-950/30 border-emerald-500 ring-2 ring-emerald-500/20'
+                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300'
+                }`}>
+                  <input
+                    type="radio"
+                    name="item_description_display_mode"
+                    value="BASIC"
+                    checked={itemDescriptionDisplayMode === 'BASIC'}
+                    onChange={() => setItemDescriptionDisplayMode('BASIC')}
+                    className="mt-1 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <div className="space-y-1">
+                    <div className="font-bold text-xs text-slate-900 dark:text-slate-100">
+                      Descrição Básica (Padrão)
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Exibe apenas o nome principal do modelo cadastrado.
+                    </p>
+                    <div className="pt-1 font-mono text-[11px] text-emerald-700 dark:text-emerald-400 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">
+                      Ex: HP 664
+                    </div>
+                  </div>
+                </label>
+
+                <label className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${
+                  itemDescriptionDisplayMode === 'FULL'
+                    ? 'bg-emerald-50/50 dark:bg-emerald-950/30 border-emerald-500 ring-2 ring-emerald-500/20'
+                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300'
+                }`}>
+                  <input
+                    type="radio"
+                    name="item_description_display_mode"
+                    value="FULL"
+                    checked={itemDescriptionDisplayMode === 'FULL'}
+                    onChange={() => setItemDescriptionDisplayMode('FULL')}
+                    className="mt-1 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <div className="space-y-1">
+                    <div className="font-bold text-xs text-slate-900 dark:text-slate-100">
+                      Descrição Completa
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Exibe o nome do modelo concatenado com os opcionais técnicos e especificações.
+                    </p>
+                    <div className="pt-1 font-mono text-[11px] text-emerald-700 dark:text-emerald-400 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">
+                      Ex: HP 664 Tricolor Versão XL (Alta Capacidade) 32ml
+                    </div>
+                  </div>
+                </label>
               </div>
             </div>
 

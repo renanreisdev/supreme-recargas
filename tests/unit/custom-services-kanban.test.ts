@@ -330,5 +330,69 @@ describe('Custom Services, Kanban & Financial Report Suite', () => {
       AppStore.deleteCategory(cat.id);
     });
   });
+
+  describe('12. Item Description Display Mode Configuration', () => {
+    it('saves and retrieves item_description_display_mode in company settings', () => {
+      // 1. Set to BASIC
+      AppStore.updateSettings(tenantId, {
+        item_description_display_mode: 'BASIC'
+      });
+      let settings = AppStore.getSettings(tenantId);
+      expect(settings.item_description_display_mode).toBe('BASIC');
+
+      // 2. Set to FULL
+      AppStore.updateSettings(tenantId, {
+        item_description_display_mode: 'FULL'
+      });
+      settings = AppStore.getSettings(tenantId);
+      expect(settings.item_description_display_mode).toBe('FULL');
+    });
+  });
+
+  describe('13. Kanban Item Drag & Drop State Transition', () => {
+    it('moves item to another workflow stage smoothly', () => {
+      const order = AppStore.addServiceOrder({
+        tenant_id: tenantId,
+        customer_id: 'cust-001',
+        opened_by: 'usr-admin',
+        opened_by_name: 'Admin',
+        items: [
+          {
+            model_id: 'mod-hp664-black',
+            internal_identifier: 'TEST-DRAG-01',
+            services: [
+              {
+                service_id: 'srv-refill',
+                quantity: 1,
+                unit_price: 25.0
+              }
+            ]
+          }
+        ]
+      });
+
+      expect(order.items).toBeDefined();
+      expect(order.items!.length).toBeGreaterThan(0);
+      const itemId = order.items![0].id;
+      expect(order.items![0].status).toBe('RECEBIDO');
+
+      // Drag and drop onto 'EM_RECARGA'
+      const updated = AppStore.updateOrderItemStatus(itemId, {
+        status: 'EM_RECARGA',
+        current_state_id: 'state-002',
+        technical_notes: 'Movido via arrastar e soltar no Kanban'
+      });
+
+      expect(updated.status).toBe('EM_RECARGA');
+      expect(updated.current_state_id).toBe('state-002');
+
+      // Drag and drop onto 'TESTES'
+      const updatedTests = AppStore.updateOrderItemStatus(itemId, {
+        status: 'TESTES',
+        current_state_id: 'state-003'
+      });
+      expect(updatedTests.status).toBe('TESTES');
+    });
+  });
 });
 
