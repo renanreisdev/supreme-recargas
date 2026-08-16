@@ -241,7 +241,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
             </span>
           </div>
           <Badge variant="outline" className="text-[9px] font-mono border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 px-1.5 py-0 shrink-0">
-            {currentCompany.business_segment === 'RECARGA_CARTUCHOS' ? 'Cartuchos' : 'Geral'}
+            Multissegmento
           </Badge>
         </div>
       </div>

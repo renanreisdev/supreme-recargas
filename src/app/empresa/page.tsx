@@ -27,7 +27,7 @@ import {
   UserCheck
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
-import { AppStore, MOCK_PLANS, SEGMENT_PRESETS, DEFAULT_PERMISSION_GROUPS } from '@/lib/store';
+import { AppStore, MOCK_PLANS, SEGMENT_PRESETS, DEFAULT_PERMISSION_GROUPS, BUSINESS_PRESETS } from '@/lib/store';
 import { formatCurrency, getRoleBadgeConfig } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -135,10 +135,8 @@ export default function CompanySettingsPage() {
   }, [currentCompany.id]);
 
   const handleSegmentSwitch = (newSegment: BusinessSegment) => {
-    const updated = AppStore.setCompanySegment(currentCompany.id, newSegment, undefined, currentUser?.full_name || 'Administrador');
-    setSettings(updated);
+    AppStore.setCompanySegment(currentCompany.id, newSegment, currentUser?.full_name || 'Administrador');
     setSegmentConfig(AppStore.getSegmentConfig(currentCompany.id));
-    setCustomChecklist(updated.custom_checklist_items || []);
     setSegmentSaveSuccess(true);
     setTimeout(() => setSegmentSaveSuccess(false), 3500);
   };
@@ -706,14 +704,14 @@ export default function CompanySettingsPage() {
             </div>
           )}
 
-          {/* 4 Segment Presets Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-            {Object.values(SEGMENT_PRESETS).map((seg) => {
-              const isCurrent = segmentConfig.segment === seg.segment;
+          {/* 5 Segment Presets Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+            {Object.values(BUSINESS_PRESETS).map((seg) => {
+              const isCurrent = (currentCompany.active_template_keys || []).includes(seg.key);
               return (
                 <div
-                  key={seg.segment}
-                  onClick={() => handleSegmentSwitch(seg.segment)}
+                  key={seg.key}
+                  onClick={() => handleSegmentSwitch(seg.key as any)}
                   className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between space-y-3 ${
                     isCurrent
                       ? 'border-emerald-600 bg-emerald-50/40 dark:bg-emerald-950/30 shadow-xs'
@@ -725,32 +723,33 @@ export default function CompanySettingsPage() {
                       <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
                         isCurrent ? 'bg-emerald-600 text-white' : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
                       }`}>
-                        {seg.segment === 'RECARGA_CARTUCHOS' && <Printer className="w-4 h-4" />}
-                        {seg.segment === 'ASSISTENCIA_CELULARES_INFORMATICA' && <Smartphone className="w-4 h-4" />}
-                        {seg.segment === 'FERRAMENTAS_MOTORES' && <Wrench className="w-4 h-4" />}
-                        {seg.segment === 'OFICINA_GERAL' && <Layers className="w-4 h-4" />}
+                        {seg.icon === 'Printer' && <Printer className="w-4 h-4" />}
+                        {seg.icon === 'Smartphone' && <Smartphone className="w-4 h-4" />}
+                        {seg.icon === 'Wrench' && <Wrench className="w-4 h-4" />}
+                        {seg.icon === 'Layers' && <Layers className="w-4 h-4" />}
+                        {!['Printer', 'Smartphone', 'Wrench', 'Layers'].includes(seg.icon || '') && <Layers className="w-4 h-4" />}
                       </div>
 
                       {isCurrent ? (
                         <Badge className="bg-emerald-600 text-white text-[10px] font-bold">Ativo</Badge>
                       ) : (
                         <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2 text-slate-500 hover:text-emerald-600">
-                          Selecionar
+                          Habilitar
                         </Button>
                       )}
                     </div>
 
                     <div>
-                      <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">{seg.segmentName}</h4>
+                      <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">{seg.name}</h4>
                       <p className="text-[11px] text-slate-500 mt-1 line-clamp-2">
-                        Item: <strong>{seg.itemLabelSingular}</strong> | ID: <strong>{seg.identifierLabel}</strong>
+                        {seg.description}
                       </p>
                     </div>
                   </div>
 
                   <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800 text-[10px] text-slate-500 flex items-center justify-between">
-                    <span>{seg.hasWeightInspection ? '⚖️ Com Balança' : '📋 Com Checklist'}</span>
-                    <span className="font-semibold text-slate-700 dark:text-slate-300">{seg.defaultCategories.length} categorias</span>
+                    <span>{seg.fieldDefinitions && seg.fieldDefinitions.length > 0 ? '⚖️ Campos Especiais' : '📋 Padrão'}</span>
+                    <span className="font-semibold text-slate-700 dark:text-slate-300">{seg.categories.length} categorias</span>
                   </div>
                 </div>
               );

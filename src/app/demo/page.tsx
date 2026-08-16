@@ -359,10 +359,10 @@ export default function DemoPage() {
                   (1 Admin, 3 Atendentes e 2 Técnicos) são rotacionadas a cada 7 dias e todos os usuários adicionais 
                   criados durante testes são removidos automaticamente.
                 </p>
-                {sandbox?.nextResetAt && (
+                {sandbox?.lastResetAt && (
                   <p className="text-[10px] text-slate-500 font-mono flex items-center gap-1.5 pt-0.5">
                     <Calendar className="w-3 h-3 text-slate-400" />
-                    <span>Próximo ciclo de renovação programado para: {formatDate(sandbox.nextResetAt)}</span>
+                    <span>Último ciclo de renovação realizado em: {formatDate(sandbox.lastResetAt)}</span>
                   </p>
                 )}
               </div>

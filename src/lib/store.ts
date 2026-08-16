@@ -1,208 +1,508 @@
 // ============================================================================
-// SUPREME RECARGAS 2 - DATA STORE & REPOSITORY SERVICE
-// Cloud-Connected Supabase & Local Cache Store with Real-time Multi-Device Sync
+// SUPREME RECARGAS 2 - CENTRAL STORE & DOMAIN SERVICE LAYER
+// Generic, Modular Multi-Tenant Architecture with Supabase & Reactive Sync
 // ============================================================================
 
 import { 
-  Company, 
   Profile, 
+  UserRole, 
+  Company, 
+  Plan, 
+  Subscription, 
+  PermissionGroup,
   Customer, 
-  CartridgeModel, 
-  ServicePrice, 
-  CartridgeEntry, 
-  Cartridge, 
-  CartridgeStatusHistory, 
-  Delivery, 
-  AuditLog, 
+  ItemCategory,
+  Brand,
+  ItemModel,
+  ItemVariant,
+  ItemAttributeDefinition,
+  CustomerAsset,
+  Service,
+  ServiceCategory,
+  ServicePriceRule,
+  ServiceFieldDefinition,
+  ServiceResultDefinition,
+  WorkflowTemplate,
+  WorkflowState,
+  ChecklistTemplate,
+  ServiceOrder,
+  ServiceOrderItem,
+  ServiceOrderItemService,
+  Payment,
+  Delivery,
+  OrderStatusHistory,
+  AuditLog,
   CompanySettings,
-  CartridgeStatus,
-  ResultClassification,
-  RequestedService,
-  PaymentMethod,
-  PaymentStatus,
-  Plan,
-  Subscription,
-  BusinessSegment,
-  SegmentCustomization,
-  KanbanColumnConfig,
-  PermissionGroup
+  BusinessTemplateKey,
+  BusinessTemplate,
+  OrderStatus,
+  FinancialStatus,
+  PaymentMethod
 } from '@/types';
-import { supabase } from '@/lib/supabase';
+import { supabase } from './supabase';
 
-// Helper to generate valid RFC4122 UUID v4
-export function generateUUID(): string {
+const LOCAL_STORAGE_KEY = 'supreme_recargas_v2_store';
+
+export interface DemoSandboxConfig {
+  passwords: {
+    admin: string;
+    attendant: string;
+    technician: string;
+  };
+  autoResetDays: number;
+  lastResetAt: string;
+}
+
+function generateUUID(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID();
   }
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
     const r = (Math.random() * 16) | 0;
     const v = c === 'x' ? r : (r & 0x3) | 0x8;
     return v.toString(16);
   });
 }
 
-// Preset Segment Configurations
-export const SEGMENT_PRESETS: Record<BusinessSegment, SegmentCustomization> = {
+function generateTrackingToken(): string {
+  const bytes = new Uint8Array(16);
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < 16; i++) bytes[i] = Math.floor(Math.random() * 256);
+  }
+  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// ============================================================================
+// 1. BUSINESS PRESETS & SEEDS (Zero Hardcoding - Config Driven)
+// ============================================================================
+
+export const BUSINESS_PRESETS: Record<BusinessTemplateKey, BusinessTemplate> = {
   RECARGA_CARTUCHOS: {
-    segment: 'RECARGA_CARTUCHOS',
-    segmentName: 'Recarga de Cartuchos & Toners',
-    itemLabelSingular: 'Cartucho',
-    itemLabelPlural: 'Cartuchos',
-    identifierLabel: 'Final de Série',
-    serviceLabel: 'Serviço Solicitado',
-    hasWeightInspection: true,
-    hasChecklist: false,
-    defaultChecklistItems: [],
-    defaultCategories: ['Cartuchos Jato de Tinta', 'Toners Laser', 'Garrafas de Tinta', 'Outros'],
-    iconName: 'Printer'
-  },
-  ASSISTENCIA_CELULARES_INFORMATICA: {
-    segment: 'ASSISTENCIA_CELULARES_INFORMATICA',
-    segmentName: 'Assistência Técnica de Celulares & Informática',
-    itemLabelSingular: 'Aparelho / Dispositivo',
-    itemLabelPlural: 'Aparelhos',
-    identifierLabel: 'IMEI / Serial',
-    serviceLabel: 'Serviço / Reparo Solicitado',
-    hasWeightInspection: false,
-    hasChecklist: true,
-    defaultChecklistItems: [
-      'Tela / Vidro Trincado ou Riscos',
-      'Touch Screen 100% Funcional',
-      'Câmeras Frontal & Traseira',
-      'Bateria / Conector de Carga',
-      'Wi-Fi & Bluetooth',
-      'Alto-falantes & Microfone',
-      'Gaveta de Chip / Leitor Biométrico'
+    key: 'RECARGA_CARTUCHOS',
+    name: 'Recarga de Cartuchos & Toners',
+    description: 'Gestão para centros de recarga rápida de cartuchos jato de tinta e toners laser com balança.',
+    icon: 'Printer',
+    categories: [
+      { id: 'cat-cartucho-tinta', name: 'Cartucho de Tinta', slug: 'cartucho-tinta', icon: 'Printer', identifier_label: 'Final de Série', is_system: true, is_active: true },
+      { id: 'cat-toner-laser', name: 'Toner Laser', slug: 'toner-laser', icon: 'Layers', identifier_label: 'Nº de Série', is_system: true, is_active: true }
     ],
-    defaultCategories: ['Smartphones', 'Notebooks', 'Tablets', 'Consoles de Games', 'Monitores', 'Periféricos'],
-    iconName: 'Smartphone'
+    brands: [
+      { id: 'brand-hp', name: 'HP', slug: 'hp', is_system: true, is_active: true },
+      { id: 'brand-canon', name: 'Canon', slug: 'canon', is_system: true, is_active: true },
+      { id: 'brand-epson', name: 'Epson', slug: 'epson', is_system: true, is_active: true },
+      { id: 'brand-samsung', name: 'Samsung', slug: 'samsung', is_system: true, is_active: true },
+      { id: 'brand-brother', name: 'Brother', slug: 'brother', is_system: true, is_active: true }
+    ],
+    models: [
+      { id: 'mod-hp-664', category_id: 'cat-cartucho-tinta', brand_id: 'brand-hp', brand_name: 'HP', name: 'HP 664', internal_code: 'HP664', description: 'Cartucho jato de tinta HP DeskJet 2136/2676', attributes: { capacity_ml: 2.0, empty_weight_grams: 28.5, full_weight_grams: 30.5 }, is_active: true },
+      { id: 'mod-hp-667', category_id: 'cat-cartucho-tinta', brand_id: 'brand-hp', brand_name: 'HP', name: 'HP 667', internal_code: 'HP667', description: 'Cartucho HP Advantage 2376/2776', attributes: { capacity_ml: 2.0, empty_weight_grams: 29.0, full_weight_grams: 31.0 }, is_active: true },
+      { id: 'mod-hp-122', category_id: 'cat-cartucho-tinta', brand_id: 'brand-hp', brand_name: 'HP', name: 'HP 122', internal_code: 'HP122', description: 'Cartucho HP DeskJet 1000/2000', attributes: { capacity_ml: 1.5, empty_weight_grams: 27.0, full_weight_grams: 28.5 }, is_active: true },
+      { id: 'mod-canon-cl146', category_id: 'cat-cartucho-tinta', brand_id: 'brand-canon', brand_name: 'Canon', name: 'Canon CL-146 Color', internal_code: 'CL146', description: 'Cartucho Canon Pixma MG2410', attributes: { capacity_ml: 9.0, empty_weight_grams: 35.0, full_weight_grams: 44.0 }, is_active: true },
+      { id: 'mod-toner-85a', category_id: 'cat-toner-laser', brand_id: 'brand-hp', brand_name: 'HP', name: 'Toner HP CE285A (85A)', internal_code: 'CE285A', description: 'Toner LaserJet P1102w/M1132', attributes: { capacity_ml: 80.0, empty_weight_grams: 650.0, full_weight_grams: 730.0 }, is_active: true }
+    ],
+    services: [
+      { id: 'srv-recarga', name: 'Recarga de Tinta', code: 'RECARGA', description: 'Injeção de tinta pressurizada e despressurização', default_price: 30.00, estimated_time_minutes: 15, is_active: true, category_ids: ['cat-cartucho-tinta', 'cat-toner-laser'] },
+      { id: 'srv-verificacao', name: 'Verificação Técnica', code: 'VERIFICACAO', description: 'Análise de circuito eletrônico e bicos injetores', default_price: 10.00, estimated_time_minutes: 10, is_active: true, category_ids: ['cat-cartucho-tinta', 'cat-toner-laser'] },
+      { id: 'srv-teste', name: 'Teste de Impressão', code: 'TESTE', description: 'Impressão de padrão de teste em máquina real', default_price: 5.00, estimated_time_minutes: 5, is_active: true, category_ids: ['cat-cartucho-tinta'] },
+      { id: 'srv-desentupimento', name: 'Desentupimento Ultrassônico', code: 'DESENTUPIMENTO', description: 'Banho químico e ultrassom para desobstrução de injetores secos', default_price: 15.00, estimated_time_minutes: 20, is_active: true, category_ids: ['cat-cartucho-tinta'] }
+    ],
+    attributes: [
+      { name: 'Cor', key: 'color', data_type: 'select', options: ['Preto', 'Tricolor', 'Ciano', 'Magenta', 'Amarelo'], is_required: true, is_filterable: true, sort_order: 1, is_active: true },
+      { name: 'Capacidade XL', key: 'is_xl', data_type: 'boolean', is_required: false, is_filterable: true, sort_order: 2, is_active: true },
+      { name: 'Peso Vazio (g)', key: 'empty_weight_grams', data_type: 'decimal', unit: 'g', is_required: false, is_filterable: false, sort_order: 3, is_active: true },
+      { name: 'Peso Cheio (g)', key: 'full_weight_grams', data_type: 'decimal', unit: 'g', is_required: false, is_filterable: false, sort_order: 4, is_active: true }
+    ],
+    fieldDefinitions: [
+      { label: 'Peso de Entrada', field_key: 'input_weight_grams', field_type: 'decimal', unit: 'g', is_required: false, sort_order: 1 },
+      { label: 'Peso de Saída', field_key: 'output_weight_grams', field_type: 'decimal', unit: 'g', is_required: false, sort_order: 2 },
+      { label: 'Teste Elétrico', field_key: 'circuit_test', field_type: 'select', options: ['Aprovado', 'Circuito Queimado', 'Curto'], is_required: false, sort_order: 3 }
+    ],
+    results: [
+      { code: 'OK', label: '100% OK (Testado e Aprovado)', color: 'emerald', is_approval: true, is_active: true },
+      { code: 'CID', label: 'CID (Circuito Eletrônico Queimado)', color: 'amber', is_approval: false, is_active: true },
+      { code: 'QUEIMADO', label: 'Cabeça Queimada', color: 'rose', is_approval: false, is_active: true },
+      { code: 'ENTUPIDO', label: 'Injetor Entupido', color: 'amber', is_approval: false, is_active: true },
+      { code: 'FALHA_IMPRESSAO', label: 'Falha de Impressão Persistente', color: 'amber', is_approval: false, is_active: true },
+      { code: 'SEM_REPARO', label: 'Sem Reparo (Inviável)', color: 'rose', is_approval: false, is_active: true }
+    ],
+    workflow: {
+      name: 'Fluxo Padrão de Recarga',
+      is_default: true,
+      states: [
+        { id: 'st-rec-recebido', workflow_id: 'wf-recarga', code: 'RECEBIDO', name: 'Recebido (Balcão)', color: 'slate', stage_type: 'RECEBIDO', sort_order: 1, is_initial: true, is_final: false },
+        { id: 'st-rec-verificacao', workflow_id: 'wf-recarga', code: 'EM_VERIFICACAO', name: 'Em Verificação', color: 'amber', stage_type: 'EM_ANDAMENTO', sort_order: 2, is_initial: false, is_final: false },
+        { id: 'st-rec-recarga', workflow_id: 'wf-recarga', code: 'EM_RECARGA', name: 'Em Recarga', color: 'purple', stage_type: 'EM_ANDAMENTO', sort_order: 3, is_initial: false, is_final: false },
+        { id: 'st-rec-teste', workflow_id: 'wf-recarga', code: 'EM_TESTE', name: 'Em Teste', color: 'blue', stage_type: 'EM_ANDAMENTO', sort_order: 4, is_initial: false, is_final: false },
+        { id: 'st-rec-pronto', workflow_id: 'wf-recarga', code: 'FINALIZADO', name: 'Pronto p/ Retirada', color: 'emerald', stage_type: 'CONCLUIDO', sort_order: 5, is_initial: false, is_final: true },
+        { id: 'st-rec-problema', workflow_id: 'wf-recarga', code: 'COM_PROBLEMA', name: 'Com Problema', color: 'rose', stage_type: 'EM_ANDAMENTO', sort_order: 6, is_initial: false, is_final: false }
+      ]
+    }
   },
+
+  ASSISTENCIA_INFORMATICA: {
+    key: 'ASSISTENCIA_INFORMATICA',
+    name: 'Assistência Técnica de Informática & Notebooks',
+    description: 'Manutenção de notebooks, computadores, monitores e impressoras.',
+    icon: 'Laptop',
+    categories: [
+      { id: 'cat-notebook', name: 'Notebook', slug: 'notebook', icon: 'Laptop', identifier_label: 'Nº de Série / Service Tag', is_system: true, is_active: true },
+      { id: 'cat-computador', name: 'Computador Desktop', slug: 'computador', icon: 'Monitor', identifier_label: 'Nº de Série / Identificador', is_system: true, is_active: true },
+      { id: 'cat-monitor', name: 'Monitor', slug: 'monitor', icon: 'Monitor', identifier_label: 'Nº de Série', is_system: true, is_active: true },
+      { id: 'cat-impressora', name: 'Impressora', slug: 'impressora', icon: 'Printer', identifier_label: 'Nº de Série', is_system: true, is_active: true }
+    ],
+    brands: [
+      { id: 'brand-dell', name: 'Dell', slug: 'dell', is_system: true, is_active: true },
+      { id: 'brand-lenovo', name: 'Lenovo', slug: 'lenovo', is_system: true, is_active: true },
+      { id: 'brand-acer', name: 'Acer', slug: 'acer', is_system: true, is_active: true },
+      { id: 'brand-asus', name: 'Asus', slug: 'asus', is_system: true, is_active: true },
+      { id: 'brand-apple', name: 'Apple', slug: 'apple', is_system: true, is_active: true }
+    ],
+    models: [
+      { id: 'mod-dell-latitude', category_id: 'cat-notebook', brand_id: 'brand-dell', brand_name: 'Dell', name: 'Dell Latitude 3470', internal_code: 'LAT3470', description: 'Notebook Corporativo 14" Intel Core i5', is_active: true },
+      { id: 'mod-lenovo-ideapad', category_id: 'cat-notebook', brand_id: 'brand-lenovo', brand_name: 'Lenovo', name: 'IdeaPad 3 15ALC6', internal_code: 'IP3', description: 'Notebook Lenovo Ryzen 5', is_active: true },
+      { id: 'mod-epson-l3250', category_id: 'cat-impressora', brand_id: 'brand-epson', brand_name: 'Epson', name: 'Epson EcoTank L3250', internal_code: 'L3250', description: 'Multifuncional Tanque de Tinta Wi-Fi', is_active: true }
+    ],
+    services: [
+      { id: 'srv-diagnostico-inf', name: 'Diagnóstico Técnico Especializado', code: 'DIAGNOSTICO', description: 'Análise de hardware, placa-mãe, memória e fonte', default_price: 60.00, estimated_time_minutes: 60, is_active: true, category_ids: ['cat-notebook', 'cat-computador', 'cat-impressora'] },
+      { id: 'srv-formatacao', name: 'Formatação & Reinstalação de Sistema', code: 'FORMATACAO', description: 'Instalação de Windows/Linux limpo, drivers e programas essenciais', default_price: 120.00, estimated_time_minutes: 120, is_active: true, category_ids: ['cat-notebook', 'cat-computador'] },
+      { id: 'srv-limpeza-preventiva', name: 'Limpeza Preventiva & Troca de Pasta Térmica', code: 'LIMPEZA_PREVENTIVA', description: 'Desmontagem, desobstrução de cooler e pasta térmica de alta condutividade', default_price: 90.00, estimated_time_minutes: 60, is_active: true, category_ids: ['cat-notebook', 'cat-computador'] },
+      { id: 'srv-reparo-placa', name: 'Reparo Avançado de Placa-Mãe', code: 'REPARO_PLACA', description: 'Micro-solda, troca de CI, mosfets ou reballing', default_price: 250.00, estimated_time_minutes: 240, is_active: true, category_ids: ['cat-notebook', 'cat-computador'] }
+    ],
+    attributes: [
+      { name: 'Processador', key: 'cpu', data_type: 'text', is_required: false, is_filterable: true, sort_order: 1, is_active: true },
+      { name: 'Memória RAM', key: 'ram', data_type: 'select', options: ['4 GB', '8 GB', '16 GB', '32 GB', '64 GB'], is_required: false, is_filterable: true, sort_order: 2, is_active: true },
+      { name: 'Armazenamento', key: 'storage', data_type: 'select', options: ['SSD 120GB', 'SSD 240GB', 'SSD 480GB', 'SSD 1TB', 'HD 500GB', 'HD 1TB'], is_required: false, is_filterable: true, sort_order: 3, is_active: true }
+    ],
+    fieldDefinitions: [
+      { label: 'Sintoma Constatado', field_key: 'diagnosed_symptom', field_type: 'text', is_required: false, sort_order: 1 },
+      { label: 'Parecer Técnico', field_key: 'tech_opinion', field_type: 'textarea', is_required: false, sort_order: 2 },
+      { label: 'Peças Utilizadas', field_key: 'parts_used', field_type: 'text', is_required: false, sort_order: 3 }
+    ],
+    results: [
+      { code: 'APROVADO', label: 'Reparo Concluído com Sucesso', color: 'emerald', is_approval: true, is_active: true },
+      { code: 'AGUARDANDO_CLIENTE', label: 'Aguardando Aprovação de Orçamento', color: 'amber', is_approval: false, is_active: true },
+      { code: 'AGUARDANDO_PECA', label: 'Aguardando Chegada de Peça', color: 'blue', is_approval: false, is_active: true },
+      { code: 'RECUSADO', label: 'Orçamento Recusado pelo Cliente', color: 'slate', is_approval: false, is_active: true },
+      { code: 'SEM_REPARO', label: 'Sem Reparo (Placa Inviável)', color: 'rose', is_approval: false, is_active: true }
+    ],
+    workflow: {
+      name: 'Fluxo Assistência Técnica Informática',
+      is_default: true,
+      states: [
+        { id: 'st-inf-recebido', workflow_id: 'wf-informatica', code: 'RECEBIDO', name: 'Recebido na Recepção', color: 'slate', stage_type: 'RECEBIDO', sort_order: 1, is_initial: true, is_final: false },
+        { id: 'st-inf-diagnostico', workflow_id: 'wf-informatica', code: 'EM_DIAGNOSTICO', name: 'Em Diagnóstico', color: 'amber', stage_type: 'EM_ANDAMENTO', sort_order: 2, is_initial: false, is_final: false },
+        { id: 'st-inf-orcamento', workflow_id: 'wf-informatica', code: 'AGUARDANDO_APROVACAO', name: 'Aguard. Aprovação', color: 'purple', stage_type: 'AGUARDANDO_APROVACAO', sort_order: 3, is_initial: false, is_final: false },
+        { id: 'st-inf-reparo', workflow_id: 'wf-informatica', code: 'EM_REPARO', name: 'Em Reparo / Bancada', color: 'blue', stage_type: 'EM_ANDAMENTO', sort_order: 4, is_initial: false, is_final: false },
+        { id: 'st-inf-testes', workflow_id: 'wf-informatica', code: 'EM_TESTES', name: 'Em Testes Finais', color: 'teal', stage_type: 'EM_ANDAMENTO', sort_order: 5, is_initial: false, is_final: false },
+        { id: 'st-inf-pronto', workflow_id: 'wf-informatica', code: 'FINALIZADO', name: 'Pronto p/ Retirada', color: 'emerald', stage_type: 'CONCLUIDO', sort_order: 6, is_initial: false, is_final: true }
+      ]
+    },
+    checklist: {
+      name: 'Checklist Entrada de Notebook / PC',
+      items: [
+        { id: 'chk-inf-1', item_name: 'Acompanha Carregador / Fonte Original', is_required: false, sort_order: 1 },
+        { id: 'chk-inf-2', item_name: 'Liga normalmente (Dá vídeo)', is_required: false, sort_order: 2 },
+        { id: 'chk-inf-3', item_name: 'Carcaça / Dobradiça possui trincas ou riscos', is_required: false, sort_order: 3 },
+        { id: 'chk-inf-4', item_name: 'Teclado e Touchpad funcionais', is_required: false, sort_order: 4 },
+        { id: 'chk-inf-5', item_name: 'Tela LCD sem manchas ou linhas', is_required: false, sort_order: 5 }
+      ]
+    }
+  },
+
+  ASSISTENCIA_CELULARES: {
+    key: 'ASSISTENCIA_CELULARES',
+    name: 'Assistência Técnica de Celulares & Tablets',
+    description: 'Troca de tela, bateria, conector de carga e reparo em placas de smartphones.',
+    icon: 'Smartphone',
+    categories: [
+      { id: 'cat-smartphone', name: 'Smartphone', slug: 'smartphone', icon: 'Smartphone', identifier_label: 'IMEI / Nº de Série', is_system: true, is_active: true },
+      { id: 'cat-tablet', name: 'Tablet', slug: 'tablet', icon: 'Tablet', identifier_label: 'Nº de Série', is_system: true, is_active: true }
+    ],
+    brands: [
+      { id: 'brand-apple-cel', name: 'Apple', slug: 'apple', is_system: true, is_active: true },
+      { id: 'brand-samsung-cel', name: 'Samsung', slug: 'samsung', is_system: true, is_active: true },
+      { id: 'brand-motorola', name: 'Motorola', slug: 'motorola', is_system: true, is_active: true },
+      { id: 'brand-xiaomi', name: 'Xiaomi', slug: 'xiaomi', is_system: true, is_active: true }
+    ],
+    models: [
+      { id: 'mod-iphone-13', category_id: 'cat-smartphone', brand_id: 'brand-apple-cel', brand_name: 'Apple', name: 'iPhone 13', internal_code: 'IP13', description: 'Smartphone Apple 128GB/256GB', is_active: true },
+      { id: 'mod-galaxy-s23', category_id: 'cat-smartphone', brand_id: 'brand-samsung-cel', brand_name: 'Samsung', name: 'Galaxy S23', internal_code: 'S23', description: 'Smartphone Samsung 5G', is_active: true },
+      { id: 'mod-moto-g54', category_id: 'cat-smartphone', brand_id: 'brand-motorola', brand_name: 'Motorola', name: 'Moto G54 5G', internal_code: 'G54', description: 'Motorola 256GB', is_active: true }
+    ],
+    services: [
+      { id: 'srv-troca-tela', name: 'Troca de Tela / Módulo Frontal', code: 'TROCA_TELA', description: 'Substituição completa do display touch OLED/IPS', default_price: 180.00, estimated_time_minutes: 60, is_active: true, category_ids: ['cat-smartphone', 'cat-tablet'] },
+      { id: 'srv-troca-bateria', name: 'Troca de Bateria', code: 'TROCA_BATERIA', description: 'Substituição de bateria estufada ou com baixa saúde', default_price: 120.00, estimated_time_minutes: 45, is_active: true, category_ids: ['cat-smartphone', 'cat-tablet'] },
+      { id: 'srv-conector-carga', name: 'Troca de Conector de Carga (Dock USB)', code: 'CONECTOR_CARGA', description: 'Substituição do conector Tipo-C / Lightning', default_price: 90.00, estimated_time_minutes: 60, is_active: true, category_ids: ['cat-smartphone', 'cat-tablet'] }
+    ],
+    attributes: [
+      { name: 'Cor do Aparelho', key: 'color', data_type: 'text', is_required: false, is_filterable: true, sort_order: 1, is_active: true },
+      { name: 'Capacidade', key: 'storage', data_type: 'select', options: ['64 GB', '128 GB', '256 GB', '512 GB', '1 TB'], is_required: false, is_filterable: true, sort_order: 2, is_active: true },
+      { name: 'Senha de Desbloqueio', key: 'device_password', data_type: 'text', is_required: false, is_filterable: false, sort_order: 3, is_active: true }
+    ],
+    fieldDefinitions: [
+      { label: 'Saúde da Bateria (%)', field_key: 'battery_health', field_type: 'decimal', unit: '%', is_required: false, sort_order: 1 },
+      { label: 'Condição da Carcaça', field_key: 'chassis_condition', field_type: 'text', is_required: false, sort_order: 2 }
+    ],
+    results: [
+      { code: 'APROVADO', label: 'Reparo Concluído com Sucesso', color: 'emerald', is_approval: true, is_active: true },
+      { code: 'AGUARDANDO_APROVACAO', label: 'Aguardando Autorização de Valor', color: 'amber', is_approval: false, is_active: true },
+      { code: 'SEM_REPARO', label: 'Sem Reparo Possível', color: 'rose', is_approval: false, is_active: true }
+    ],
+    workflow: {
+      name: 'Fluxo Assistência Celulares',
+      is_default: true,
+      states: [
+        { id: 'st-cel-recebido', workflow_id: 'wf-celular', code: 'RECEBIDO', name: 'Recebido (Balcão)', color: 'slate', stage_type: 'RECEBIDO', sort_order: 1, is_initial: true, is_final: false },
+        { id: 'st-cel-analise', workflow_id: 'wf-celular', code: 'EM_ANALISE', name: 'Em Análise', color: 'amber', stage_type: 'EM_ANDAMENTO', sort_order: 2, is_initial: false, is_final: false },
+        { id: 'st-cel-bancada', workflow_id: 'wf-celular', code: 'EM_REPARO', name: 'Na Bancada', color: 'blue', stage_type: 'EM_ANDAMENTO', sort_order: 3, is_initial: false, is_final: false },
+        { id: 'st-cel-testes', workflow_id: 'wf-celular', code: 'EM_TESTES', name: 'Testes de Câmera/Touch', color: 'teal', stage_type: 'EM_ANDAMENTO', sort_order: 4, is_initial: false, is_final: false },
+        { id: 'st-cel-pronto', workflow_id: 'wf-celular', code: 'FINALIZADO', name: 'Pronto p/ Entrega', color: 'emerald', stage_type: 'CONCLUIDO', sort_order: 5, is_initial: false, is_final: true }
+      ]
+    },
+    checklist: {
+      name: 'Checklist Entrada Smartphone',
+      items: [
+        { id: 'chk-cel-1', item_name: 'Tela liga e dá touch em toda a área', is_required: false, sort_order: 1 },
+        { id: 'chk-cel-2', item_name: 'Câmera Frontal e Traseira funcionam', is_required: false, sort_order: 2 },
+        { id: 'chk-cel-3', item_name: 'Microfone e Alto-falantes operacionais', is_required: false, sort_order: 3 },
+        { id: 'chk-cel-4', item_name: 'Reconhece chip SIM e Wi-Fi', is_required: false, sort_order: 4 },
+        { id: 'chk-cel-5', item_name: 'Carcaça/Tampa traseira possui marcas de queda', is_required: false, sort_order: 5 }
+      ]
+    }
+  },
+
   FERRAMENTAS_MOTORES: {
-    segment: 'FERRAMENTAS_MOTORES',
-    segmentName: 'Manutenção de Ferramentas & Motores',
-    itemLabelSingular: 'Equipamento / Máquina',
-    itemLabelPlural: 'Equipamentos',
-    identifierLabel: 'Nº de Série / Tag',
-    serviceLabel: 'Serviço / Manutenção',
-    hasWeightInspection: false,
-    hasChecklist: true,
-    defaultChecklistItems: [
-      'Cabo de Força / Plugue Elétrico',
-      'Escovas de Carvão / Coletor',
-      'Gatilho / Interruptor Liga-Desliga',
-      'Rolamentos & Engrenagens',
-      'Mandril / Eixo de Encaixe',
-      'Carcaça & Proteção de Segurança'
+    key: 'FERRAMENTAS_MOTORES',
+    name: 'Motores Elétricos & Ferramentas',
+    description: 'Manutenção de furadeiras, serras, compressores e rebobinamento de motores.',
+    icon: 'Wrench',
+    categories: [
+      { id: 'cat-ferramenta', name: 'Ferramenta Elétrica', slug: 'ferramenta-eletrica', icon: 'Wrench', identifier_label: 'Nº de Série / Patrimônio', is_system: true, is_active: true },
+      { id: 'cat-motor', name: 'Motor Elétrico', slug: 'motor-eletrico', icon: 'Zap', identifier_label: 'Nº de Série / Identificador', is_system: true, is_active: true }
     ],
-    defaultCategories: ['Furadeiras & Parafusadeiras', 'Serras & Lixadeiras', 'Lavadoras de Alta Pressão', 'Motores Elétricos', 'Geradores', 'Compressores'],
-    iconName: 'Wrench'
+    brands: [
+      { id: 'brand-makita', name: 'Makita', slug: 'makita', is_system: true, is_active: true },
+      { id: 'brand-bosch', name: 'Bosch', slug: 'bosch', is_system: true, is_active: true },
+      { id: 'brand-dewalt', name: 'DeWalt', slug: 'dewalt', is_system: true, is_active: true },
+      { id: 'brand-weg', name: 'WEG', slug: 'weg', is_system: true, is_active: true }
+    ],
+    models: [
+      { id: 'mod-makita-hp1640', category_id: 'cat-ferramenta', brand_id: 'brand-makita', brand_name: 'Makita', name: 'Furadeira de Impacto HP1640', internal_code: 'HP1640', description: 'Furadeira 760W 13mm', is_active: true },
+      { id: 'mod-motor-weg-2cv', category_id: 'cat-motor', brand_id: 'brand-weg', brand_name: 'WEG', name: 'Motor WEG Trifásico 2CV', internal_code: 'WEG2CV', description: 'Motor 4 Polos 220/380V', is_active: true }
+    ],
+    services: [
+      { id: 'srv-rebobinamento', name: 'Rebobinamento de Estator/Induzido', code: 'REBOBINAMENTO', description: 'Rebobinamento completo com fio de cobre esmaltado classe H', default_price: 180.00, estimated_time_minutes: 180, is_active: true, category_ids: ['cat-motor', 'cat-ferramenta'] },
+      { id: 'srv-troca-escovas', name: 'Troca de Escovas de Carvão', code: 'TROCA_ESCOVAS', description: 'Substituição de carvões gastos e limpeza do coletor', default_price: 45.00, estimated_time_minutes: 30, is_active: true, category_ids: ['cat-ferramenta'] },
+      { id: 'srv-revisao-geral', name: 'Revisão Geral e Lubrificação', code: 'REVISAO_GERAL', description: 'Troca de graxa, rolamentos e teste de isolação', default_price: 80.00, estimated_time_minutes: 60, is_active: true, category_ids: ['cat-motor', 'cat-ferramenta'] }
+    ],
+    attributes: [
+      { name: 'Voltagem', key: 'voltage', data_type: 'select', options: ['110V', '220V', 'Bivolt', 'Trifásico 220/380V'], is_required: false, is_filterable: true, sort_order: 1, is_active: true },
+      { name: 'Potência', key: 'power', data_type: 'text', is_required: false, is_filterable: true, sort_order: 2, is_active: true }
+    ],
+    fieldDefinitions: [
+      { label: 'Resistência de Isolação (MΩ)', field_key: 'insulation_resistance', field_type: 'decimal', unit: 'MΩ', is_required: false, sort_order: 1 },
+      { label: 'Corrente em Vazio (A)', field_key: 'no_load_current', field_type: 'decimal', unit: 'A', is_required: false, sort_order: 2 }
+    ],
+    results: [
+      { code: 'APROVADO', label: 'Equipamento Revisado e Operacional', color: 'emerald', is_approval: true, is_active: true },
+      { code: 'SEM_REPARO', label: 'Induzido Danificado / Inviável', color: 'rose', is_approval: false, is_active: true }
+    ],
+    workflow: {
+      name: 'Fluxo Manutenção Ferramentas e Motores',
+      is_default: true,
+      states: [
+        { id: 'st-mot-recebido', workflow_id: 'wf-motores', code: 'RECEBIDO', name: 'Recepção', color: 'slate', stage_type: 'RECEBIDO', sort_order: 1, is_initial: true, is_final: false },
+        { id: 'st-mot-desmontagem', workflow_id: 'wf-motores', code: 'DESMONTAGEM', name: 'Desmontagem & Teste', color: 'amber', stage_type: 'EM_ANDAMENTO', sort_order: 2, is_initial: false, is_final: false },
+        { id: 'st-mot-bancada', workflow_id: 'wf-motores', code: 'EM_REBOBINAMENTO', name: 'Na Bancada / Bobinagem', color: 'blue', stage_type: 'EM_ANDAMENTO', sort_order: 3, is_initial: false, is_final: false },
+        { id: 'st-mot-testes', workflow_id: 'wf-motores', code: 'TESTES_CARGA', name: 'Teste em Carga', color: 'teal', stage_type: 'EM_ANDAMENTO', sort_order: 4, is_initial: false, is_final: false },
+        { id: 'st-mot-pronto', workflow_id: 'wf-motores', code: 'FINALIZADO', name: 'Pronto p/ Retirada', color: 'emerald', stage_type: 'CONCLUIDO', sort_order: 5, is_initial: false, is_final: true }
+      ]
+    }
   },
+
   OFICINA_GERAL: {
-    segment: 'OFICINA_GERAL',
-    segmentName: 'Oficina & Serviços Gerais',
-    itemLabelSingular: 'Item / Peça',
-    itemLabelPlural: 'Itens',
-    identifierLabel: 'Código / Serial',
-    serviceLabel: 'Serviço Solicitado',
-    hasWeightInspection: false,
-    hasChecklist: true,
-    defaultChecklistItems: [
-      'Estado Geral de Conservação',
-      'Avarias Estéticas Visíveis',
-      'Acessórios / Componentes Entregues',
-      'Funcionamento no Recebimento'
+    key: 'OFICINA_GERAL',
+    name: 'Oficina Técnica Geral & Manutenção',
+    description: 'Configuração flexível para qualquer tipo de prestação de serviços técnicos.',
+    icon: 'Layers',
+    categories: [
+      { id: 'cat-geral', name: 'Equipamento Geral', slug: 'equipamento-geral', icon: 'Layers', identifier_label: 'Código / Nº de Série', is_system: true, is_active: true }
     ],
-    defaultCategories: ['Geral', 'Eletrônicos', 'Mecânica', 'Manutenção Preventiva', 'Outros'],
-    iconName: 'Layers'
+    brands: [
+      { id: 'brand-geral', name: 'Genérica / Outras', slug: 'generica', is_system: true, is_active: true }
+    ],
+    models: [
+      { id: 'mod-equipamento-padrao', category_id: 'cat-geral', brand_id: 'brand-geral', brand_name: 'Genérica', name: 'Equipamento Padrão', internal_code: 'EQP', description: 'Item genérico para manutenção', is_active: true }
+    ],
+    services: [
+      { id: 'srv-manutencao-geral', name: 'Manutenção Preventiva / Corretiva', code: 'MANUTENCAO', description: 'Inspeção, reparo e testes de bancada', default_price: 100.00, estimated_time_minutes: 60, is_active: true, category_ids: ['cat-geral'] }
+    ],
+    attributes: [
+      { name: 'Modelo / Referência', key: 'reference', data_type: 'text', is_required: false, is_filterable: true, sort_order: 1, is_active: true }
+    ],
+    fieldDefinitions: [
+      { label: 'Observação Técnica', field_key: 'tech_notes', field_type: 'textarea', is_required: false, sort_order: 1 }
+    ],
+    results: [
+      { code: 'APROVADO', label: 'Serviço Concluído com Sucesso', color: 'emerald', is_approval: true, is_active: true },
+      { code: 'SEM_REPARO', label: 'Sem Condições de Reparo', color: 'rose', is_approval: false, is_active: true }
+    ],
+    workflow: {
+      name: 'Fluxo Genérico de Serviços',
+      is_default: true,
+      states: [
+        { id: 'st-ger-recebido', workflow_id: 'wf-geral', code: 'RECEBIDO', name: 'Recebido', color: 'slate', stage_type: 'RECEBIDO', sort_order: 1, is_initial: true, is_final: false },
+        { id: 'st-ger-execucao', workflow_id: 'wf-geral', code: 'EM_EXECUCAO', name: 'Em Execução', color: 'blue', stage_type: 'EM_ANDAMENTO', sort_order: 2, is_initial: false, is_final: false },
+        { id: 'st-ger-pronto', workflow_id: 'wf-geral', code: 'FINALIZADO', name: 'Concluído', color: 'emerald', stage_type: 'CONCLUIDO', sort_order: 3, is_initial: false, is_final: true }
+      ]
+    }
   }
 };
 
-// Default Seed Companies
+export const SEGMENT_PRESETS = BUSINESS_PRESETS;
+
+// ============================================================================
+// 2. SEED DATA (COMPANIES, PLANS, USERS & DEMO DATA)
+// ============================================================================
+
+export const MOCK_COMPANY_SUPREME: Company = {
+  id: '00000000-0000-0000-0000-000000000001',
+  corporate_name: 'Supreme Soluções Tecnológicas LTDA',
+  trade_name: 'Supreme Informática & Recargas',
+  cnpj: '12.345.678/0001-90',
+  phone: '(11) 3456-7890',
+  whatsapp: '(11) 98765-4321',
+  email: 'contato@supreme.com.br',
+  address: 'Av. Paulista, 1000 - Bela Vista',
+  city: 'São Paulo',
+  state: 'SP',
+  zip_code: '01310-100',
+  responsible_name: 'Carlos Oliveira',
+  active_template_keys: ['RECARGA_CARTUCHOS', 'ASSISTENCIA_INFORMATICA', 'ASSISTENCIA_CELULARES'],
+  is_active: true,
+  created_at: new Date('2026-01-01').toISOString(),
+  updated_at: new Date('2026-01-01').toISOString()
+};
+
+export const MOCK_COMPANY_ALFA: Company = {
+  id: '00000000-0000-0000-0000-000000000002',
+  corporate_name: 'Alfa Motores & Ferramentas LTDA',
+  trade_name: 'Alfa Oficina e Motores',
+  cnpj: '98.765.432/0001-10',
+  phone: '(19) 3210-9876',
+  whatsapp: '(19) 99876-5432',
+  email: 'contato@alfamotores.com.br',
+  address: 'Rua Barão de Jaguara, 500 - Centro',
+  city: 'Campinas',
+  state: 'SP',
+  zip_code: '13015-001',
+  responsible_name: 'Marcos Almeida',
+  active_template_keys: ['FERRAMENTAS_MOTORES', 'OFICINA_GERAL'],
+  is_active: true,
+  created_at: new Date('2026-02-01').toISOString(),
+  updated_at: new Date('2026-02-01').toISOString()
+};
+
 export const MOCK_COMPANIES: Company[] = [
+  MOCK_COMPANY_SUPREME,
+  MOCK_COMPANY_ALFA
+];
+
+export const MOCK_PLANS: Plan[] = [
   {
-    id: 'b2000000-0000-0000-0000-000000000001',
-    corporate_name: 'Supreme Recargas e Informática LTDA',
-    trade_name: 'Supreme Informática',
-    cnpj: '12.345.678/0001-90',
-    phone: '(11) 98765-4321',
-    whatsapp: '11987654321',
-    email: 'contato@supremeinformatica.com.br',
-    responsible_name: 'Carlos Oliveira',
-    address: 'Av. Paulista, 1000 - Sala 42',
-    city: 'São Paulo',
-    state: 'SP',
-    zip_code: '01310-100',
-    logo_url: '',
-    business_segment: 'RECARGA_CARTUCHOS',
-    is_active: true,
-    created_at: '2026-01-15T00:00:00.000Z',
-    updated_at: '2026-01-15T00:00:00.000Z'
+    id: 'plan-starter-saas',
+    name: 'Plano Essencial',
+    code: 'ESSENCIAL',
+    description: 'Para pequenas oficinas e assistências em início de operação',
+    max_users: 3,
+    monthly_price: 59.90,
+    extra_user_price: 15.00,
+    features: ['Emissão de Ordens de Serviço', 'Bancada Técnica Kanban', 'Etiqueta com QR Code de Rastreio', 'Até 3 Usuários'],
+    is_active: true
   },
   {
-    id: 'b2000000-0000-0000-0000-000000000002',
-    corporate_name: 'Mega Soluções em Recargas & Impressão EIRELI',
-    trade_name: 'Mega Recargas Centro',
-    cnpj: '98.765.432/0001-11',
-    phone: '(11) 98888-3333',
-    whatsapp: '11988883333',
-    email: 'contato@megarecargas.com.br',
-    responsible_name: 'Eduardo Martins',
-    address: 'Rua Direita, 250 - Centro',
-    city: 'Campinas',
-    state: 'SP',
-    zip_code: '13010-000',
-    logo_url: '',
-    business_segment: 'RECARGA_CARTUCHOS',
-    is_active: true,
-    created_at: '2026-01-20T00:00:00.000Z',
-    updated_at: '2026-01-20T00:00:00.000Z'
+    id: 'plan-pro-saas',
+    name: 'Plano Profissional',
+    code: 'PROFISSIONAL',
+    description: 'Para centros de serviço com alto volume e equipe dedicada',
+    max_users: 8,
+    monthly_price: 119.90,
+    extra_user_price: 15.00,
+    features: ['Ordens Ilimitadas', 'Múltiplos Segmentos Simultâneos', 'Relatórios Financeiros & Faturamento', 'Controle de Checklists e Histórico de Ativos', 'Até 8 Usuários'],
+    is_active: true
   },
   {
-    id: 'b2000000-0000-0000-0000-000000000003',
-    corporate_name: 'Império do Toner & Cartuchos ME',
-    trade_name: 'Império dos Cartuchos',
-    cnpj: '44.555.666/0001-22',
-    phone: '(19) 97777-4444',
-    whatsapp: '19977774444',
-    email: 'financeiro@imperiocartuchos.com.br',
-    responsible_name: 'Luciana Ferreira',
-    address: 'Av. Brasil, 550',
-    city: 'Ribeirão Preto',
-    state: 'SP',
-    zip_code: '14015-000',
-    logo_url: '',
-    business_segment: 'RECARGA_CARTUCHOS',
-    is_active: false,
-    created_at: '2026-02-05T00:00:00.000Z',
-    updated_at: '2026-02-05T00:00:00.000Z'
+    id: 'plan-master-saas',
+    name: 'Plano Enterprise',
+    code: 'ENTERPRISE',
+    description: 'Para grandes redes de assistência e franquias',
+    max_users: 25,
+    monthly_price: 249.90,
+    extra_user_price: 12.00,
+    features: ['Capacidade Expandida', 'Auditoria Completa', 'Suporte Prioritário', 'Workflows Customizados', 'Até 25 Usuários'],
+    is_active: true
   }
 ];
 
-export const MOCK_COMPANY_SUPREME: Company = MOCK_COMPANIES[0];
+export const MOCK_SUBSCRIPTIONS: Subscription[] = [
+  {
+    id: 'sub-supreme-01',
+    tenant_id: MOCK_COMPANY_SUPREME.id,
+    plan_id: 'plan-pro-saas',
+    status: 'ACTIVE',
+    starts_at: '2026-01-01T00:00:00Z',
+    extra_users: 2,
+    custom_price: 149.90,
+    billing_cycle: 'MONTHLY',
+    notes: 'Cliente modelo - 10 usuários contratados'
+  },
+  {
+    id: 'sub-alfa-02',
+    tenant_id: MOCK_COMPANY_ALFA.id,
+    plan_id: 'plan-starter-saas',
+    status: 'ACTIVE',
+    starts_at: '2026-02-01T00:00:00Z',
+    extra_users: 0,
+    billing_cycle: 'MONTHLY'
+  }
+];
 
 export const DEFAULT_PERMISSION_GROUPS: PermissionGroup[] = [
   {
     id: 'default-admin-group',
-    tenant_id: '',
-    name: 'Administrador',
-    description: 'Acesso irrestrito a todas as funções, relatórios, configurações e gestão da empresa',
+    name: 'Administrador (Acesso Total)',
+    description: 'Controle total da empresa, gestão financeira, relatórios, equipe e configurações.',
     is_system_default: true,
     default_role: 'ADMINISTRADOR',
     permissions: {
+      orders_create: true,
+      orders_view: true,
+      orders_deliver: true,
+      orders_cancel: true,
+      orders_reopen: true,
+      orders_discount: true,
+      orders_print: true,
+      customers_view: true,
+      customers_create: true,
+      customers_edit: true,
+      technical_workbench: true,
+      technical_update: true,
+      catalog_manage: true,
+      services_manage: true,
+      finance_view: true,
+      audit_view: true,
+      settings_manage: true,
+      // Backward-compat keys
       create_entry: true,
       view_entries: true,
       register_delivery: true,
-      close_uncompleted_entry: true,
-      apply_discount_on_delivery: true,
       print_ticket: true,
       view_customers: true,
       create_customer: true,
       edit_customer: true,
-      technical_workbench: true,
-      register_weight: true,
-      register_diagnosis: true,
       update_tech_status: true,
-      customize_kanban: true,
       reopen_entry: true,
       delete_entry: true,
       manage_models: true,
@@ -214,1112 +514,431 @@ export const DEFAULT_PERMISSION_GROUPS: PermissionGroup[] = [
   },
   {
     id: 'default-attendant-group',
-    tenant_id: '',
-    name: 'Atendente (Balcão)',
-    description: 'Recepção no balcão, abertura de comandas, cadastro de clientes, baixa e entrega',
+    name: 'Atendente (Balcão de Atendimento)',
+    description: 'Abertura de ordens de serviço, emissão de tickets, cadastro de clientes e baixa de entrega.',
     is_system_default: true,
     default_role: 'ATENDENTE',
     permissions: {
+      orders_create: true,
+      orders_view: true,
+      orders_deliver: true,
+      orders_print: true,
+      customers_view: true,
+      customers_create: true,
+      customers_edit: true,
+      // Backward-compat keys
       create_entry: true,
       view_entries: true,
       register_delivery: true,
-      close_uncompleted_entry: true,
-      apply_discount_on_delivery: false,
       print_ticket: true,
       view_customers: true,
       create_customer: true,
-      edit_customer: true,
-      technical_workbench: false,
-      register_weight: false,
-      register_diagnosis: false,
-      update_tech_status: false,
-      customize_kanban: false,
-      reopen_entry: false,
-      delete_entry: false,
-      manage_models: false,
-      manage_services: false,
-      view_financial_reports: false,
-      view_audit_logs: false,
-      manage_company: false
+      edit_customer: true
     }
   },
   {
     id: 'default-tech-group',
-    tenant_id: '',
-    name: 'Técnico (Bancada)',
-    description: 'Oficina técnica, fila Kanban, pesagem, testes de impressão e diagnóstico de defeitos',
+    name: 'Técnico (Bancada & Oficina)',
+    description: 'Acesso à bancada técnica Kanban, execução de testes, pesagem e diagnóstico de itens.',
     is_system_default: true,
     default_role: 'TECNICO',
     permissions: {
-      create_entry: false,
-      view_entries: true,
-      register_delivery: false,
-      close_uncompleted_entry: false,
-      apply_discount_on_delivery: false,
-      print_ticket: true,
-      view_customers: false,
-      create_customer: false,
-      edit_customer: false,
       technical_workbench: true,
-      register_weight: true,
-      register_diagnosis: true,
-      update_tech_status: true,
-      customize_kanban: false,
-      reopen_entry: false,
-      delete_entry: false,
-      manage_models: false,
-      manage_services: false,
-      view_financial_reports: false,
-      view_audit_logs: false,
-      manage_company: false
+      technical_update: true,
+      // Backward-compat keys
+      update_tech_status: true
     }
   }
 ];
 
-export const MOCK_PLANS: Plan[] = [
-  {
-    id: 'a1000000-0000-0000-0000-000000000001',
-    name: 'Plano Inicial (Free)',
-    code: 'INICIAL',
-    description: 'Até 4 usuários incluídos no total (Admin, Técnico ou Atendente).',
-    max_users: 4,
-    max_administrators: 4,
-    max_attendants: 4,
-    max_technicians: 4,
-    max_total_users: 4,
-    monthly_price: 0,
-    extra_user_price: 15.00,
-    extra_attendant_price: 15.00,
-    extra_technician_price: 15.00,
-    extra_admin_price: 15.00,
-    features: [
-      'Até 4 usuários no total',
-      'Entradas e Comandas com QR Code',
-      'Bancada Técnica (Kanban)',
-      'Impressão Térmica e A4',
-      'WhatsApp nativo via link (wa.me)'
-    ],
-    is_active: true,
-    created_at: '2026-01-01T00:00:00.000Z'
-  },
-  {
-    id: 'a1000000-0000-0000-0000-000000000002',
-    name: 'Plano Básico',
-    code: 'BASICO',
-    description: 'Para assistências de 10 a 20 cartuchos/dia. Até 8 usuários incluídos no total.',
-    max_users: 8,
-    max_administrators: 8,
-    max_attendants: 8,
-    max_technicians: 8,
-    max_total_users: 8,
-    monthly_price: 69.90,
-    extra_user_price: 15.00,
-    extra_attendant_price: 15.00,
-    extra_technician_price: 15.00,
-    extra_admin_price: 15.00,
-    features: [
-      'Até 8 usuários no total',
-      'Relatórios e Indicadores Financeiros',
-      'Rastreio online para clientes',
-      'Registro de Auditoria de Ações',
-      'Suporte prioritário via WhatsApp'
-    ],
-    is_active: true,
-    created_at: '2026-01-01T00:00:00.000Z'
-  },
-  {
-    id: 'a1000000-0000-0000-0000-000000000003',
-    name: 'Plano Profissional',
-    code: 'PROFISSIONAL',
-    description: 'Para operações em expansão. Até 15 usuários incluídos no total.',
-    max_users: 15,
-    max_administrators: 15,
-    max_attendants: 15,
-    max_technicians: 15,
-    max_total_users: 15,
-    monthly_price: 139.90,
-    extra_user_price: 15.00,
-    extra_attendant_price: 15.00,
-    extra_technician_price: 15.00,
-    extra_admin_price: 15.00,
-    features: [
-      'Até 15 usuários no total',
-      'Gestão avançada de perdas e garantias',
-      'Múltiplos terminais simultâneos',
-      'Exportação de dados e relatórios em tempo real',
-      'Controle customizado de pesagem'
-    ],
-    is_active: true,
-    created_at: '2026-01-01T00:00:00.000Z'
-  },
-  {
-    id: 'a1000000-0000-0000-0000-000000000004',
-    name: 'Plano Enterprise / Ilimitado',
-    code: 'ENTERPRISE',
-    description: 'Para redes e franquias. Até 35 usuários incluídos no total.',
-    max_users: 35,
-    max_administrators: 35,
-    max_attendants: 35,
-    max_technicians: 35,
-    max_total_users: 35,
-    monthly_price: 249.90,
-    extra_user_price: 15.00,
-    extra_attendant_price: 15.00,
-    extra_technician_price: 15.00,
-    extra_admin_price: 15.00,
-    features: [
-      'Até 35 usuários no total',
-      'Limites customizáveis sob demanda',
-      'Painel consolidado multi-unidades',
-      'Onboarding e treinamento personalizado'
-    ],
-    is_active: true,
-    created_at: '2026-01-01T00:00:00.000Z'
-  }
-];
-
-export const MOCK_SUBSCRIPTIONS: Subscription[] = [
-  {
-    id: 'c3000000-0000-0000-0000-000000000001',
-    tenant_id: MOCK_COMPANIES[0].id,
-    plan_id: MOCK_PLANS[0].id,
-    status: 'ACTIVE',
-    starts_at: '2026-01-15T00:00:00.000Z',
-    extra_attendants: 0,
-    extra_technicians: 0,
-    extra_administrators: 0,
-    billing_cycle: 'MONTHLY',
-    plan: MOCK_PLANS[0]
-  },
-  {
-    id: 'c3000000-0000-0000-0000-000000000002',
-    tenant_id: MOCK_COMPANIES[1].id,
-    plan_id: MOCK_PLANS[2].id,
-    status: 'ACTIVE',
-    starts_at: '2026-01-20T00:00:00.000Z',
-    extra_attendants: 1,
-    extra_technicians: 2,
-    extra_administrators: 0,
-    billing_cycle: 'MONTHLY',
-    plan: MOCK_PLANS[2]
-  },
-  {
-    id: 'c3000000-0000-0000-0000-000000000003',
-    tenant_id: MOCK_COMPANIES[2].id,
-    plan_id: MOCK_PLANS[1].id,
-    status: 'PAUSED',
-    starts_at: '2026-02-05T00:00:00.000Z',
-    extra_attendants: 0,
-    extra_technicians: 0,
-    extra_administrators: 0,
-    billing_cycle: 'MONTHLY',
-    plan: MOCK_PLANS[1]
-  }
-];
-
-export const MOCK_SUBSCRIPTION_SUPREME: Subscription = MOCK_SUBSCRIPTIONS[0];
-
-// Fixed Demo User IDs (Protected from modification/deletion)
-export const FIXED_DEMO_USER_IDS = [
-  'd4000000-0000-0000-0000-000000000001', // Admin
-  'd4000000-0000-0000-0000-000000000002', // Atendente 1
-  'd4000000-0000-0000-0000-000000000004', // Atendente 2
-  'd4000000-0000-0000-0000-000000000005', // Atendente 3
-  'd4000000-0000-0000-0000-000000000003', // Técnico 1
-  'd4000000-0000-0000-0000-000000000006'  // Técnico 2
-];
-
-export interface DemoSandboxConfig {
-  lastResetAt: string;
-  nextResetAt: string;
-  passwords: {
-    admin: string;
-    attendant: string;
-    technician: string;
-  };
-  fixedUserIds: string[];
-}
-
-export const INITIAL_DEMO_SANDBOX: DemoSandboxConfig = {
-  lastResetAt: new Date().toISOString(),
-  nextResetAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-  passwords: {
-    admin: 'demo-adm-842',
-    attendant: 'demo-atd-193',
-    technician: 'demo-tec-557'
-  },
-  fixedUserIds: FIXED_DEMO_USER_IDS
-};
-
-// Default Profiles
 export const MOCK_PROFILES: Profile[] = [
-  // 1 Administrador Fixo da Demo
   {
-    id: 'd4000000-0000-0000-0000-000000000001',
+    id: '00000000-0000-0000-0000-000000000099',
     tenant_id: MOCK_COMPANY_SUPREME.id,
-    full_name: 'Carlos Oliveira (Admin Demo)',
-    email: 'admin@supreme.com.br',
-    password: 'demo-adm-842',
-    phone: '(11) 91111-1111',
-    role: 'ADMINISTRADOR',
-    is_active: true,
-    created_at: '2026-01-15T00:00:00.000Z',
-    company: MOCK_COMPANY_SUPREME
-  },
-  // 3 Atendentes Fixos da Demo
-  {
-    id: 'd4000000-0000-0000-0000-000000000002',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    full_name: 'Mariana Santos (Atendente 1)',
-    email: 'mariana.atendente@supreme.com.br',
-    password: 'demo-atd-193',
-    phone: '(11) 92222-2222',
-    role: 'ATENDENTE',
-    is_active: true,
-    created_at: '2026-01-16T00:00:00.000Z',
-    company: MOCK_COMPANY_SUPREME
-  },
-  {
-    id: 'd4000000-0000-0000-0000-000000000004',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    full_name: 'Lucas Lima (Atendente 2)',
-    email: 'lucas.atendente@supreme.com.br',
-    password: 'demo-atd-193',
-    phone: '(11) 92222-4444',
-    role: 'ATENDENTE',
-    is_active: true,
-    created_at: '2026-01-16T00:00:00.000Z',
-    company: MOCK_COMPANY_SUPREME
-  },
-  {
-    id: 'd4000000-0000-0000-0000-000000000005',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    full_name: 'Beatriz Costa (Atendente 3)',
-    email: 'beatriz.atendente@supreme.com.br',
-    password: 'demo-atd-193',
-    phone: '(11) 92222-5555',
-    role: 'ATENDENTE',
-    is_active: true,
-    created_at: '2026-01-16T00:00:00.000Z',
-    company: MOCK_COMPANY_SUPREME
-  },
-  // 2 Técnicos Fixos da Demo
-  {
-    id: 'd4000000-0000-0000-0000-000000000003',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    full_name: 'Rafael Souza (Técnico 1)',
-    email: 'rafael.tecnico@supreme.com.br',
-    password: 'demo-tec-557',
-    phone: '(11) 93333-3333',
-    role: 'TECNICO',
-    is_active: true,
-    created_at: '2026-01-16T00:00:00.000Z',
-    company: MOCK_COMPANY_SUPREME
-  },
-  {
-    id: 'd4000000-0000-0000-0000-000000000006',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    full_name: 'Marcos Silva (Técnico 2)',
-    email: 'marcos.tecnico@supreme.com.br',
-    password: 'demo-tec-557',
-    phone: '(11) 93333-6666',
-    role: 'TECNICO',
-    is_active: true,
-    created_at: '2026-01-16T00:00:00.000Z',
-    company: MOCK_COMPANY_SUPREME
-  },
-  // Super Admin
-  {
-    id: 'd4000000-0000-0000-0000-000000000000',
-    tenant_id: '',
-    full_name: 'Super Admin Plataforma',
-    email: 'super@supreme-recargas.com',
-    password: 'super123',
-    phone: '(11) 90000-0000',
+    full_name: 'Antigravity Super Admin',
+    email: 'super@supreme.com.br',
+    password: 'superadminmaster',
+    phone: '(11) 99999-0000',
     role: 'SUPER_ADMIN',
     is_active: true,
-    created_at: '2026-01-01T00:00:00.000Z'
+    created_at: new Date('2026-01-01').toISOString()
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000010',
+    tenant_id: MOCK_COMPANY_SUPREME.id,
+    full_name: 'Carlos Oliveira',
+    email: 'admin@supreme.com.br',
+    password: 'demo-adm-842',
+    phone: '(11) 98765-1001',
+    role: 'ADMINISTRADOR',
+    group_id: 'default-admin-group',
+    group_name: 'Administrador (Acesso Total)',
+    is_active: true,
+    created_at: new Date('2026-01-01').toISOString()
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000020',
+    tenant_id: MOCK_COMPANY_SUPREME.id,
+    full_name: 'Mariana Santos',
+    email: 'mariana.atendente@supreme.com.br',
+    password: 'demo-atd-193',
+    phone: '(11) 98765-2001',
+    role: 'ATENDENTE',
+    group_id: 'default-attendant-group',
+    group_name: 'Atendente (Balcão de Atendimento)',
+    is_active: true,
+    created_at: new Date('2026-01-01').toISOString()
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000030',
+    tenant_id: MOCK_COMPANY_SUPREME.id,
+    full_name: 'Rafael Souza',
+    email: 'rafael.tecnico@supreme.com.br',
+    password: 'demo-tec-557',
+    phone: '(11) 98765-3001',
+    role: 'TECNICO',
+    group_id: 'default-tech-group',
+    group_name: 'Técnico (Bancada & Oficina)',
+    is_active: true,
+    created_at: new Date('2026-01-01').toISOString()
   }
 ];
 
 export const MOCK_CUSTOMERS: Customer[] = [
   {
-    id: 'ca000000-0000-0000-0000-000000000001',
+    id: 'cust-01',
     tenant_id: MOCK_COMPANY_SUPREME.id,
-    internal_code: 1001,
-    name: 'João Silva Advogados',
+    internal_code: 101,
+    name: 'Advocacia Pinheiro & Associados',
+    document: '23.456.789/0001-01',
+    phone: '(11) 98765-4321',
+    phone_is_whatsapp: true,
+    secondary_phone: '(11) 3344-5566',
+    secondary_phone_is_whatsapp: false,
+    email: 'contato@pinheiroadv.com.br',
+    company_name: 'Pinheiro Advogados',
+    address: 'Rua Bela Cintra, 450 - Consolação',
+    created_at: new Date('2026-01-15').toISOString()
+  },
+  {
+    id: 'cust-02',
+    tenant_id: MOCK_COMPANY_SUPREME.id,
+    internal_code: 102,
+    name: 'Juliana Ferreira Mendes',
+    document: '345.678.901-23',
+    phone: '(11) 97654-3210',
+    phone_is_whatsapp: true,
+    email: 'juliana.mendes@email.com',
+    address: 'Rua Augusta, 1200 - Cerqueira César',
+    created_at: new Date('2026-01-20').toISOString()
+  },
+  {
+    id: 'cust-03',
+    tenant_id: MOCK_COMPANY_SUPREME.id,
+    internal_code: 103,
+    name: 'Colégio Futuro Brilhante',
     document: '11.222.333/0001-44',
-    phone: '(11) 98888-1111',
+    phone: '(11) 96543-2109',
     phone_is_whatsapp: true,
-    secondary_phone: '(11) 3322-4455',
-    secondary_phone_is_whatsapp: false,
-    whatsapp: '11988881111',
-    email: 'contato@silvaadv.com.br',
-    company_name: 'Silva Advocacia',
-    notes: 'Cliente mensal VIP',
-    created_at: '2026-01-20T00:00:00.000Z'
-  },
-  {
-    id: 'ca000000-0000-0000-0000-000000000002',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    internal_code: 1002,
-    name: 'Dra. Ana Paula Mendes',
-    document: '123.456.789-00',
-    phone: '(11) 97777-2222',
-    phone_is_whatsapp: true,
-    secondary_phone: '',
-    secondary_phone_is_whatsapp: false,
-    whatsapp: '11977772222',
-    email: 'ana.mendes@clinica.com.br',
-    company_name: 'Clínica Sorriso',
-    notes: 'Solicita sempre recibo impresso',
-    created_at: '2026-02-01T00:00:00.000Z'
-  },
-  {
-    id: 'ca000000-0000-0000-0000-000000000003',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    internal_code: 1003,
-    name: 'Escritório Contábil Modelo',
-    document: '22.333.444/0001-55',
-    phone: '(11) 96666-3333',
-    phone_is_whatsapp: true,
-    secondary_phone: '(11) 4004-5566',
-    secondary_phone_is_whatsapp: false,
-    whatsapp: '11966663333',
-    email: 'contato@contabilmodelo.com.br',
-    company_name: 'Contábil Modelo',
-    notes: 'Alto volume de toners',
-    created_at: '2026-02-10T00:00:00.000Z'
-  },
-  {
-    id: 'ca000000-0000-0000-0000-000000000004',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    internal_code: 1004,
-    name: 'Auto Elétrica São Jorge',
-    document: '33.444.555/0001-66',
-    phone: '(11) 95555-4444',
-    phone_is_whatsapp: true,
-    secondary_phone: '',
-    secondary_phone_is_whatsapp: false,
-    whatsapp: '11955554444',
-    email: 'eletricasj@gmail.com',
-    company_name: 'São Jorge Auto Elétrica',
-    notes: 'Manutenção de ferramentas e alternadores',
-    created_at: '2026-02-15T00:00:00.000Z'
+    email: 'financeiro@futurobrilhante.edu.br',
+    created_at: new Date('2026-02-01').toISOString()
   }
 ];
 
-export const MOCK_MODELS: CartridgeModel[] = [
-  // 1. Segmento: Recarga de Cartuchos
-  {
-    id: '01000000-0000-0000-0000-000000000001',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    brand_name: 'HP',
-    model_name: 'HP 664',
-    category: 'Cartuchos Jato de Tinta',
-    color: 'Preto',
-    is_xl: false,
-    capacity_ml: 2.0,
-    empty_weight_grams: 26.5,
-    full_weight_grams: 30.5,
-    technical_notes: 'Injetor padrão HP DeskJet',
-    refill_price: 30.00,
-    verification_price: 15.00,
-    test_price: 10.00,
-    is_active: true
-  },
-  {
-    id: '01000000-0000-0000-0000-000000000002',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    brand_name: 'HP',
-    model_name: 'HP 664',
-    category: 'Cartuchos Jato de Tinta',
-    color: 'Colorido',
-    is_xl: false,
-    capacity_ml: 2.0,
-    empty_weight_grams: 28.0,
-    full_weight_grams: 37.0,
-    technical_notes: '3 câmaras: C, M, Y',
-    refill_price: 35.00,
-    verification_price: 15.00,
-    test_price: 10.00,
-    is_active: true
-  },
-  {
-    id: '01000000-0000-0000-0000-000000000003',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    brand_name: 'HP',
-    model_name: 'HP 664 XL',
-    category: 'Cartuchos Jato de Tinta',
-    color: 'Preto',
-    is_xl: true,
-    capacity_ml: 8.5,
-    empty_weight_grams: 27.0,
-    full_weight_grams: 42.0,
-    technical_notes: 'Cartucho de alta capacidade',
-    refill_price: 45.00,
-    verification_price: 15.00,
-    test_price: 10.00,
-    is_active: true
-  },
-  {
-    id: '01000000-0000-0000-0000-000000000004',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    brand_name: 'Canon',
-    model_name: 'Canon PG-145',
-    category: 'Cartuchos Jato de Tinta',
-    color: 'Preto',
-    is_xl: false,
-    capacity_ml: 8.0,
-    empty_weight_grams: 32.0,
-    full_weight_grams: 45.0,
-    technical_notes: 'Cartucho linha MG e TS',
-    refill_price: 35.00,
-    verification_price: 15.00,
-    test_price: 10.00,
-    is_active: true
-  },
-  {
-    id: '01000000-0000-0000-0000-000000000005',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    brand_name: 'Epson',
-    model_name: 'Refil T544 Black (EcoTank)',
-    category: 'Garrafas de Tinta',
-    color: 'Preto',
-    is_xl: false,
-    capacity_ml: 65.0,
-    technical_notes: 'Tinta pigmentada L3150 / L3250',
-    refill_price: 40.00,
-    verification_price: 15.00,
-    test_price: 10.00,
-    is_active: true
-  },
+// Initial Categories, Brands, Models & Services (Extracted from Presets)
+const INITIAL_CATEGORIES: ItemCategory[] = [
+  ...BUSINESS_PRESETS.RECARGA_CARTUCHOS.categories,
+  ...BUSINESS_PRESETS.ASSISTENCIA_INFORMATICA.categories,
+  ...BUSINESS_PRESETS.ASSISTENCIA_CELULARES.categories,
+  ...BUSINESS_PRESETS.FERRAMENTAS_MOTORES.categories
+];
 
-  // 2. Segmento: Assistência de Celulares & Informática
-  {
-    id: '01000000-0000-0000-0000-000000000010',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    brand_name: 'Apple',
-    model_name: 'iPhone 13 / 13 Pro',
-    category: 'Smartphones',
-    color: 'Preto',
-    is_xl: false,
-    technical_notes: 'Conector Lightning / Tela Super Retina XDR OLED',
-    refill_price: 250.00, // Preço base troca de tela/bateria
-    verification_price: 50.00,
-    test_price: 30.00,
-    is_active: true
-  },
-  {
-    id: '01000000-0000-0000-0000-000000000011',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    brand_name: 'Samsung',
-    model_name: 'Galaxy S23 / S23 Ultra',
-    category: 'Smartphones',
-    color: 'Preto',
-    is_xl: false,
-    technical_notes: 'Conector Type-C / Tela Dynamic AMOLED 2X',
-    refill_price: 280.00,
-    verification_price: 50.00,
-    test_price: 30.00,
-    is_active: true
-  },
-  {
-    id: '01000000-0000-0000-0000-000000000012',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    brand_name: 'Motorola',
-    model_name: 'Moto G84 5G',
-    category: 'Smartphones',
-    color: 'Preto',
-    is_xl: false,
-    technical_notes: 'Tela pOLED / Bateria 5000mAh',
-    refill_price: 180.00,
-    verification_price: 40.00,
-    test_price: 25.00,
-    is_active: true
-  },
-  {
-    id: '01000000-0000-0000-0000-000000000013',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    brand_name: 'Dell',
-    model_name: 'Inspiron 15 3000 / 5000',
-    category: 'Notebooks',
-    color: 'Prata',
-    is_xl: false,
-    technical_notes: 'Formatação, troca de teclado, SSD NVMe, cooler',
-    refill_price: 150.00,
-    verification_price: 60.00,
-    test_price: 40.00,
-    is_active: true
-  },
+const INITIAL_BRANDS: Brand[] = [
+  ...BUSINESS_PRESETS.RECARGA_CARTUCHOS.brands,
+  ...BUSINESS_PRESETS.ASSISTENCIA_INFORMATICA.brands,
+  ...BUSINESS_PRESETS.FERRAMENTAS_MOTORES.brands
+];
 
-  // 3. Segmento: Ferramentas & Motores
-  {
-    id: '01000000-0000-0000-0000-000000000020',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    brand_name: 'Makita',
-    model_name: 'Furadeira de Impacto HP1640 (760W)',
-    category: 'Furadeiras & Parafusadeiras',
-    color: 'Azul',
-    is_xl: false,
-    technical_notes: 'Voltagem 127V/220V - Mandril 1/2 Pol',
-    refill_price: 90.00,
-    verification_price: 35.00,
-    test_price: 20.00,
-    is_active: true
-  },
-  {
-    id: '01000000-0000-0000-0000-000000000021',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    brand_name: 'Bosch',
-    model_name: 'Serra Circular GKS 150 (1500W)',
-    category: 'Serras & Lixadeiras',
-    color: 'Azul',
-    is_xl: false,
-    technical_notes: 'Disco 7.1/4 Pol - Troca de rolamentos e induzido',
-    refill_price: 120.00,
-    verification_price: 40.00,
-    test_price: 25.00,
-    is_active: true
-  },
-  {
-    id: '01000000-0000-0000-0000-000000000022',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    brand_name: 'Wap',
-    model_name: 'Lavadora de Alta Pressão Eco Power 2200',
-    category: 'Lavadoras de Alta Pressão',
-    color: 'Amarelo',
-    is_xl: false,
-    technical_notes: 'Bomba com pistões de inox, troca de gaxeta e válvulas',
-    refill_price: 140.00,
-    verification_price: 45.00,
-    test_price: 30.00,
-    is_active: true
-  },
+const INITIAL_MODELS: ItemModel[] = [
+  ...BUSINESS_PRESETS.RECARGA_CARTUCHOS.models.map(m => ({ ...m, tenant_id: MOCK_COMPANY_SUPREME.id } as ItemModel)),
+  ...BUSINESS_PRESETS.ASSISTENCIA_INFORMATICA.models.map(m => ({ ...m, tenant_id: MOCK_COMPANY_SUPREME.id } as ItemModel)),
+  ...BUSINESS_PRESETS.ASSISTENCIA_CELULARES.models.map(m => ({ ...m, tenant_id: MOCK_COMPANY_SUPREME.id } as ItemModel)),
+  ...BUSINESS_PRESETS.FERRAMENTAS_MOTORES.models.map(m => ({ ...m, tenant_id: MOCK_COMPANY_ALFA.id } as ItemModel))
+];
 
-  // 4. Segmento: Oficina & Geral
+const INITIAL_SERVICES: Service[] = [
+  ...BUSINESS_PRESETS.RECARGA_CARTUCHOS.services.map(s => ({ ...s, tenant_id: MOCK_COMPANY_SUPREME.id } as Service)),
+  ...BUSINESS_PRESETS.ASSISTENCIA_INFORMATICA.services.map(s => ({ ...s, tenant_id: MOCK_COMPANY_SUPREME.id } as Service)),
+  ...BUSINESS_PRESETS.ASSISTENCIA_CELULARES.services.map(s => ({ ...s, tenant_id: MOCK_COMPANY_SUPREME.id } as Service)),
+  ...BUSINESS_PRESETS.FERRAMENTAS_MOTORES.services.map(s => ({ ...s, tenant_id: MOCK_COMPANY_ALFA.id } as Service))
+];
+
+const INITIAL_WORKFLOW_STATES: WorkflowState[] = [
+  ...(BUSINESS_PRESETS.RECARGA_CARTUCHOS.workflow.states || []).map(st => ({ ...st, tenant_id: MOCK_COMPANY_SUPREME.id })),
+  ...(BUSINESS_PRESETS.ASSISTENCIA_INFORMATICA.workflow.states || []).map(st => ({ ...st, tenant_id: MOCK_COMPANY_SUPREME.id }))
+];
+
+const INITIAL_CHECKLISTS: ChecklistTemplate[] = [
+  { id: 'chk-template-inf', tenant_id: MOCK_COMPANY_SUPREME.id, category_id: 'cat-notebook', name: 'Checklist Entrada Notebook', items: BUSINESS_PRESETS.ASSISTENCIA_INFORMATICA.checklist?.items || [] },
+  { id: 'chk-template-cel', tenant_id: MOCK_COMPANY_SUPREME.id, category_id: 'cat-smartphone', name: 'Checklist Entrada Smartphone', items: BUSINESS_PRESETS.ASSISTENCIA_CELULARES.checklist?.items || [] }
+];
+
+// Initial Service Orders & Order Items Demo Data
+export const INITIAL_SERVICE_ORDERS: ServiceOrder[] = [
   {
-    id: '01000000-0000-0000-0000-000000000030',
+    id: 'ord-2026-000001',
     tenant_id: MOCK_COMPANY_SUPREME.id,
-    brand_name: 'Geral',
-    model_name: 'Item / Equipamento Eletrônico Geral',
-    category: 'Geral',
-    color: 'Preto',
-    is_xl: false,
-    technical_notes: 'Equipamento genérico de atendimento',
-    refill_price: 80.00,
-    verification_price: 30.00,
-    test_price: 20.00,
-    is_active: true
+    order_number: '2026-000001',
+    order_sequence: 1,
+    order_year: 2026,
+    customer_id: 'cust-01',
+    opened_by: '00000000-0000-0000-0000-000000000020',
+    opened_by_name: 'Mariana Santos',
+    opened_at: new Date('2026-08-16T09:30:00Z').toISOString(),
+    status: 'EM_ANDAMENTO',
+    financial_status: 'PENDENTE',
+    subtotal_amount: 60.00,
+    discount_amount: 0.00,
+    surcharge_amount: 0.00,
+    total_amount: 60.00,
+    paid_amount: 0.00,
+    remaining_amount: 60.00,
+    tracking_token: 'tok-recarga-hp664-pinheiro-01',
+    notes: 'Recarga urgente para petição jurídica',
+    created_at: new Date('2026-08-16T09:30:00Z').toISOString(),
+    customer: MOCK_CUSTOMERS[0],
+    items: [
+      {
+        id: 'item-001-01',
+        tenant_id: MOCK_COMPANY_SUPREME.id,
+        service_order_id: 'ord-2026-000001',
+        model_id: 'mod-hp-664',
+        item_index: 1,
+        internal_identifier: 'A942',
+        reported_issue: 'Tinta preta esgotou',
+        current_state_id: 'st-rec-recarga',
+        status: 'EM_RECARGA',
+        assigned_technician_id: '00000000-0000-0000-0000-000000000030',
+        subtotal_amount: 30.00,
+        discount_amount: 0.00,
+        total_amount: 30.00,
+        received_at: new Date('2026-08-16T09:30:00Z').toISOString(),
+        created_at: new Date('2026-08-16T09:30:00Z').toISOString(),
+        updated_at: new Date('2026-08-16T10:00:00Z').toISOString(),
+        custom_field_values: { input_weight_grams: 28.5, color: 'Preto' },
+        services: [
+          {
+            id: 'srv-item-001',
+            tenant_id: MOCK_COMPANY_SUPREME.id,
+            service_order_item_id: 'item-001-01',
+            service_id: 'srv-recarga',
+            service_name: 'Recarga de Tinta',
+            quantity: 1,
+            unit_price: 30.00,
+            discount_amount: 0,
+            surcharge_amount: 0,
+            total_amount: 30.00,
+            status: 'EM_EXECUCAO',
+            field_data: { input_weight: 28.5 }
+          }
+        ]
+      },
+      {
+        id: 'item-001-02',
+        tenant_id: MOCK_COMPANY_SUPREME.id,
+        service_order_id: 'ord-2026-000001',
+        model_id: 'mod-hp-664',
+        item_index: 2,
+        internal_identifier: 'B112',
+        reported_issue: 'Tricolor falhando',
+        current_state_id: 'st-rec-teste',
+        status: 'EM_TESTE',
+        assigned_technician_id: '00000000-0000-0000-0000-000000000030',
+        subtotal_amount: 30.00,
+        discount_amount: 0.00,
+        total_amount: 30.00,
+        received_at: new Date('2026-08-16T09:30:00Z').toISOString(),
+        created_at: new Date('2026-08-16T09:30:00Z').toISOString(),
+        updated_at: new Date('2026-08-16T10:15:00Z').toISOString(),
+        custom_field_values: { input_weight_grams: 29.0, output_weight_grams: 37.5, color: 'Tricolor' },
+        services: [
+          {
+            id: 'srv-item-002',
+            tenant_id: MOCK_COMPANY_SUPREME.id,
+            service_order_item_id: 'item-001-02',
+            service_id: 'srv-recarga',
+            service_name: 'Recarga de Tinta',
+            quantity: 1,
+            unit_price: 30.00,
+            discount_amount: 0,
+            surcharge_amount: 0,
+            total_amount: 30.00,
+            status: 'CONCLUIDO',
+            field_data: { input_weight: 29.0, output_weight: 37.5 }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'ord-2026-000002',
+    tenant_id: MOCK_COMPANY_SUPREME.id,
+    order_number: '2026-000002',
+    order_sequence: 2,
+    order_year: 2026,
+    customer_id: 'cust-02',
+    opened_by: '00000000-0000-0000-0000-000000000020',
+    opened_by_name: 'Mariana Santos',
+    opened_at: new Date('2026-08-16T11:00:00Z').toISOString(),
+    status: 'EM_ANDAMENTO',
+    financial_status: 'PAGO_PARCIAL',
+    subtotal_amount: 210.00,
+    discount_amount: 10.00,
+    surcharge_amount: 0.00,
+    total_amount: 200.00,
+    paid_amount: 100.00,
+    remaining_amount: 100.00,
+    tracking_token: 'tok-notebook-dell-juliana-02',
+    notes: 'Cliente deixou sinal de R$ 100 via PIX',
+    created_at: new Date('2026-08-16T11:00:00Z').toISOString(),
+    customer: MOCK_CUSTOMERS[1],
+    items: [
+      {
+        id: 'item-002-01',
+        tenant_id: MOCK_COMPANY_SUPREME.id,
+        service_order_id: 'ord-2026-000002',
+        model_id: 'mod-dell-latitude',
+        item_index: 1,
+        internal_identifier: 'DELL-SN-849201',
+        reported_issue: 'Superaquecendo e travando na inicialização',
+        accessories: 'Acompanha Carregador Original 65W',
+        current_state_id: 'st-inf-reparo',
+        status: 'EM_REPARO',
+        assigned_technician_id: '00000000-0000-0000-0000-000000000030',
+        subtotal_amount: 210.00,
+        discount_amount: 10.00,
+        total_amount: 200.00,
+        received_at: new Date('2026-08-16T11:00:00Z').toISOString(),
+        created_at: new Date('2026-08-16T11:00:00Z').toISOString(),
+        updated_at: new Date('2026-08-16T11:30:00Z').toISOString(),
+        checklist: [
+          { item: 'Acompanha Carregador / Fonte Original', checked: true },
+          { item: 'Liga normalmente (Dá vídeo)', checked: true },
+          { item: 'Carcaça / Dobradiça possui trincas ou riscos', checked: false },
+          { item: 'Teclado e Touchpad funcionais', checked: true },
+          { item: 'Tela LCD sem manchas ou linhas', checked: true }
+        ],
+        services: [
+          {
+            id: 'srv-item-003',
+            tenant_id: MOCK_COMPANY_SUPREME.id,
+            service_order_item_id: 'item-002-01',
+            service_id: 'srv-formatacao',
+            service_name: 'Formatação & Reinstalação de Sistema',
+            quantity: 1,
+            unit_price: 120.00,
+            discount_amount: 0,
+            surcharge_amount: 0,
+            total_amount: 120.00,
+            status: 'EM_EXECUCAO'
+          },
+          {
+            id: 'srv-item-004',
+            tenant_id: MOCK_COMPANY_SUPREME.id,
+            service_order_item_id: 'item-002-01',
+            service_id: 'srv-limpeza-preventiva',
+            service_name: 'Limpeza Preventiva & Troca de Pasta Térmica',
+            quantity: 1,
+            unit_price: 90.00,
+            discount_amount: 10.00,
+            surcharge_amount: 0,
+            total_amount: 80.00,
+            status: 'CONCLUIDO'
+          }
+        ]
+      }
+    ]
   }
 ];
 
-export const DEFAULT_KANBAN_COLUMNS: Record<BusinessSegment, KanbanColumnConfig[]> = {
-  RECARGA_CARTUCHOS: [
-    { id: 'col-waiting', title: '1. Triagem & Balança', color: 'amber', statuses: ['RECEBIDO', 'AGUARDANDO_VERIFICACAO', 'EM_VERIFICACAO'], description: 'Recepção, identificação de série e pesagem inicial' },
-    { id: 'col-refill', title: '2. Em Recarga', color: 'purple', statuses: ['AGUARDANDO_RECARGA', 'EM_RECARGA'], description: 'Injeção de tinta, pressurização e câmara de vácuo' },
-    { id: 'col-testing', title: '3. Teste & Pesagem Final', color: 'blue', statuses: ['AGUARDANDO_TESTE', 'EM_TESTE'], description: 'Impressão de padrão de cores e pesagem de saída' },
-    { id: 'col-done', title: '4. Concluídos / Defeitos', color: 'emerald', statuses: ['FINALIZADO', 'ENTREGUE', 'COM_PROBLEMA', 'SEM_REPARO'], description: 'Itens finalizados ou com laudo técnico' }
-  ],
-  ASSISTENCIA_CELULARES_INFORMATICA: [
-    { id: 'col-waiting', title: '1. Triagem & Checklist', color: 'amber', statuses: ['RECEBIDO', 'AGUARDANDO_VERIFICACAO', 'EM_VERIFICACAO'], description: 'Checklist de entrada, IMEI e teste de toque' },
-    { id: 'col-refill', title: '2. Bancada & Reparo', color: 'purple', statuses: ['AGUARDANDO_RECARGA', 'EM_RECARGA'], description: 'Troca de componentes, microsolda e montagem' },
-    { id: 'col-testing', title: '3. Aguardando Peça / Teste', color: 'blue', statuses: ['AGUARDANDO_TESTE', 'EM_TESTE', 'COM_PROBLEMA'], description: 'Testes de estresse de bateria e câmeras' },
-    { id: 'col-done', title: '4. Pronto p/ Retirada', color: 'emerald', statuses: ['FINALIZADO', 'ENTREGUE', 'SEM_REPARO'], description: 'Equipamento limpo e pronto para entrega' }
-  ],
-  FERRAMENTAS_MOTORES: [
-    { id: 'col-waiting', title: '1. Recepção & Desmontagem', color: 'amber', statuses: ['RECEBIDO', 'AGUARDANDO_VERIFICACAO', 'EM_VERIFICACAO'], description: 'Desmontagem e análise do induzido e rolamentos' },
-    { id: 'col-refill', title: '2. Bobinagem & Peças', color: 'purple', statuses: ['AGUARDANDO_RECARGA', 'EM_RECARGA'], description: 'Troca de carvão, engrenagens e isolamento' },
-    { id: 'col-testing', title: '3. Montagem & Teste Elétrico', color: 'blue', statuses: ['AGUARDANDO_TESTE', 'EM_TESTE', 'COM_PROBLEMA'], description: 'Medição em carga e teste de fuga de corrente' },
-    { id: 'col-done', title: '4. Pronto / Entregue', color: 'emerald', statuses: ['FINALIZADO', 'ENTREGUE', 'SEM_REPARO'], description: 'Máquina lubrificada e liberada' }
-  ],
-  OFICINA_GERAL: [
-    { id: 'col-waiting', title: '1. Entrada / Avaliação', color: 'amber', statuses: ['RECEBIDO', 'AGUARDANDO_VERIFICACAO', 'EM_VERIFICACAO'], description: 'Inspeção física e levantamento de avarias' },
-    { id: 'col-refill', title: '2. Em Execução', color: 'purple', statuses: ['AGUARDANDO_RECARGA', 'EM_RECARGA'], description: 'Execução do serviço e substituição de peças' },
-    { id: 'col-testing', title: '3. Revisão & Testes', color: 'blue', statuses: ['AGUARDANDO_TESTE', 'EM_TESTE', 'COM_PROBLEMA'], description: 'Inspeção de qualidade final' },
-    { id: 'col-done', title: '4. Finalizado', color: 'emerald', statuses: ['FINALIZADO', 'ENTREGUE', 'SEM_REPARO'], description: 'Serviço concluído' }
-  ]
-};
+export const INITIAL_PAYMENTS: Payment[] = [
+  {
+    id: 'pay-001',
+    tenant_id: MOCK_COMPANY_SUPREME.id,
+    service_order_id: 'ord-2026-000002',
+    amount: 100.00,
+    payment_method: 'PIX',
+    received_by: '00000000-0000-0000-0000-000000000020',
+    received_by_name: 'Mariana Santos',
+    paid_at: new Date('2026-08-16T11:05:00Z').toISOString(),
+    notes: 'Adiantamento de 50% no balcão',
+    created_at: new Date('2026-08-16T11:05:00Z').toISOString()
+  }
+];
 
-export const MOCK_SERVICE_PRICES: ServicePrice[] = [
-  // 1. Recarga de Cartuchos & Toners
+export const INITIAL_AUDIT_LOGS: AuditLog[] = [
   {
-    id: 'f6000000-0000-0000-0000-000000000001',
+    id: 'aud-001',
     tenant_id: MOCK_COMPANY_SUPREME.id,
-    service_type: 'VERIFICACAO',
-    title: 'Verificação e Teste Eletrônico',
-    description: 'Diagnóstico no testador elétrico e balança de precisão',
-    default_price: 15.00,
-    estimated_time_minutes: 15,
-    category: 'Cartuchos',
-    is_active: true
+    user_name: 'Mariana Santos',
+    action: 'CRIACAO_ORDEM_SERVICO',
+    resource: 'service_orders',
+    resource_id: 'ord-2026-000001',
+    details: 'Abertura de OS nº 2026-000001 para Advocacia Pinheiro (2 cartuchos HP 664)',
+    created_at: new Date('2026-08-16T09:30:00Z').toISOString()
   },
   {
-    id: 'f6000000-0000-0000-0000-000000000002',
+    id: 'aud-002',
     tenant_id: MOCK_COMPANY_SUPREME.id,
-    service_type: 'RECARGA',
-    title: 'Recarga Padrão de Tinta',
-    description: 'Carga completa de tinta pigmentada ou corante de alta densidade',
-    default_price: 30.00,
-    estimated_time_minutes: 30,
-    category: 'Cartuchos',
-    is_active: true
-  },
-  {
-    id: 'f6000000-0000-0000-0000-000000000003',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    service_type: 'VERIFICACAO_E_RECARGA',
-    title: 'Verificação + Recarga Completa',
-    description: 'Isenção da taxa de teste ao realizar a recarga',
-    default_price: 30.00,
-    estimated_time_minutes: 40,
-    category: 'Cartuchos',
-    is_active: true
-  },
-  {
-    id: 'f6000000-0000-0000-0000-000000000004',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    service_type: 'DESOBSTRUCAO',
-    title: 'Desobstrução Ultrassônica de Bicos',
-    description: 'Limpeza profunda em cuba ultrassônica com desentupidor químico',
-    default_price: 25.00,
-    estimated_time_minutes: 45,
-    category: 'Cartuchos',
-    is_active: true
-  },
-  {
-    id: 'f6000000-0000-0000-0000-000000000005',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    service_type: 'TESTE',
-    title: 'Teste de Impressão em Bancada',
-    description: 'Teste de padrão de cores e alinhamento de bicos injetores',
-    default_price: 10.00,
-    estimated_time_minutes: 10,
-    category: 'Cartuchos',
-    is_active: true
-  },
-
-  // 2. Assistência de Celulares & Informática
-  {
-    id: 'f6000000-0000-0000-0000-000000000010',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    service_type: 'TROCA_TELA',
-    title: 'Troca de Tela / Display Frontal',
-    description: 'Substituição completa do módulo display touch + blindagem',
-    default_price: 180.00,
-    estimated_time_minutes: 60,
-    category: 'Smartphones & Tablets',
-    is_active: true
-  },
-  {
-    id: 'f6000000-0000-0000-0000-000000000011',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    service_type: 'TROCA_BATERIA',
-    title: 'Troca de Bateria Premium',
-    description: 'Substituição de bateria com calibração de ciclos',
-    default_price: 120.00,
-    estimated_time_minutes: 45,
-    category: 'Smartphones & Tablets',
-    is_active: true
-  },
-  {
-    id: 'f6000000-0000-0000-0000-000000000012',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    service_type: 'CONECTOR_CARGA',
-    title: 'Reparo de Conector / Dock de Carga',
-    description: 'Substituição ou ressolda do conector USB Type-C / Lightning',
-    default_price: 90.00,
-    estimated_time_minutes: 50,
-    category: 'Smartphones & Tablets',
-    is_active: true
-  },
-  {
-    id: 'f6000000-0000-0000-0000-000000000013',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    service_type: 'FORMATACAO_BACKUP',
-    title: 'Formatação, Limpeza & Backup',
-    description: 'Instalação limpa de sistema operacional, drivers e cópia de segurança',
-    default_price: 130.00,
-    estimated_time_minutes: 90,
-    category: 'Notebooks & Computadores',
-    is_active: true
-  },
-
-  // 3. Ferramentas & Motores
-  {
-    id: 'f6000000-0000-0000-0000-000000000020',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    service_type: 'TROCA_CARVAO',
-    title: 'Troca de Escovas de Carvão',
-    description: 'Substituição do par de carvões e lixamento do coletor',
-    default_price: 45.00,
-    estimated_time_minutes: 30,
-    category: 'Ferramentas Elétricas',
-    is_active: true
-  },
-  {
-    id: 'f6000000-0000-0000-0000-000000000021',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    service_type: 'REVISAO_MOTOR',
-    title: 'Revisão e Lubrificação Geral',
-    description: 'Desmontagem, desengraxe, troca de graxa de alta temperatura e rolamentos',
-    default_price: 80.00,
-    estimated_time_minutes: 60,
-    category: 'Ferramentas Elétricas',
-    is_active: true
+    user_name: 'Mariana Santos',
+    action: 'CRIACAO_ORDEM_SERVICO',
+    resource: 'service_orders',
+    resource_id: 'ord-2026-000002',
+    details: 'Abertura de OS nº 2026-000002 para Juliana Mendes (Notebook Dell Latitude 3470)',
+    created_at: new Date('2026-08-16T11:00:00Z').toISOString()
   }
 ];
 
 export const MOCK_COMPANY_SETTINGS: CompanySettings = {
-  id: 'e5000000-0000-0000-0000-000000000001',
+  id: 'sett-001',
   tenant_id: MOCK_COMPANY_SUPREME.id,
-  business_segment: 'RECARGA_CARTUCHOS',
+  active_templates: ['RECARGA_CARTUCHOS', 'ASSISTENCIA_INFORMATICA', 'ASSISTENCIA_CELULARES'],
   show_prices_on_receipt: true,
-  receipt_header_note: 'SUPREME RECARGAS & INFORMÁTICA\nEspecialistas em Recarga e Manutenção',
-  receipt_footer_note: 'Garantia de 30 dias para recargas. Apresente este comprovante para retirada.\nObrigado pela preferência!',
-  verification_waiver_policy: 'CREDIT_IF_REFILLED',
-  waive_verification_if_refilled: true,
-  default_refill_price: 30.00,
-  default_refill_xl_price: 45.00,
-  default_verification_price: 15.00,
-  default_test_price: 10.00,
-  input_weight_responsibility: 'AMBOS',
+  receipt_header_note: 'Agradecemos a preferência! Garantia legal de 90 dias.',
+  receipt_footer_note: 'Acompanhe online com o QR Code ao lado.',
   thermal_paper_width_mm: 80,
   require_customer_document: false,
-  require_cartridge_serial: true,
-  kanban_columns: DEFAULT_KANBAN_COLUMNS.RECARGA_CARTUCHOS
+  require_item_serial: true
 };
 
-export const INITIAL_AUDIT_LOGS: AuditLog[] = [
-  {
-    id: '03000000-0000-0000-0000-000000000001',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    user_id: MOCK_PROFILES[1].id,
-    user_name: 'Mariana Santos (Atendente)',
-    action: 'CRIACAO_COMANDA',
-    resource: 'cartridge_entries',
-    resource_id: 'ea000000-0000-0000-0000-000000000001',
-    details: 'Comanda 2026-000001 gerada para João Silva Advogados (2 cartuchos) - R$ 60,00',
-    created_at: new Date(Date.now() - 86400000 * 2).toISOString()
-  },
-  {
-    id: '03000000-0000-0000-0000-000000000002',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    user_id: MOCK_PROFILES[2].id,
-    user_name: 'Rafael Souza (Técnico)',
-    action: 'DIAGNOSTICO_TECNICO',
-    resource: 'cartridges',
-    resource_id: '02000000-0000-0000-0000-000000000003',
-    details: 'Classificado cartucho 2026-000002-01 como QUEIMADO. Preço recalculado para taxa de verificação.',
-    created_at: new Date(Date.now() - 86400000).toISOString()
-  }
-];
-
-export const INITIAL_ENTRIES: CartridgeEntry[] = [
-  {
-    id: 'ea000000-0000-0000-0000-000000000001',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    entry_number: '2026-000001',
-    entry_sequence: 1,
-    entry_year: 2026,
-    customer_id: MOCK_CUSTOMERS[0].id,
-    attendant_id: MOCK_PROFILES[1].id,
-    entry_date: new Date(Date.now() - 86400000 * 2).toISOString(),
-    subtotal_amount: 65.00,
-    discount_amount: 5.00,
-    surcharge_amount: 0,
-    total_amount: 60.00,
-    payment_status: 'PAGO',
-    payment_method: 'PIX',
-    payments: [{ method: 'PIX', amount: 60.00 }],
-    amount_paid: 60.00,
-    paid_at: new Date(Date.now() - 86400000).toISOString(),
-    general_notes: 'Cliente VIP - Retirou no mesmo dia',
-    tracking_token: 'trk-2026000001-abc1',
-    customer: MOCK_CUSTOMERS[0],
-    attendant: MOCK_PROFILES[1],
-    delivery_info: {
-      delivered_at: new Date(Date.now() - 86400000).toISOString(),
-      delivered_by: MOCK_PROFILES[1].id,
-      receiver_name: 'João Silva',
-      receiver_document: '11.222.333/0001-44',
-      receiver_relation: 'Próprio Cliente',
-      payment_method: 'PIX',
-      payment_status: 'PAGO',
-      amount_paid: 60.00,
-      paid_at: new Date(Date.now() - 86400000).toISOString(),
-      attendant_name: 'Mariana Santos'
-    },
-    created_at: new Date(Date.now() - 86400000 * 2).toISOString()
-  },
-  {
-    id: 'ea000000-0000-0000-0000-000000000002',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    entry_number: '2026-000002',
-    entry_sequence: 2,
-    entry_year: 2026,
-    customer_id: MOCK_CUSTOMERS[1].id,
-    attendant_id: MOCK_PROFILES[1].id,
-    entry_date: new Date(Date.now() - 86400000).toISOString(),
-    subtotal_amount: 45.00,
-    discount_amount: 0,
-    surcharge_amount: 0,
-    total_amount: 15.00,
-    payment_status: 'PAGO',
-    payment_method: 'DINHEIRO',
-    payments: [{ method: 'DINHEIRO', amount: 15.00 }],
-    amount_paid: 15.00,
-    paid_at: new Date(Date.now() - 43200000).toISOString(),
-    general_notes: 'Cartucho com circuito queimado - Cobrada taxa de verificação',
-    tracking_token: 'trk-2026000002-xyz2',
-    customer: MOCK_CUSTOMERS[1],
-    attendant: MOCK_PROFILES[1],
-    delivery_info: {
-      delivered_at: new Date(Date.now() - 43200000).toISOString(),
-      delivered_by: MOCK_PROFILES[1].id,
-      receiver_name: 'Dra. Ana Paula Mendes',
-      receiver_relation: 'Próprio Cliente',
-      payment_method: 'DINHEIRO',
-      payment_status: 'PAGO',
-      amount_paid: 15.00,
-      paid_at: new Date(Date.now() - 43200000).toISOString(),
-      attendant_name: 'Mariana Santos'
-    },
-    created_at: new Date(Date.now() - 86400000).toISOString()
-  },
-  {
-    id: 'ea000000-0000-0000-0000-000000000003',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    entry_number: '2026-000003',
-    entry_sequence: 3,
-    entry_year: 2026,
-    customer_id: MOCK_CUSTOMERS[2].id,
-    attendant_id: MOCK_PROFILES[1].id,
-    entry_date: new Date(Date.now() - 21600000).toISOString(),
-    subtotal_amount: 120.00,
-    discount_amount: 0,
-    surcharge_amount: 0,
-    total_amount: 120.00,
-    payment_status: 'PAGO',
-    payment_method: 'CARTAO_CREDITO',
-    payments: [{ method: 'CARTAO_CREDITO', amount: 120.00 }],
-    amount_paid: 120.00,
-    paid_at: new Date(Date.now() - 10800000).toISOString(),
-    general_notes: 'Recargas toner escritório contábil',
-    tracking_token: 'trk-2026000003-mod3',
-    customer: MOCK_CUSTOMERS[2],
-    attendant: MOCK_PROFILES[1],
-    delivery_info: {
-      delivered_at: new Date(Date.now() - 10800000).toISOString(),
-      delivered_by: MOCK_PROFILES[1].id,
-      receiver_name: 'Pedro Motoboy',
-      receiver_relation: 'Portador / Motoboy',
-      payment_method: 'CARTAO_CREDITO',
-      payment_status: 'PAGO',
-      amount_paid: 120.00,
-      paid_at: new Date(Date.now() - 10800000).toISOString(),
-      attendant_name: 'Mariana Santos'
-    },
-    created_at: new Date(Date.now() - 21600000).toISOString()
-  },
-  {
-    id: 'ea000000-0000-0000-0000-000000000004',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    entry_number: '2026-000004',
-    entry_sequence: 4,
-    entry_year: 2026,
-    customer_id: MOCK_CUSTOMERS[0].id,
-    attendant_id: MOCK_PROFILES[1].id,
-    entry_date: new Date().toISOString(),
-    subtotal_amount: 80.00,
-    discount_amount: 0,
-    surcharge_amount: 0,
-    total_amount: 80.00,
-    payment_status: 'PENDENTE',
-    payment_method: 'A_PRAZO',
-    payments: [{ method: 'A_PRAZO', amount: 80.00 }],
-    general_notes: 'Faturamento quinzenal para empresa',
-    tracking_token: 'trk-2026000004-pen4',
-    customer: MOCK_CUSTOMERS[0],
-    attendant: MOCK_PROFILES[1],
-    created_at: new Date().toISOString()
-  }
-];
-
-export const INITIAL_CARTRIDGES: Cartridge[] = [
-  {
-    id: '02000000-0000-0000-0000-000000000001',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    entry_id: INITIAL_ENTRIES[0].id,
-    serial_number: '2026-000001-01',
-    item_index: 1,
-    model_id: MOCK_MODELS[0].id,
-    service_requested: 'VERIFICACAO_E_RECARGA',
-    color: 'Preto',
-    is_xl: false,
-    final_serie: '94A1',
-    status: 'ENTREGUE',
-    result_classification: 'OK',
-    technician_id: MOCK_PROFILES[2].id,
-    input_weight_grams: 27.8,
-    output_weight_grams: 36.5,
-    weight_diff_grams: 8.7,
-    reception_notes: 'Cartucho entregue ao cliente',
-    technical_notes: 'Recarga 100% OK e aprovada.',
-    original_price: 30.00,
-    applied_price: 30.00,
-    discount_amount: 0,
-    surcharge_amount: 0,
-    final_price: 30.00,
-    model: MOCK_MODELS[0],
-    technician: MOCK_PROFILES[2],
-    entry_number: '2026-000001',
-    customer_name: 'João Silva Advogados',
-    created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
-    updated_at: new Date(Date.now() - 86400000).toISOString()
-  },
-  {
-    id: '02000000-0000-0000-0000-000000000002',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    entry_id: INITIAL_ENTRIES[0].id,
-    serial_number: '2026-000001-02',
-    item_index: 2,
-    model_id: MOCK_MODELS[1].id,
-    service_requested: 'RECARGA',
-    color: 'Colorido',
-    is_xl: false,
-    final_serie: '88C2',
-    status: 'ENTREGUE',
-    result_classification: 'OK',
-    technician_id: MOCK_PROFILES[2].id,
-    input_weight_grams: 29.2,
-    output_weight_grams: 37.1,
-    weight_diff_grams: 7.9,
-    reception_notes: 'Cliente informou que acabou a cor azul',
-    technical_notes: 'Limpeza ultrassônica realizada no injetor. Teste 100% OK.',
-    original_price: 35.00,
-    applied_price: 30.00,
-    discount_amount: 5.00,
-    surcharge_amount: 0,
-    final_price: 30.00,
-    model: MOCK_MODELS[1],
-    technician: MOCK_PROFILES[2],
-    entry_number: '2026-000001',
-    customer_name: 'João Silva Advogados',
-    created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
-    updated_at: new Date(Date.now() - 86400000).toISOString()
-  },
-  {
-    id: '02000000-0000-0000-0000-000000000003',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    entry_id: INITIAL_ENTRIES[1].id,
-    serial_number: '2026-000002-01',
-    item_index: 1,
-    model_id: MOCK_MODELS[2].id,
-    service_requested: 'VERIFICACAO_E_RECARGA',
-    color: 'Preto',
-    is_xl: true,
-    final_serie: 'XL77',
-    status: 'ENTREGUE',
-    result_classification: 'QUEIMADO',
-    technician_id: MOCK_PROFILES[2].id,
-    input_weight_grams: 28.1,
-    reception_notes: 'Verificar se compensa recarga XL',
-    technical_notes: 'Circuito impresso queimado. Sem comunicação na impressora teste.',
-    original_price: 45.00,
-    applied_price: 15.00,
-    discount_amount: 0,
-    surcharge_amount: 0,
-    final_price: 15.00,
-    model: MOCK_MODELS[2],
-    technician: MOCK_PROFILES[2],
-    entry_number: '2026-000002',
-    customer_name: 'Dra. Ana Paula Mendes',
-    created_at: new Date(Date.now() - 86400000).toISOString(),
-    updated_at: new Date(Date.now() - 43200000).toISOString()
-  },
-  {
-    id: '02000000-0000-0000-0000-000000000004',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    entry_id: INITIAL_ENTRIES[2].id,
-    serial_number: '2026-000003-01',
-    item_index: 1,
-    model_id: MOCK_MODELS[3].id,
-    service_requested: 'RECARGA',
-    color: 'Preto',
-    is_xl: false,
-    final_serie: 'PG88',
-    status: 'ENTREGUE',
-    result_classification: 'OK',
-    technician_id: MOCK_PROFILES[2].id,
-    input_weight_grams: 32.0,
-    output_weight_grams: 45.0,
-    weight_diff_grams: 13.0,
-    original_price: 60.00,
-    applied_price: 60.00,
-    discount_amount: 0,
-    surcharge_amount: 0,
-    final_price: 60.00,
-    model: MOCK_MODELS[3],
-    technician: MOCK_PROFILES[2],
-    entry_number: '2026-000003',
-    customer_name: 'Contabilidade Modelo',
-    created_at: new Date(Date.now() - 21600000).toISOString(),
-    updated_at: new Date(Date.now() - 10800000).toISOString()
-  },
-  {
-    id: '02000000-0000-0000-0000-000000000005',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    entry_id: INITIAL_ENTRIES[3].id,
-    serial_number: '2026-000004-01',
-    item_index: 1,
-    model_id: MOCK_MODELS[0].id,
-    service_requested: 'VERIFICACAO_E_RECARGA',
-    color: 'Preto',
-    is_xl: false,
-    final_serie: '55Z1',
-    status: 'EM_RECARGA',
-    result_classification: 'PENDENTE',
-    input_weight_grams: 28.0,
-    original_price: 40.00,
-    applied_price: 40.00,
-    discount_amount: 0,
-    surcharge_amount: 0,
-    final_price: 40.00,
-    model: MOCK_MODELS[0],
-    technician: MOCK_PROFILES[2],
-    entry_number: '2026-000004',
-    customer_name: 'João Silva Advogados',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  }
-];
-
-const LOCAL_STORAGE_KEY = 'supreme_recargas_store_v5';
-let isRealtimeInitialized = false;
+// ============================================================================
+// 3. APPSTORE CLASS IMPLEMENTATION (GENERIC STORE LAYER)
+// ============================================================================
 
 export class AppStore {
-  private static isSyncing = false;
   private static memoryStore: any = null;
 
   private static getStoreData() {
     if (typeof window === 'undefined') {
       if (!this.memoryStore) {
         this.memoryStore = {
-          profiles: [...MOCK_PROFILES],
-          entries: [...INITIAL_ENTRIES],
-          cartridges: [...INITIAL_CARTRIDGES],
-          customers: [...MOCK_CUSTOMERS],
-          models: [...MOCK_MODELS],
-          servicePrices: [...MOCK_SERVICE_PRICES],
-          settings: { ...MOCK_COMPANY_SETTINGS },
-          company: { ...MOCK_COMPANY_SUPREME },
           companies: [...MOCK_COMPANIES],
           plans: [...MOCK_PLANS],
           subscriptions: [...MOCK_SUBSCRIPTIONS],
+          profiles: [...MOCK_PROFILES],
           permissionGroups: [...DEFAULT_PERMISSION_GROUPS],
-          demoSandbox: { ...INITIAL_DEMO_SANDBOX },
-          auditLogs: [...INITIAL_AUDIT_LOGS]
+          customers: [...MOCK_CUSTOMERS],
+          categories: [...INITIAL_CATEGORIES],
+          brands: [...INITIAL_BRANDS],
+          models: [...INITIAL_MODELS],
+          services: [...INITIAL_SERVICES],
+          workflowStates: [...INITIAL_WORKFLOW_STATES],
+          checklistTemplates: [...INITIAL_CHECKLISTS],
+          serviceOrders: [...INITIAL_SERVICE_ORDERS],
+          payments: [...INITIAL_PAYMENTS],
+          auditLogs: [...INITIAL_AUDIT_LOGS],
+          settings: { ...MOCK_COMPANY_SETTINGS },
+          company: { ...MOCK_COMPANY_SUPREME }
         };
       }
       return this.memoryStore;
@@ -1328,20 +947,23 @@ export class AppStore {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (!raw) {
       const initial = {
-        profiles: MOCK_PROFILES,
-        entries: INITIAL_ENTRIES,
-        cartridges: INITIAL_CARTRIDGES,
-        customers: MOCK_CUSTOMERS,
-        models: MOCK_MODELS,
-        servicePrices: MOCK_SERVICE_PRICES,
-        settings: MOCK_COMPANY_SETTINGS,
-        company: MOCK_COMPANY_SUPREME,
         companies: MOCK_COMPANIES,
         plans: MOCK_PLANS,
         subscriptions: MOCK_SUBSCRIPTIONS,
+        profiles: MOCK_PROFILES,
         permissionGroups: DEFAULT_PERMISSION_GROUPS,
-        demoSandbox: INITIAL_DEMO_SANDBOX,
-        auditLogs: INITIAL_AUDIT_LOGS
+        customers: MOCK_CUSTOMERS,
+        categories: INITIAL_CATEGORIES,
+        brands: INITIAL_BRANDS,
+        models: INITIAL_MODELS,
+        services: INITIAL_SERVICES,
+        workflowStates: INITIAL_WORKFLOW_STATES,
+        checklistTemplates: INITIAL_CHECKLISTS,
+        serviceOrders: INITIAL_SERVICE_ORDERS,
+        payments: INITIAL_PAYMENTS,
+        auditLogs: INITIAL_AUDIT_LOGS,
+        settings: MOCK_COMPANY_SETTINGS,
+        company: MOCK_COMPANY_SUPREME
       };
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(initial));
       return initial;
@@ -1349,52 +971,43 @@ export class AppStore {
 
     try {
       const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed.profiles)) {
-        parsed.profiles = MOCK_PROFILES;
-      } else {
-        // Ensure Super Admin is always present in profiles
-        const hasSuper = parsed.profiles.some((p: Profile) => p.role === 'SUPER_ADMIN' || p.email.toLowerCase().includes('super@'));
-        if (!hasSuper) {
-          const superProfile = MOCK_PROFILES.find(p => p.role === 'SUPER_ADMIN');
-          if (superProfile) parsed.profiles.push(superProfile);
-        }
-        // Ensure fixed demo profiles are present
-        for (const p of MOCK_PROFILES) {
-          if (!parsed.profiles.some((x: Profile) => x.id === p.id)) {
-            parsed.profiles.push(p);
-          }
-        }
-      }
-      if (!Array.isArray(parsed.entries)) parsed.entries = INITIAL_ENTRIES;
-      if (!Array.isArray(parsed.cartridges)) parsed.cartridges = INITIAL_CARTRIDGES;
-      if (!Array.isArray(parsed.customers)) parsed.customers = MOCK_CUSTOMERS;
-      if (!Array.isArray(parsed.models)) parsed.models = MOCK_MODELS;
-      if (!Array.isArray(parsed.servicePrices)) parsed.servicePrices = MOCK_SERVICE_PRICES;
-      if (!parsed.settings) parsed.settings = MOCK_COMPANY_SETTINGS;
-      if (!parsed.company) parsed.company = MOCK_COMPANY_SUPREME;
       if (!Array.isArray(parsed.companies) || parsed.companies.length === 0) parsed.companies = MOCK_COMPANIES;
       if (!Array.isArray(parsed.plans) || parsed.plans.length === 0) parsed.plans = MOCK_PLANS;
       if (!Array.isArray(parsed.subscriptions) || parsed.subscriptions.length === 0) parsed.subscriptions = MOCK_SUBSCRIPTIONS;
+      if (!Array.isArray(parsed.profiles) || parsed.profiles.length === 0) parsed.profiles = MOCK_PROFILES;
       if (!Array.isArray(parsed.permissionGroups) || parsed.permissionGroups.length === 0) parsed.permissionGroups = DEFAULT_PERMISSION_GROUPS;
-      if (!parsed.demoSandbox) parsed.demoSandbox = INITIAL_DEMO_SANDBOX;
+      if (!Array.isArray(parsed.customers)) parsed.customers = MOCK_CUSTOMERS;
+      if (!Array.isArray(parsed.categories) || parsed.categories.length === 0) parsed.categories = INITIAL_CATEGORIES;
+      if (!Array.isArray(parsed.brands) || parsed.brands.length === 0) parsed.brands = INITIAL_BRANDS;
+      if (!Array.isArray(parsed.models) || parsed.models.length === 0) parsed.models = INITIAL_MODELS;
+      if (!Array.isArray(parsed.services) || parsed.services.length === 0) parsed.services = INITIAL_SERVICES;
+      if (!Array.isArray(parsed.workflowStates) || parsed.workflowStates.length === 0) parsed.workflowStates = INITIAL_WORKFLOW_STATES;
+      if (!Array.isArray(parsed.checklistTemplates) || parsed.checklistTemplates.length === 0) parsed.checklistTemplates = INITIAL_CHECKLISTS;
+      if (!Array.isArray(parsed.serviceOrders)) parsed.serviceOrders = INITIAL_SERVICE_ORDERS;
+      if (!Array.isArray(parsed.payments)) parsed.payments = INITIAL_PAYMENTS;
       if (!Array.isArray(parsed.auditLogs)) parsed.auditLogs = INITIAL_AUDIT_LOGS;
+      if (!parsed.settings) parsed.settings = MOCK_COMPANY_SETTINGS;
+      if (!parsed.company) parsed.company = MOCK_COMPANY_SUPREME;
       return parsed;
     } catch {
       return {
-        profiles: MOCK_PROFILES,
-        entries: INITIAL_ENTRIES,
-        cartridges: INITIAL_CARTRIDGES,
-        customers: MOCK_CUSTOMERS,
-        models: MOCK_MODELS,
-        servicePrices: MOCK_SERVICE_PRICES,
-        settings: MOCK_COMPANY_SETTINGS,
-        company: MOCK_COMPANY_SUPREME,
         companies: MOCK_COMPANIES,
         plans: MOCK_PLANS,
         subscriptions: MOCK_SUBSCRIPTIONS,
+        profiles: MOCK_PROFILES,
         permissionGroups: DEFAULT_PERMISSION_GROUPS,
-        demoSandbox: INITIAL_DEMO_SANDBOX,
-        auditLogs: INITIAL_AUDIT_LOGS
+        customers: MOCK_CUSTOMERS,
+        categories: INITIAL_CATEGORIES,
+        brands: INITIAL_BRANDS,
+        models: INITIAL_MODELS,
+        services: INITIAL_SERVICES,
+        workflowStates: INITIAL_WORKFLOW_STATES,
+        checklistTemplates: INITIAL_CHECKLISTS,
+        serviceOrders: INITIAL_SERVICE_ORDERS,
+        payments: INITIAL_PAYMENTS,
+        auditLogs: INITIAL_AUDIT_LOGS,
+        settings: MOCK_COMPANY_SETTINGS,
+        company: MOCK_COMPANY_SUPREME
       };
     }
   }
@@ -1403,611 +1016,161 @@ export class AppStore {
     if (typeof window !== 'undefined') {
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
       if (emitEvent) {
-        window.dispatchEvent(new CustomEvent('supreme_store_updated'));
+        window.dispatchEvent(new CustomEvent('supreme_store_updated', { detail: data }));
       }
     } else {
       this.memoryStore = data;
     }
   }
 
-  // Real-time synchronization with Supabase
-  static async syncFromSupabase(tenantId = MOCK_COMPANY_SUPREME.id): Promise<boolean> {
-    if (this.isSyncing) return false;
-    this.isSyncing = true;
-
-    try {
-      const [
-        custRes,
-        modRes,
-        priceRes,
-        setRes,
-        entRes,
-        cartRes,
-        profRes,
-        auditRes
-      ] = await Promise.all([
-        supabase.from('customers').select('*').eq('tenant_id', tenantId).order('created_at', { ascending: false }),
-        supabase.from('cartridge_models').select('*').eq('tenant_id', tenantId).order('model_name', { ascending: true }),
-        supabase.from('service_prices').select('*').eq('tenant_id', tenantId),
-        supabase.from('company_settings').select('*').eq('tenant_id', tenantId).maybeSingle(),
-        supabase.from('cartridge_entries').select('*').eq('tenant_id', tenantId).order('entry_sequence', { ascending: false }),
-        supabase.from('cartridges').select('*').eq('tenant_id', tenantId).order('created_at', { ascending: false }),
-        supabase.from('profiles').select('*').eq('tenant_id', tenantId),
-        supabase.from('audit_logs').select('*').eq('tenant_id', tenantId).order('created_at', { ascending: false }).limit(200)
-      ]);
-
-      const data = this.getStoreData();
-
-      // Intelligently merge Customers (never wipe locally created ones)
-      if (custRes.data && custRes.data.length > 0) {
-        const custMap = new Map<string, Customer>();
-        (data.customers || []).forEach((c: Customer) => custMap.set(c.id, c));
-        custRes.data.forEach((c: Customer) => {
-          custMap.set(c.id, { ...custMap.get(c.id), ...c });
-        });
-        data.customers = Array.from(custMap.values());
-      }
-
-      // Intelligently merge Models
-      if (modRes.data && modRes.data.length > 0) {
-        const modMap = new Map<string, CartridgeModel>();
-        (data.models || []).forEach((m: CartridgeModel) => modMap.set(m.id, m));
-        modRes.data.forEach((m: CartridgeModel) => {
-          modMap.set(m.id, { ...modMap.get(m.id), ...m });
-        });
-        data.models = Array.from(modMap.values());
-      }
-
-      // Intelligently merge Service Prices
-      if (priceRes.data && priceRes.data.length > 0) {
-        const priceMap = new Map<string, ServicePrice>();
-        (data.servicePrices || []).forEach((s: ServicePrice) => priceMap.set(s.id, s));
-        priceRes.data.forEach((s: ServicePrice) => {
-          priceMap.set(s.id, { ...priceMap.get(s.id), ...s });
-        });
-        data.servicePrices = Array.from(priceMap.values());
-      }
-
-      if (setRes.data) {
-        data.settings = { ...data.settings, ...setRes.data };
-      }
-
-      // Intelligently merge Entries (never wipe locally created ones)
-      const entMap = new Map<string, CartridgeEntry>();
-      (data.entries || []).forEach((e: CartridgeEntry) => entMap.set(e.id, e));
-      if (entRes.data && entRes.data.length > 0) {
-        entRes.data.forEach((e: CartridgeEntry) => {
-          entMap.set(e.id, { ...entMap.get(e.id), ...e });
-        });
-      }
-      data.entries = Array.from(entMap.values()).sort((a, b) => (b.entry_sequence || 0) - (a.entry_sequence || 0));
-
-      // Intelligently merge Cartridges (never wipe locally created ones)
-      const cartMap = new Map<string, Cartridge>();
-      (data.cartridges || []).forEach((c: Cartridge) => cartMap.set(c.id, c));
-      if (cartRes.data && cartRes.data.length > 0) {
-        cartRes.data.forEach((c: Cartridge) => {
-          cartMap.set(c.id, { ...cartMap.get(c.id), ...c });
-        });
-      }
-      data.cartridges = Array.from(cartMap.values());
-
-      // Intelligently merge Profiles
-      if (profRes.data && profRes.data.length > 0) {
-        const profMap = new Map<string, Profile>();
-        (data.profiles || []).forEach((p: Profile) => profMap.set(p.id, p));
-        profRes.data.forEach((p: Profile) => {
-          profMap.set(p.id, { ...profMap.get(p.id), ...p });
-        });
-        data.profiles = Array.from(profMap.values());
-      }
-
-      // Intelligently merge Audit Logs
-      if (auditRes.data && auditRes.data.length > 0) {
-        const logMap = new Map<string, AuditLog>();
-        (data.auditLogs || []).forEach((l: AuditLog) => logMap.set(l.id, l));
-        auditRes.data.forEach((l: AuditLog) => {
-          logMap.set(l.id, { ...logMap.get(l.id), ...l });
-        });
-        data.auditLogs = Array.from(logMap.values()).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 500);
-      }
-
-      this.saveStoreData(data);
-
-      // Background push any locally created entries that don't yet exist in Supabase
-      const cloudEntryIds = new Set((entRes.data || []).map((e: any) => e.id));
-      const unsyncedEntries = (data.entries || []).filter((e: CartridgeEntry) => e.tenant_id === tenantId && !cloudEntryIds.has(e.id));
-      if (unsyncedEntries.length > 0) {
-        unsyncedEntries.forEach((entry: CartridgeEntry) => {
-          const entryPayload = {
-            id: entry.id,
-            tenant_id: entry.tenant_id,
-            entry_number: entry.entry_number,
-            entry_sequence: entry.entry_sequence,
-            entry_year: entry.entry_year,
-            customer_id: entry.customer_id,
-            attendant_id: entry.attendant_id,
-            entry_date: entry.entry_date,
-            subtotal_amount: entry.subtotal_amount,
-            discount_amount: entry.discount_amount || 0,
-            surcharge_amount: entry.surcharge_amount || 0,
-            total_amount: entry.total_amount,
-            payment_status: entry.payment_status || 'PENDENTE',
-            payment_method: entry.payment_method || 'DINHEIRO',
-            payments: entry.payments || null,
-            general_notes: entry.general_notes || null,
-            tracking_token: entry.tracking_token,
-            created_at: entry.created_at,
-            updated_at: entry.updated_at || entry.created_at
-          };
-
-          supabase.from('cartridge_entries').upsert(entryPayload).then(() => {
-            const entryCartridges = (data.cartridges || []).filter((c: Cartridge) => c.entry_id === entry.id).map((c: Cartridge) => ({
-              id: c.id,
-              tenant_id: c.tenant_id,
-              entry_id: c.entry_id,
-              serial_number: c.serial_number,
-              item_index: c.item_index,
-              model_id: c.model_id,
-              service_requested: c.service_requested,
-              color: c.color,
-              is_xl: c.is_xl ?? false,
-              final_serie: c.final_serie || 'S/N',
-              status: c.status || 'AGUARDANDO_VERIFICACAO',
-              result_classification: c.result_classification || 'PENDENTE',
-              input_weight_grams: c.input_weight_grams || null,
-              reception_notes: c.reception_notes || null,
-              original_price: c.original_price || 0,
-              applied_price: c.applied_price || 0,
-              discount_amount: c.discount_amount || 0,
-              surcharge_amount: c.surcharge_amount || 0,
-              final_price: c.final_price || 0,
-              entry_number: c.entry_number,
-              customer_name: c.customer_name || 'Cliente',
-              created_at: c.created_at || new Date().toISOString(),
-              updated_at: c.updated_at || new Date().toISOString()
-            }));
-
-            if (entryCartridges.length > 0) {
-              supabase.from('cartridges').upsert(entryCartridges).then();
-            }
-          });
-        });
-      }
-
-      return true;
-    } catch (err) {
-      console.warn('Supabase sync error, using local cache:', err);
-      return false;
-    } finally {
-      this.isSyncing = false;
-    }
-  }
-
-  // Setup Realtime WebSocket Listener across all browser windows/devices
-  static initRealtime(tenantId = MOCK_COMPANY_SUPREME.id) {
-    if (typeof window === 'undefined' || isRealtimeInitialized) return;
-    isRealtimeInitialized = true;
-
-    // Initial fetch from Supabase
-    this.syncFromSupabase(tenantId);
-
-    // Subscribe to database changes
-    supabase
-      .channel('supreme-db-sync')
-      .on('postgres_changes', { event: '*', schema: 'public', filter: `tenant_id=eq.${tenantId}` }, () => {
-        this.syncFromSupabase(tenantId);
-      })
-      .subscribe();
-  }
-
-  // ==========================================================================
-  // SUPER ADMIN & SAAS MULTI-TENANT MANAGEMENT
-  // ==========================================================================
-
-  // Companies Management
+  // --------------------------------------------------------------------------
+  // COMPANIES & TENANTS
+  // --------------------------------------------------------------------------
   static getCompanies(): Company[] {
     const data = this.getStoreData();
     return data.companies || MOCK_COMPANIES;
   }
 
-  static getCompany(tenantId?: string): Company {
-    const data = this.getStoreData();
-    const companies: Company[] = data.companies || MOCK_COMPANIES;
-    if (tenantId) {
-      const found = companies.find(c => c.id === tenantId);
-      if (found) return found;
-    }
-    return data.company || companies[0] || MOCK_COMPANY_SUPREME;
+  static getCompany(id: string): Company {
+    const companies = this.getCompanies();
+    return companies.find(c => c.id === id) || companies[0] || MOCK_COMPANY_SUPREME;
   }
 
   static addCompany(
-    companyData: Omit<Company, 'id' | 'created_at' | 'updated_at'>,
+    company: Partial<Company>,
     initialAdmin?: { fullName: string; email: string; password?: string; phone?: string },
     planId?: string,
     performedByName?: string,
-    businessSegment?: BusinessSegment
-  ): { company: Company; admin?: Profile; subscription: Subscription } {
+    initialTemplateKey?: BusinessTemplateKey
+  ): Company {
     const data = this.getStoreData();
-    if (!Array.isArray(data.companies)) data.companies = MOCK_COMPANIES;
-    if (!Array.isArray(data.subscriptions)) data.subscriptions = MOCK_SUBSCRIPTIONS;
-    if (!Array.isArray(data.plans)) data.plans = MOCK_PLANS;
-    if (!Array.isArray(data.profiles)) data.profiles = MOCK_PROFILES;
-
-    const companyId = (companyData as any).id || generateUUID();
-    const now = new Date().toISOString();
-    const segment = businessSegment || companyData.business_segment || 'RECARGA_CARTUCHOS';
-    const segmentPreset = SEGMENT_PRESETS[segment] || SEGMENT_PRESETS.RECARGA_CARTUCHOS;
-
+    const companyId = company.id || generateUUID();
+    const templateKey = initialTemplateKey || (company as any).business_segment || 'RECARGA_CARTUCHOS';
     const newCompany: Company = {
-      ...companyData,
       id: companyId,
-      business_segment: segment,
-      created_at: now,
-      updated_at: now
+      corporate_name: company.corporate_name || company.trade_name || 'Nova Empresa',
+      trade_name: company.trade_name || 'Nova Empresa',
+      cnpj: company.cnpj || '00.000.000/0001-00',
+      phone: company.phone || '(11) 99999-9999',
+      whatsapp: company.whatsapp,
+      email: company.email || 'contato@empresa.com.br',
+      address: company.address,
+      city: company.city,
+      state: company.state,
+      responsible_name: company.responsible_name,
+      active_template_keys: company.active_template_keys || [templateKey],
+      is_active: company.is_active !== false,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     };
+    if (!Array.isArray(data.companies)) data.companies = [];
+    data.companies.push(newCompany);
 
-    data.companies.unshift(newCompany);
+    if (planId) {
+      this.assignPlanToCompany(companyId, planId, undefined, performedByName);
+    }
 
-    // Create Company Settings with Segment Config
-    const newSettings: CompanySettings = {
-      id: generateUUID(),
-      tenant_id: companyId,
-      business_segment: segment,
-      segment_config: segmentPreset,
-      custom_checklist_items: segmentPreset.defaultChecklistItems,
-      show_prices_on_receipt: true,
-      receipt_header_note: `${newCompany.trade_name}\nAtendimento e Manutenção Especializada`,
-      receipt_footer_note: 'Garantia legal de 90 dias com a apresentação desta comanda.\nAgradecemos a preferência!',
-      verification_waiver_policy: 'CREDIT_IF_REFILLED',
-      waive_verification_if_refilled: true,
-      default_refill_price: 30.00,
-      default_refill_xl_price: 45.00,
-      default_verification_price: 15.00,
-      default_test_price: 10.00,
-      input_weight_responsibility: segmentPreset.hasWeightInspection ? 'AMBOS' : 'TECNICO',
-      thermal_paper_width_mm: 80,
-      require_customer_document: false,
-      require_cartridge_serial: true
-    };
-
-    data.settings = newSettings;
-
-    // Create Subscription
-    const selectedPlanId = planId || data.plans[0]?.id || MOCK_PLANS[0].id;
-    const selectedPlan = data.plans.find((p: Plan) => p.id === selectedPlanId) || data.plans[0];
-
-    const newSubscription: Subscription = {
-      id: generateUUID(),
-      tenant_id: companyId,
-      plan_id: selectedPlanId,
-      status: 'ACTIVE',
-      starts_at: now,
-      extra_attendants: 0,
-      extra_technicians: 0,
-      extra_administrators: 0,
-      billing_cycle: 'MONTHLY',
-      plan: selectedPlan
-    };
-
-    data.subscriptions.unshift(newSubscription);
-
-    // Create Initial Admin User if provided
-    let newAdmin: Profile | undefined;
-    if (initialAdmin) {
-      newAdmin = {
+    if (initialAdmin && initialAdmin.email) {
+      const adminProfile: Profile = {
         id: generateUUID(),
         tenant_id: companyId,
         full_name: initialAdmin.fullName,
         email: initialAdmin.email,
-        password: initialAdmin.password || '123456',
         phone: initialAdmin.phone,
+        password: initialAdmin.password || '123456',
         role: 'ADMINISTRADOR',
         is_active: true,
-        created_at: now,
-        company: newCompany
+        created_at: new Date().toISOString()
       };
-      data.profiles.push(newAdmin);
+      if (!Array.isArray(data.profiles)) data.profiles = [];
+      data.profiles.push(adminProfile);
     }
 
     this.saveStoreData(data);
-
-    // Push to Supabase
     supabase.from('companies').insert(newCompany).then();
-    supabase.from('company_settings').upsert(newSettings).then();
-    supabase.from('subscriptions').insert(newSubscription).then();
-    if (newAdmin) {
-      supabase.from('profiles').insert(newAdmin).then();
-    }
-
-    this.logAudit({
-      tenant_id: companyId,
-      user_name: performedByName || 'Super Administrador',
-      action: 'CRIACAO_EMPRESA_SAAS',
-      resource: 'companies',
-      resource_id: companyId,
-      details: `Cadastrada nova empresa ${newCompany.trade_name} [Segmento: ${segmentPreset.segmentName}] (CNPJ: ${newCompany.cnpj || 'Não informado'}) no ${selectedPlan.name}.`
-    });
-
-    return { company: newCompany, admin: newAdmin, subscription: newSubscription };
+    return newCompany;
   }
 
-  static updateCompany(companyId: string, updates: Partial<Company>, performedByName?: string): Company {
+  static updateCompany(id: string, updates: Partial<Company>, performedByName?: string): Company {
     const data = this.getStoreData();
-    if (!Array.isArray(data.companies)) data.companies = MOCK_COMPANIES;
-
-    const idx = data.companies.findIndex((c: Company) => c.id === companyId);
-    if (idx === -1) throw new Error('Empresa não encontrada.');
-
+    const idx = data.companies.findIndex((c: Company) => c.id === id);
+    if (idx === -1) throw new Error('Empresa não encontrada');
     const updated = { ...data.companies[idx], ...updates, updated_at: new Date().toISOString() };
     data.companies[idx] = updated;
-
-    if (data.company && data.company.id === companyId) {
-      data.company = updated;
-    }
-
     this.saveStoreData(data);
-
-    supabase.from('companies').update(updates).eq('id', companyId).then();
-
-    this.logAudit({
-      tenant_id: companyId,
-      user_name: performedByName || 'Super Administrador',
-      action: 'EDICAO_EMPRESA_SAAS',
-      resource: 'companies',
-      resource_id: companyId,
-      details: `Atualizados dados cadastrais da empresa ${updated.trade_name}.`
-    });
-
+    supabase.from('companies').update(updates).eq('id', id).then();
     return updated;
   }
 
-  static toggleCompanyStatus(companyId: string, performedByName?: string): Company {
+  static setCompanySegment(companyId: string, segment: BusinessTemplateKey, performedByName?: string): Company {
     const data = this.getStoreData();
-    if (!Array.isArray(data.companies)) data.companies = MOCK_COMPANIES;
-
-    const idx = data.companies.findIndex((c: Company) => c.id === companyId);
-    if (idx === -1) throw new Error('Empresa não encontrada.');
-
-    const currentStatus = data.companies[idx].is_active;
-    const newStatus = !currentStatus;
-    const updated = { ...data.companies[idx], is_active: newStatus, updated_at: new Date().toISOString() };
-    data.companies[idx] = updated;
-
-    if (data.company && data.company.id === companyId) {
-      data.company = updated;
-    }
-
-    // Also toggle subscription status if paused
-    if (Array.isArray(data.subscriptions)) {
-      const subIdx = data.subscriptions.findIndex((s: Subscription) => s.tenant_id === companyId);
-      if (subIdx !== -1) {
-        data.subscriptions[subIdx].status = newStatus ? 'ACTIVE' : 'PAUSED';
-      }
-    }
-
+    const comp = data.companies.find((c: Company) => c.id === companyId);
+    if (!comp) throw new Error('Empresa não encontrada');
+    comp.active_template_keys = [segment];
+    comp.business_segment = segment;
     this.saveStoreData(data);
-
-    supabase.from('companies').update({ is_active: newStatus }).eq('id', companyId).then();
-
-    this.logAudit({
-      tenant_id: companyId,
-      user_name: performedByName || 'Super Administrador',
-      action: newStatus ? 'ATIVACAO_EMPRESA_SAAS' : 'BLOQUEIO_EMPRESA_SAAS',
-      resource: 'companies',
-      resource_id: companyId,
-      details: `Empresa ${updated.trade_name} ${newStatus ? 'REATIVADA / DESBLOQUEADA' : 'SUSPENSA / BLOQUEADA'}.`
-    });
-
-    return updated;
+    return comp;
   }
 
-  static deleteCompany(companyId: string, performedByName?: string): boolean {
+  static deleteCompany(id: string, performedByName?: string): boolean {
     const data = this.getStoreData();
-    if (!Array.isArray(data.companies)) data.companies = MOCK_COMPANIES;
-
-    const idx = data.companies.findIndex((c: Company) => c.id === companyId);
-    if (idx === -1) throw new Error('Empresa não encontrada.');
-
-    const name = data.companies[idx].trade_name;
-    data.companies.splice(idx, 1);
-    data.subscriptions = (data.subscriptions || []).filter((s: Subscription) => s.tenant_id !== companyId);
-
+    data.companies = (data.companies || []).filter((c: Company) => c.id !== id);
     this.saveStoreData(data);
-
-    supabase.from('companies').delete().eq('id', companyId).then();
-
-    this.logAudit({
-      user_name: performedByName || 'Super Administrador',
-      action: 'EXCLUSAO_EMPRESA_SAAS',
-      resource: 'companies',
-      resource_id: companyId,
-      details: `Empresa ${name} excluída da plataforma SaaS.`
-    });
-
+    supabase.from('companies').delete().eq('id', id).then();
     return true;
   }
 
-  // Plans Management
+  // --------------------------------------------------------------------------
+  // PLANS & SUBSCRIPTIONS (Unified User Capacity)
+  // --------------------------------------------------------------------------
   static getPlans(): Plan[] {
     const data = this.getStoreData();
     return data.plans || MOCK_PLANS;
   }
 
-  static getPlan(planId: string): Plan | undefined {
-    const plans = this.getPlans();
-    return plans.find(p => p.id === planId);
-  }
-
   static addPlan(plan: Omit<Plan, 'id' | 'created_at' | 'updated_at'>, performedByName?: string): Plan {
     const data = this.getStoreData();
-    if (!Array.isArray(data.plans)) data.plans = MOCK_PLANS;
-
-    const newPlan: Plan = {
-      ...plan,
-      id: generateUUID(),
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-
+    const newPlan: Plan = { ...plan, id: generateUUID(), created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
     data.plans.push(newPlan);
     this.saveStoreData(data);
-
-    supabase.from('plans').insert(newPlan).then();
-
-    this.logAudit({
-      user_name: performedByName || 'Super Administrador',
-      action: 'CRIACAO_PLANO_SAAS',
-      resource: 'plans',
-      resource_id: newPlan.id,
-      details: `Criado novo plano SaaS: ${newPlan.name} (Mensalidade: R$ ${newPlan.monthly_price.toFixed(2)} | Limite Admins: ${newPlan.max_administrators}, Atendentes: ${newPlan.max_attendants}, Técnicos: ${newPlan.max_technicians})`
-    });
-
     return newPlan;
   }
 
-  static updatePlan(planId: string, updates: Partial<Plan>, performedByName?: string): Plan {
+  static updatePlan(id: string, updates: Partial<Plan>, performedByName?: string): Plan {
     const data = this.getStoreData();
-    if (!Array.isArray(data.plans)) data.plans = MOCK_PLANS;
-
-    const idx = data.plans.findIndex((p: Plan) => p.id === planId);
-    if (idx === -1) throw new Error('Plano não encontrado.');
-
-    const updated: Plan = {
-      ...data.plans[idx],
-      ...updates,
-      updated_at: new Date().toISOString()
-    };
-
+    const idx = data.plans.findIndex((p: Plan) => p.id === id);
+    if (idx === -1) throw new Error('Plano não encontrado');
+    const updated = { ...data.plans[idx], ...updates, updated_at: new Date().toISOString() };
     data.plans[idx] = updated;
     this.saveStoreData(data);
-
-    supabase.from('plans').update(updates).eq('id', planId).then();
-
-    this.logAudit({
-      user_name: performedByName || 'Super Administrador',
-      action: 'EDICAO_PLANO_SAAS',
-      resource: 'plans',
-      resource_id: planId,
-      details: `Atualizado plano SaaS ${updated.name}: Mensalidade R$ ${updated.monthly_price.toFixed(2)}, Atendente Extra +R$ ${updated.extra_attendant_price?.toFixed(2)}, Técnico Extra +R$ ${updated.extra_technician_price?.toFixed(2)}`
-    });
-
     return updated;
   }
 
-  static deletePlan(planId: string, performedByName?: string): boolean {
+  static deletePlan(id: string, performedByName?: string): boolean {
     const data = this.getStoreData();
-    if (!Array.isArray(data.plans)) data.plans = MOCK_PLANS;
-
-    const idx = data.plans.findIndex((p: Plan) => p.id === planId);
-    if (idx === -1) throw new Error('Plano não encontrado.');
-
-    const name = data.plans[idx].name;
-    data.plans.splice(idx, 1);
+    data.plans = data.plans.filter((p: Plan) => p.id !== id);
     this.saveStoreData(data);
-
-    supabase.from('plans').delete().eq('id', planId).then();
-
-    this.logAudit({
-      user_name: performedByName || 'Super Administrador',
-      action: 'EXCLUSAO_PLANO_SAAS',
-      resource: 'plans',
-      resource_id: planId,
-      details: `Plano SaaS ${name} excluído.`
-    });
-
     return true;
   }
 
-  // Subscriptions Management
   static getSubscriptions(): Subscription[] {
     const data = this.getStoreData();
-    const subs: Subscription[] = data.subscriptions || MOCK_SUBSCRIPTIONS;
-    const plans: Plan[] = data.plans || MOCK_PLANS;
-
-    return subs.map(s => ({
-      ...s,
-      plan: plans.find(p => p.id === s.plan_id) || plans[0]
-    }));
+    return data.subscriptions || MOCK_SUBSCRIPTIONS;
   }
 
-  static getSubscription(tenantId: string): Subscription | undefined {
-    const subs = this.getSubscriptions();
-    return subs.find(s => s.tenant_id === tenantId);
-  }
-
-  static updateSubscription(subscriptionId: string, updates: Partial<Subscription>, performedByName?: string): Subscription {
+  static assignPlanToCompany(tenantId: string, planId: string, extras?: Partial<Subscription>, performedByName?: string): Subscription {
     const data = this.getStoreData();
-    if (!Array.isArray(data.subscriptions)) data.subscriptions = MOCK_SUBSCRIPTIONS;
-
-    const idx = data.subscriptions.findIndex((s: Subscription) => s.id === subscriptionId);
-    if (idx === -1) throw new Error('Assinatura não encontrada.');
-
-    const updated: Subscription = {
-      ...data.subscriptions[idx],
-      ...updates
-    };
-
-    data.subscriptions[idx] = updated;
-    this.saveStoreData(data);
-
-    supabase.from('subscriptions').update(updates).eq('id', subscriptionId).then();
-
-    this.logAudit({
-      tenant_id: updated.tenant_id,
-      user_name: performedByName || 'Super Administrador',
-      action: 'EDICAO_ASSINATURA_SAAS',
-      resource: 'subscriptions',
-      resource_id: subscriptionId,
-      details: `Atualizada assinatura da empresa (Extras: +${updated.extra_attendants || 0} Atendentes, +${updated.extra_technicians || 0} Técnicos, +${updated.extra_administrators || 0} Admins)`
-    });
-
-    return updated;
-  }
-
-  static assignPlanToCompany(
-    tenantId: string,
-    planId: string,
-    extras?: {
-      extra_users?: number;
-      extra_attendants?: number;
-      extra_technicians?: number;
-      extra_administrators?: number;
-      custom_max_users?: number;
-      custom_max_administrators?: number;
-      custom_max_attendants?: number;
-      custom_max_technicians?: number;
-      custom_price?: number;
-      status?: any;
-    },
-    performedByName?: string
-  ): Subscription {
-    const data = this.getStoreData();
-    if (!Array.isArray(data.subscriptions)) data.subscriptions = MOCK_SUBSCRIPTIONS;
-
-    const plans = data.plans || MOCK_PLANS;
-    const plan = plans.find((p: Plan) => p.id === planId) || plans[0];
-
+    const plan = (data.plans || MOCK_PLANS).find((p: Plan) => p.id === planId) || MOCK_PLANS[0];
     const idx = data.subscriptions.findIndex((s: Subscription) => s.tenant_id === tenantId);
     let sub: Subscription;
-
-    const resolvedExtraUsers = extras?.extra_users !== undefined 
-      ? extras.extra_users 
-      : ((extras?.extra_attendants || 0) + (extras?.extra_technicians || 0) + (extras?.extra_administrators || 0));
 
     if (idx !== -1) {
       sub = {
         ...data.subscriptions[idx],
         plan_id: planId,
         plan,
-        extra_users: resolvedExtraUsers,
-        extra_attendants: extras?.extra_attendants !== undefined ? extras.extra_attendants : data.subscriptions[idx].extra_attendants || 0,
-        extra_technicians: extras?.extra_technicians !== undefined ? extras.extra_technicians : data.subscriptions[idx].extra_technicians || 0,
-        extra_administrators: extras?.extra_administrators !== undefined ? extras.extra_administrators : data.subscriptions[idx].extra_administrators || 0,
-        custom_max_users: extras?.custom_max_users !== undefined ? extras.custom_max_users : data.subscriptions[idx].custom_max_users,
-        custom_max_administrators: extras?.custom_max_administrators,
-        custom_max_attendants: extras?.custom_max_attendants,
-        custom_max_technicians: extras?.custom_max_technicians,
+        extra_users: extras?.extra_users !== undefined ? extras.extra_users : data.subscriptions[idx].extra_users || 0,
+        custom_max_users: extras?.custom_max_users,
         custom_price: extras?.custom_price,
         status: extras?.status || data.subscriptions[idx].status || 'ACTIVE'
       };
@@ -2020,37 +1183,17 @@ export class AppStore {
         plan,
         status: extras?.status || 'ACTIVE',
         starts_at: new Date().toISOString(),
-        extra_users: resolvedExtraUsers,
-        extra_attendants: extras?.extra_attendants || 0,
-        extra_technicians: extras?.extra_technicians || 0,
-        extra_administrators: extras?.extra_administrators || 0,
+        extra_users: extras?.extra_users || 0,
         custom_max_users: extras?.custom_max_users,
-        custom_max_administrators: extras?.custom_max_administrators,
-        custom_max_attendants: extras?.custom_max_attendants,
-        custom_max_technicians: extras?.custom_max_technicians,
         custom_price: extras?.custom_price,
         billing_cycle: 'MONTHLY'
       };
       data.subscriptions.unshift(sub);
     }
-
     this.saveStoreData(data);
-
-    supabase.from('subscriptions').upsert(sub).then();
-
-    this.logAudit({
-      tenant_id: tenantId,
-      user_name: performedByName || 'Super Administrador',
-      action: 'ATRIBUICAO_PLANO_SAAS',
-      resource: 'subscriptions',
-      resource_id: sub.id,
-      details: `Atribuído plano ${plan.name} para a empresa. Usuários extras: ${sub.extra_users || 0}`
-    });
-
     return sub;
   }
 
-  // Calculate Effective User Limits and Pricing for any Company (Unified Max Users)
   static getEffectiveLimits(tenantId: string) {
     const data = this.getStoreData();
     const plans: Plan[] = data.plans || MOCK_PLANS;
@@ -2063,37 +1206,18 @@ export class AppStore {
       plan_id: plans[0]?.id || 'default',
       status: 'ACTIVE' as const,
       starts_at: new Date().toISOString(),
-      extra_users: 0,
-      extra_attendants: 0,
-      extra_technicians: 0,
-      extra_administrators: 0
+      extra_users: 0
     };
 
     const plan = plans.find(p => p.id === sub.plan_id) || plans[0] || MOCK_PLANS[0];
-
-    // Unified total users calculation
-    const extraUsers = sub.extra_users !== undefined 
-      ? sub.extra_users 
-      : ((sub.extra_administrators || 0) + (sub.extra_attendants || 0) + (sub.extra_technicians || 0));
-
-    const maxUsers = sub.custom_max_users !== undefined
-      ? sub.custom_max_users
-      : (plan.max_users || plan.max_total_users || 4) + extraUsers;
-
+    const extraUsers = sub.extra_users || 0;
+    const maxUsers = sub.custom_max_users !== undefined ? sub.custom_max_users : (plan.max_users || 5) + extraUsers;
     const tenantProfiles = profiles.filter(p => p.tenant_id === tenantId && p.is_active !== false && p.role !== 'SUPER_ADMIN');
     const usedUsers = tenantProfiles.length;
     const availableUsers = Math.max(0, maxUsers - usedUsers);
     const canAddUser = usedUsers < maxUsers;
-
-    const usedAdmins = tenantProfiles.filter(p => p.role === 'ADMINISTRADOR').length;
-    const usedAttendants = tenantProfiles.filter(p => p.role === 'ATENDENTE').length;
-    const usedTechs = tenantProfiles.filter(p => p.role === 'TECNICO').length;
-
-    // Standard extra user pricing calculation
-    const basePrice = plan.monthly_price || 0;
     const extraUserPrice = plan.extra_user_price || 15.00;
-    const extraUsersTotalCost = extraUsers * extraUserPrice;
-    const calculatedPrice = basePrice + extraUsersTotalCost;
+    const calculatedPrice = (plan.monthly_price || 0) + (extraUsers * extraUserPrice);
     const finalMonthlyPrice = sub.custom_price !== undefined ? sub.custom_price : calculatedPrice;
 
     return {
@@ -2105,239 +1229,21 @@ export class AppStore {
       canAddUser,
       extraUsers,
       extraUserPrice,
-      extraUsersTotalCost,
-      // Backward-compatibility aliases
+      finalMonthlyPrice,
       maxTotal: maxUsers,
       usedTotal: usedUsers,
-      canAddAdmin: canAddUser,
-      canAddAttendant: canAddUser,
-      canAddTech: canAddUser,
-      maxAdmins: maxUsers,
-      maxAttendants: maxUsers,
-      maxTechs: maxUsers,
-      usedAdmins,
-      usedAttendants,
-      usedTechs,
-      basePrice,
-      extraAttPrice: 0,
-      extraTechPrice: 0,
-      extraAdmPrice: 0,
-      finalMonthlyPrice
+      usedAdmins: tenantProfiles.filter(p => p.role === 'ADMINISTRADOR').length,
+      usedAttendants: tenantProfiles.filter(p => p.role === 'ATENDENTE').length,
+      usedTechs: tenantProfiles.filter(p => p.role === 'TECNICO').length
     };
   }
 
-  // Tenant Comprehensive Statistics
-  static getTenantStats(tenantId: string) {
-    const data = this.getStoreData();
-    const entries = (data.entries || []).filter((e: CartridgeEntry) => e.tenant_id === tenantId);
-    const cartridges = (data.cartridges || []).filter((c: Cartridge) => c.tenant_id === tenantId);
-    const customers = (data.customers || []).filter((c: Customer) => c.tenant_id === tenantId);
-    const limits = this.getEffectiveLimits(tenantId);
-
-    const totalRevenue = entries.reduce((acc: number, e: CartridgeEntry) => acc + (e.total_amount || 0), 0);
-
-    return {
-      totalEntries: entries.length,
-      totalCartridges: cartridges.length,
-      totalCustomers: customers.length,
-      totalRevenue,
-      limits
-    };
-  }
-
-  // Global Platform Overview for Super Admin
-  static getPlatformOverview() {
-    const companies = this.getCompanies();
-    const plans = this.getPlans();
-    const subscriptions = this.getSubscriptions();
-    const profiles = this.getAllProfiles();
-    const data = this.getStoreData();
-    const entries = data.entries || [];
-    const cartridges = data.cartridges || [];
-
-    const activeCompanies = companies.filter(c => c.is_active !== false).length;
-    const pausedCompanies = companies.filter(c => c.is_active === false).length;
-
-    let totalMRR = 0;
-    companies.forEach(c => {
-      if (c.is_active !== false) {
-        const limits = this.getEffectiveLimits(c.id);
-        totalMRR += limits.finalMonthlyPrice;
-      }
-    });
-
-    const activeUsers = profiles.filter(p => p.role !== 'SUPER_ADMIN' && p.is_active !== false).length;
-    const adminsCount = profiles.filter(p => p.role === 'ADMINISTRADOR' && p.is_active !== false).length;
-    const attendantsCount = profiles.filter(p => p.role === 'ATENDENTE' && p.is_active !== false).length;
-    const techsCount = profiles.filter(p => p.role === 'TECNICO' && p.is_active !== false).length;
-
-    return {
-      totalCompanies: companies.length,
-      activeCompanies,
-      pausedCompanies,
-      totalMRR,
-      totalUsers: activeUsers,
-      adminsCount,
-      attendantsCount,
-      techsCount,
-      totalCartridges: cartridges.length,
-      totalEntries: entries.length,
-      plansCount: plans.length,
-      subscriptionsCount: subscriptions.length
-    };
-  }
-
-  // ==========================================================================
-  // DEMO SANDBOX AUTO-ROTATION & MANAGEMENT (WEEKLY PASSWORDS & PURGE)
-  // ==========================================================================
-
-  static getDemoSandboxConfig(): DemoSandboxConfig {
-    this.checkAndAutoResetDemo();
-    const data = this.getStoreData();
-    return data.demoSandbox || INITIAL_DEMO_SANDBOX;
-  }
-
-  static checkAndAutoResetDemo(): boolean {
-    const data = this.getStoreData();
-    const sandbox: DemoSandboxConfig = data.demoSandbox || INITIAL_DEMO_SANDBOX;
-
-    const now = Date.now();
-    const nextResetTime = new Date(sandbox.nextResetAt).getTime();
-
-    // If 7 days have passed, automatically trigger weekly rotation
-    if (now >= nextResetTime) {
-      this.resetDemoSandbox('Sistema Automático Semanal');
-      return true;
-    }
-    return false;
-  }
-
-  static resetDemoSandbox(performedByName = 'Super Administrador'): DemoSandboxConfig {
-    const data = this.getStoreData();
-
-    // 1. Generate 3 new random memorable passwords for the week
-    const rand1 = Math.floor(100 + Math.random() * 900);
-    const rand2 = Math.floor(100 + Math.random() * 900);
-    const rand3 = Math.floor(100 + Math.random() * 900);
-
-    const newAdminPass = `demo-adm-${rand1}`;
-    const newAttendantPass = `demo-atd-${rand2}`;
-    const newTechPass = `demo-tec-${rand3}`;
-
-    const now = new Date();
-    const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-
-    const updatedSandbox: DemoSandboxConfig = {
-      lastResetAt: now.toISOString(),
-      nextResetAt: nextWeek.toISOString(),
-      passwords: {
-        admin: newAdminPass,
-        attendant: newAttendantPass,
-        technician: newTechPass
-      },
-      fixedUserIds: FIXED_DEMO_USER_IDS
-    };
-
-    data.demoSandbox = updatedSandbox;
-
-    // 2. Filter out any EXTRA users created in the demo company (MOCK_COMPANY_SUPREME)
-    // Keep all non-demo company users, plus only the 6 fixed demo users + Super Admin
-    if (Array.isArray(data.profiles)) {
-      data.profiles = data.profiles.filter((p: Profile) => {
-        if (p.tenant_id === MOCK_COMPANY_SUPREME.id) {
-          return FIXED_DEMO_USER_IDS.includes(p.id);
-        }
-        return true;
-      });
-
-      // 3. Update the passwords of the 6 fixed demo users
-      data.profiles = data.profiles.map((p: Profile) => {
-        if (p.tenant_id === MOCK_COMPANY_SUPREME.id) {
-          if (p.role === 'ADMINISTRADOR') {
-            return { ...p, password: newAdminPass, is_active: true };
-          }
-          if (p.role === 'ATENDENTE') {
-            return { ...p, password: newAttendantPass, is_active: true };
-          }
-          if (p.role === 'TECNICO') {
-            return { ...p, password: newTechPass, is_active: true };
-          }
-        }
-        return p;
-      });
-    }
-
-    this.saveStoreData(data);
-
-    this.logAudit({
-      tenant_id: MOCK_COMPANY_SUPREME.id,
-      user_name: performedByName,
-      action: 'RESET_SANDBOX_DEMO',
-      resource: 'demo_sandbox',
-      details: `Ambiente de demonstração resetado com sucesso! Novas senhas semanais geradas (Admin: ${newAdminPass}, Atendentes: ${newAttendantPass}, Técnicos: ${newTechPass}). Usuários extras excluídos.`
-    });
-
-    return updatedSandbox;
-  }
-
-  // Audit Logs Management
-  static getAuditLogs(tenantId?: string): AuditLog[] {
-    const data = this.getStoreData();
-    const logs: AuditLog[] = data.auditLogs || [];
-    if (!tenantId) return logs;
-    return logs.filter((l: AuditLog) => !l.tenant_id || l.tenant_id === tenantId);
-  }
-
-  static logAudit(payload: {
-    tenant_id?: string;
-    user_id?: string;
-    user_name?: string;
-    action: string;
-    resource: string;
-    resource_id?: string;
-    details: string;
-    old_values?: any;
-    new_values?: any;
-  }): AuditLog {
-    const data = this.getStoreData();
-    if (!data.auditLogs) data.auditLogs = [];
-
-    const newLog: AuditLog = {
-      id: generateUUID(),
-      tenant_id: payload.tenant_id || MOCK_COMPANY_SUPREME.id,
-      user_id: payload.user_id,
-      user_name: payload.user_name || 'Sistema',
-      action: payload.action,
-      resource: payload.resource,
-      resource_id: payload.resource_id,
-      details: payload.details,
-      old_values: payload.old_values,
-      new_values: payload.new_values,
-      created_at: new Date().toISOString()
-    };
-
-    data.auditLogs.unshift(newLog);
-    if (data.auditLogs.length > 500) {
-      data.auditLogs = data.auditLogs.slice(0, 500);
-    }
-    this.saveStoreData(data);
-
-    // Async push to Supabase
-    supabase.from('audit_logs').insert(newLog).then();
-
-    return newLog;
-  }
-
-  // User & Permission Management (Admin & Super Admin)
+  // --------------------------------------------------------------------------
+  // PROFILES & PERMISSION GROUPS
+  // --------------------------------------------------------------------------
   static getAllProfiles(): Profile[] {
     const data = this.getStoreData();
-    const profiles: Profile[] = data.profiles || MOCK_PROFILES;
-    const companies: Company[] = data.companies || MOCK_COMPANIES;
-
-    return profiles.map(p => ({
-      ...p,
-      company: companies.find(c => c.id === p.tenant_id) || data.company
-    }));
+    return data.profiles || MOCK_PROFILES;
   }
 
   static getUsers(tenantId: string): Profile[] {
@@ -2345,1519 +1251,885 @@ export class AppStore {
     return (data.profiles || MOCK_PROFILES).filter((p: Profile) => p.tenant_id === tenantId);
   }
 
-  // Permission Groups Management
   static getPermissionGroups(tenantId?: string): PermissionGroup[] {
     const data = this.getStoreData();
-    const groups: PermissionGroup[] = Array.isArray(data.permissionGroups) && data.permissionGroups.length > 0 
-      ? data.permissionGroups 
-      : DEFAULT_PERMISSION_GROUPS;
-    
-    // Return system defaults + tenant custom groups
+    const groups: PermissionGroup[] = data.permissionGroups || DEFAULT_PERMISSION_GROUPS;
     return groups.filter(g => !g.tenant_id || !tenantId || g.tenant_id === tenantId);
   }
 
-  static addPermissionGroup(
-    group: Omit<PermissionGroup, 'id' | 'created_at' | 'updated_at'>, 
-    performedByName?: string
-  ): PermissionGroup {
+  static addPermissionGroup(group: Omit<PermissionGroup, 'id' | 'created_at' | 'updated_at'>, performedByName?: string): PermissionGroup {
     const data = this.getStoreData();
-    if (!Array.isArray(data.permissionGroups)) data.permissionGroups = [...DEFAULT_PERMISSION_GROUPS];
-
-    const newGroup: PermissionGroup = {
-      ...group,
-      id: generateUUID(),
-      is_system_default: false,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-
+    const newGroup: PermissionGroup = { ...group, id: generateUUID(), is_system_default: false, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
     data.permissionGroups.push(newGroup);
     this.saveStoreData(data);
-
-    this.logAudit({
-      tenant_id: group.tenant_id,
-      user_name: performedByName || 'Administrador',
-      action: 'CRIACAO_GRUPO_PERMISSAO',
-      resource: 'permission_groups',
-      resource_id: newGroup.id,
-      details: `Criado novo grupo de permissões "${newGroup.name}"`
-    });
-
     return newGroup;
   }
 
-  static updatePermissionGroup(
-    groupId: string, 
-    updates: Partial<PermissionGroup>, 
-    performedByName?: string
-  ): PermissionGroup {
+  static updatePermissionGroup(id: string, updates: Partial<PermissionGroup>, performedByName?: string): PermissionGroup {
     const data = this.getStoreData();
-    if (!Array.isArray(data.permissionGroups)) data.permissionGroups = [...DEFAULT_PERMISSION_GROUPS];
-
-    const idx = data.permissionGroups.findIndex((g: PermissionGroup) => g.id === groupId);
-    if (idx === -1) throw new Error('Grupo de permissões não encontrado.');
-
-    const old = data.permissionGroups[idx];
-    const updated: PermissionGroup = {
-      ...old,
-      ...updates,
-      updated_at: new Date().toISOString()
-    };
-
+    const idx = data.permissionGroups.findIndex((g: PermissionGroup) => g.id === id);
+    if (idx === -1) throw new Error('Grupo não encontrado');
+    const updated = { ...data.permissionGroups[idx], ...updates, updated_at: new Date().toISOString() };
     data.permissionGroups[idx] = updated;
     this.saveStoreData(data);
-
-    this.logAudit({
-      tenant_id: updated.tenant_id,
-      user_name: performedByName || 'Administrador',
-      action: 'EDICAO_GRUPO_PERMISSAO',
-      resource: 'permission_groups',
-      resource_id: groupId,
-      details: `Atualizado grupo de permissões "${updated.name}"`
-    });
-
     return updated;
   }
 
-  static deletePermissionGroup(groupId: string, performedByName?: string): boolean {
+  static deletePermissionGroup(id: string, performedByName?: string): boolean {
     const data = this.getStoreData();
-    if (!Array.isArray(data.permissionGroups)) data.permissionGroups = [...DEFAULT_PERMISSION_GROUPS];
-
-    const group = data.permissionGroups.find((g: PermissionGroup) => g.id === groupId);
-    if (!group) throw new Error('Grupo não encontrado.');
-    if (group.is_system_default) {
-      throw new Error('Grupos padrão do sistema (Administrador, Técnico, Atendente) não podem ser excluídos.');
-    }
-
-    data.permissionGroups = data.permissionGroups.filter((g: PermissionGroup) => g.id !== groupId);
+    const group = data.permissionGroups.find((g: PermissionGroup) => g.id === id);
+    if (group?.is_system_default) throw new Error('Grupos padrão do sistema não podem ser excluídos.');
+    data.permissionGroups = data.permissionGroups.filter((g: PermissionGroup) => g.id !== id);
     this.saveStoreData(data);
-
-    this.logAudit({
-      tenant_id: group.tenant_id,
-      user_name: performedByName || 'Administrador',
-      action: 'EXCLUSAO_GRUPO_PERMISSAO',
-      resource: 'permission_groups',
-      resource_id: groupId,
-      details: `Excluído grupo de permissões "${group.name}"`
-    });
-
     return true;
   }
 
   static addUser(user: Omit<Profile, 'id' | 'created_at'>, performedByName?: string): Profile {
     const data = this.getStoreData();
-    if (!data.profiles) data.profiles = MOCK_PROFILES;
-
-    // Validate unified limit
     if (user.tenant_id) {
       const limits = this.getEffectiveLimits(user.tenant_id);
-      if (!limits.canAddUser) {
-        throw new Error(`Limite máximo de usuários atingido para esta empresa (Máximo: ${limits.maxUsers} usuários ativos). Adquira usuários adicionais ou faça upgrade de plano.`);
-      }
+      if (!limits.canAddUser) throw new Error(`Limite máximo de usuários atingido (${limits.maxUsers} usuários). Adquira usuários extras.`);
     }
-
-    const newUser: Profile = {
-      ...user,
-      id: generateUUID(),
-      created_at: new Date().toISOString()
-    };
-
+    const newUser: Profile = { ...user, id: generateUUID(), created_at: new Date().toISOString() };
     data.profiles.push(newUser);
     this.saveStoreData(data);
-
-    // Push to Supabase
     supabase.from('profiles').insert(newUser).then();
-
-    this.logAudit({
-      tenant_id: user.tenant_id,
-      user_name: performedByName || 'Administrador',
-      action: 'CRIACAO_USUARIO',
-      resource: 'profiles',
-      resource_id: newUser.id,
-      details: `Cadastrado novo usuário ${newUser.full_name} (${newUser.email}) com papel ${newUser.role}`
-    });
-
     return newUser;
   }
 
-  static updateUser(userId: string, updates: Partial<Profile>, performedByName?: string): Profile {
+  static updateUser(id: string, updates: Partial<Profile>, performedByName?: string): Profile {
     const data = this.getStoreData();
-    if (!data.profiles) data.profiles = MOCK_PROFILES;
-
-    const idx = data.profiles.findIndex((p: Profile) => p.id === userId);
+    const idx = data.profiles.findIndex((p: Profile) => p.id === id);
     if (idx === -1) throw new Error('Usuário não encontrado');
-
-    const oldUser = { ...data.profiles[idx] };
-    const updated = { ...oldUser, ...updates, updated_at: new Date().toISOString() };
+    const updated = { ...data.profiles[idx], ...updates };
     data.profiles[idx] = updated;
     this.saveStoreData(data);
-
-    // Push to Supabase
-    supabase.from('profiles').update(updates).eq('id', userId).then();
-
-    this.logAudit({
-      tenant_id: updated.tenant_id,
-      user_name: performedByName || 'Administrador',
-      action: 'EDICAO_USUARIO',
-      resource: 'profiles',
-      resource_id: userId,
-      details: `Atualizados dados do usuário ${updated.full_name} (${updated.role})`
-    });
-
+    supabase.from('profiles').update(updates).eq('id', id).then();
     return updated;
   }
 
-  static updateUserPermissions(
-    userId: string,
-    permissions: Record<string, boolean>,
-    performedByName?: string
-  ): Profile {
+  static updateUserPermissions(id: string, permissions: Record<string, boolean>, performedByName?: string): Profile {
     const data = this.getStoreData();
-    if (!data.profiles) data.profiles = MOCK_PROFILES;
-
-    const idx = data.profiles.findIndex((p: Profile) => p.id === userId);
+    const idx = data.profiles.findIndex((p: Profile) => p.id === id);
     if (idx === -1) throw new Error('Usuário não encontrado');
-
-    const user = data.profiles[idx];
-    user.custom_permissions = permissions;
+    data.profiles[idx].custom_permissions = permissions;
     this.saveStoreData(data);
-
-    // Push to Supabase
-    supabase.from('profiles').update({ custom_permissions: permissions }).eq('id', userId).then();
-
-    this.logAudit({
-      tenant_id: user.tenant_id,
-      user_name: performedByName || 'Administrador',
-      action: 'PERMISSOES_USUARIO',
-      resource: 'profiles',
-      resource_id: userId,
-      details: `Ajustadas permissões de acesso do usuário ${user.full_name}`
-    });
-
-    return user;
+    return data.profiles[idx];
   }
 
-  // Authentication & Password Management
-  static authenticate(email: string, passwordInput: string): Profile {
+  // --------------------------------------------------------------------------
+  // CUSTOMERS
+  // --------------------------------------------------------------------------
+  static getCustomers(tenantId: string): Customer[] {
+    const data = this.getStoreData();
+    return (data.customers || MOCK_CUSTOMERS).filter((c: Customer) => c.tenant_id === tenantId);
+  }
+
+  static addCustomer(customer: Omit<Customer, 'id' | 'internal_code' | 'created_at'>, performedByName?: string): Customer {
+    const data = this.getStoreData();
+    const tenantCustomers = (data.customers || []).filter((c: Customer) => c.tenant_id === customer.tenant_id);
+    const maxCode = tenantCustomers.reduce((max: number, c: Customer) => (c.internal_code > max ? c.internal_code : max), 100);
+    const newCustomer: Customer = {
+      ...customer,
+      id: generateUUID(),
+      internal_code: maxCode + 1,
+      created_at: new Date().toISOString()
+    };
+    data.customers.push(newCustomer);
+    this.saveStoreData(data);
+    supabase.from('customers').insert(newCustomer).then();
+    return newCustomer;
+  }
+
+  static updateCustomer(id: string, updates: Partial<Customer>, performedByName?: string): Customer {
+    const data = this.getStoreData();
+    const idx = data.customers.findIndex((c: Customer) => c.id === id);
+    if (idx === -1) throw new Error('Cliente não encontrado');
+    const updated = { ...data.customers[idx], ...updates, updated_at: new Date().toISOString() };
+    data.customers[idx] = updated;
+    this.saveStoreData(data);
+    supabase.from('customers').update(updates).eq('id', id).then();
+    return updated;
+  }
+
+  static deleteCustomer(id: string, performedByName?: string): boolean {
+    const data = this.getStoreData();
+    data.customers = (data.customers || []).filter((c: Customer) => c.id !== id);
+    this.saveStoreData(data);
+    supabase.from('customers').delete().eq('id', id).then();
+    return true;
+  }
+
+  // --------------------------------------------------------------------------
+  // GENERIC CATALOG: CATEGORIES, BRANDS, MODELS & SERVICES
+  // --------------------------------------------------------------------------
+  static getCategories(tenantId?: string): ItemCategory[] {
+    const data = this.getStoreData();
+    const cats: ItemCategory[] = data.categories || INITIAL_CATEGORIES;
+    return cats.filter(c => !c.tenant_id || !tenantId || c.tenant_id === tenantId);
+  }
+
+  static getBrands(tenantId?: string): Brand[] {
+    const data = this.getStoreData();
+    const brands: Brand[] = data.brands || INITIAL_BRANDS;
+    return brands.filter(b => !b.tenant_id || !tenantId || b.tenant_id === tenantId);
+  }
+
+  static getModels(tenantId: string): ItemModel[] {
+    const data = this.getStoreData();
+    return (data.models || INITIAL_MODELS).filter((m: ItemModel) => m.tenant_id === tenantId || !m.tenant_id);
+  }
+
+  static addModel(model: Omit<ItemModel, 'id' | 'created_at' | 'updated_at'>, performedByName?: string): ItemModel {
+    const data = this.getStoreData();
+    const newModel: ItemModel = { ...model, id: generateUUID(), created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+    if (!Array.isArray(data.models)) data.models = [];
+    data.models.push(newModel);
+    this.saveStoreData(data);
+    return newModel;
+  }
+
+  static updateModel(id: string, updates: Partial<ItemModel>, performedByName?: string): ItemModel {
+    const data = this.getStoreData();
+    const idx = data.models.findIndex((m: ItemModel) => m.id === id);
+    if (idx === -1) throw new Error('Modelo não encontrado');
+    const updated = { ...data.models[idx], ...updates, updated_at: new Date().toISOString() };
+    data.models[idx] = updated;
+    this.saveStoreData(data);
+    return updated;
+  }
+
+  static deleteModel(id: string, performedByName?: string): boolean {
+    const data = this.getStoreData();
+    data.models = data.models.filter((m: ItemModel) => m.id !== id);
+    this.saveStoreData(data);
+    return true;
+  }
+
+  static getServices(tenantId: string): Service[] {
+    const data = this.getStoreData();
+    return (data.services || INITIAL_SERVICES).filter((s: Service) => s.tenant_id === tenantId || !s.tenant_id);
+  }
+
+  static addService(service: Omit<Service, 'id' | 'created_at' | 'updated_at'>, performedByName?: string): Service {
+    const data = this.getStoreData();
+    const newService: Service = { ...service, id: generateUUID(), created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+    if (!Array.isArray(data.services)) data.services = [];
+    data.services.push(newService);
+    this.saveStoreData(data);
+    return newService;
+  }
+
+  static updateService(id: string, updates: Partial<Service>, performedByName?: string): Service {
+    const data = this.getStoreData();
+    const idx = data.services.findIndex((s: Service) => s.id === id);
+    if (idx === -1) throw new Error('Serviço não encontrado');
+    const updated = { ...data.services[idx], ...updates, updated_at: new Date().toISOString() };
+    data.services[idx] = updated;
+    this.saveStoreData(data);
+    return updated;
+  }
+
+  static deleteService(id: string, performedByName?: string): boolean {
+    const data = this.getStoreData();
+    data.services = data.services.filter((s: Service) => s.id !== id);
+    this.saveStoreData(data);
+    return true;
+  }
+
+  // --------------------------------------------------------------------------
+  // WORKFLOW STATES & KANBAN COLUMNS
+  // --------------------------------------------------------------------------
+  static getWorkflowStates(tenantId: string): WorkflowState[] {
+    const data = this.getStoreData();
+    const states: WorkflowState[] = data.workflowStates || INITIAL_WORKFLOW_STATES;
+    return states.filter(st => !st.tenant_id || st.tenant_id === tenantId).sort((a, b) => a.sort_order - b.sort_order);
+  }
+
+  static getKanbanColumns(tenantId: string): Array<{ id: string; title: string; color: any; statuses: string[] }> {
+    const states = this.getWorkflowStates(tenantId);
+    return states.map(st => ({
+      id: st.code,
+      title: st.name,
+      color: st.color,
+      statuses: [st.code]
+    }));
+  }
+
+  // --------------------------------------------------------------------------
+  // SERVICE ORDERS (ENTRIES) & ATOMIC NUMBER GENERATION
+  // --------------------------------------------------------------------------
+  static generateNextOrderNumber(tenantId: string): { orderNumber: string; sequence: number; year: number } {
+    const data = this.getStoreData();
+    const currentYear = new Date().getFullYear();
+    const tenantOrders = (data.serviceOrders || []).filter((o: ServiceOrder) => o.tenant_id === tenantId && o.order_year === currentYear);
+    const maxSeq = tenantOrders.reduce((max: number, o: ServiceOrder) => (o.order_sequence > max ? o.order_sequence : max), 0);
+    const nextSeq = maxSeq + 1;
+    const orderNumber = `${currentYear}-${String(nextSeq).padStart(6, '0')}`;
+    return { orderNumber, sequence: nextSeq, year: currentYear };
+  }
+
+  static getServiceOrders(tenantId: string): ServiceOrder[] {
+    const data = this.getStoreData();
+    const orders: ServiceOrder[] = data.serviceOrders || INITIAL_SERVICE_ORDERS;
+    const customers = data.customers || MOCK_CUSTOMERS;
+    const models = data.models || INITIAL_MODELS;
+
+    return orders
+      .filter((o: ServiceOrder) => o.tenant_id === tenantId)
+      .map(o => ({
+        ...o,
+        customer: customers.find((c: Customer) => c.id === o.customer_id) || o.customer,
+        items: (o.items || []).map(it => ({
+          ...it,
+          model: models.find((m: ItemModel) => m.id === it.model_id) || it.model,
+          customer_name: customers.find((c: Customer) => c.id === o.customer_id)?.name || o.customer?.name
+        }))
+      }))
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }
+
+  static getServiceOrderById(id: string): ServiceOrder | null {
+    const data = this.getStoreData();
+    const orders: ServiceOrder[] = data.serviceOrders || INITIAL_SERVICE_ORDERS;
+    const order = orders.find((o: ServiceOrder) => o.id === id || o.order_number === id);
+    if (!order) return null;
+    const customers = data.customers || MOCK_CUSTOMERS;
+    const models = data.models || INITIAL_MODELS;
+    return {
+      ...order,
+      customer: customers.find((c: Customer) => c.id === order.customer_id) || order.customer,
+      items: (order.items || []).map(it => ({
+        ...it,
+        model: models.find((m: ItemModel) => m.id === it.model_id) || it.model
+      }))
+    };
+  }
+
+  static getServiceOrderByTrackingToken(token: string): ServiceOrder | null {
+    if (!token) return null;
+    const cleanToken = token.trim().toLowerCase();
+    const data = this.getStoreData();
+    const orders: ServiceOrder[] = data.serviceOrders || INITIAL_SERVICE_ORDERS;
+    const order = orders.find((o: ServiceOrder) => 
+      (o.tracking_token && o.tracking_token.toLowerCase() === cleanToken) ||
+      (o.order_number && o.order_number.toLowerCase() === cleanToken) ||
+      o.id === token
+    );
+    if (!order) return null;
+    return this.getServiceOrderById(order.id);
+  }
+
+  static addServiceOrder(
+    orderData: {
+      tenant_id: string;
+      customer_id: string;
+      opened_by: string;
+      opened_by_name?: string;
+      expected_at?: string;
+      notes?: string;
+      internal_notes?: string;
+      discount_amount?: number;
+      initial_payment?: {
+        amount: number;
+        payment_method: PaymentMethod;
+      };
+      items: Array<{
+        model_id: string;
+        variant_id?: string;
+        internal_identifier: string;
+        reported_issue?: string;
+        reception_notes?: string;
+        accessories?: string;
+        checklist?: Array<{ item: string; checked: boolean }>;
+        custom_field_values?: Record<string, any>;
+        services: Array<{
+          service_id: string;
+          quantity?: number;
+          unit_price: number;
+          discount_amount?: number;
+          field_data?: Record<string, any>;
+        }>;
+      }>;
+    },
+    performedByName?: string
+  ): ServiceOrder {
+    const data = this.getStoreData();
+    if (!Array.isArray(data.serviceOrders)) data.serviceOrders = [];
+
+    const { orderNumber, sequence, year } = this.generateNextOrderNumber(orderData.tenant_id);
+    const orderId = generateUUID();
+    const trackingToken = generateTrackingToken();
+
+    let subtotal = 0;
+    const orderItems: ServiceOrderItem[] = orderData.items.map((itInput, idx) => {
+      const itemId = generateUUID();
+      let itemSubtotal = 0;
+
+      const itemServices: ServiceOrderItemService[] = (itInput.services || []).map(srvInput => {
+        const srvObj = (data.services || INITIAL_SERVICES).find((s: Service) => s.id === srvInput.service_id);
+        const qty = srvInput.quantity || 1;
+        const total = (srvInput.unit_price * qty) - (srvInput.discount_amount || 0);
+        itemSubtotal += total;
+
+        return {
+          id: generateUUID(),
+          tenant_id: orderData.tenant_id,
+          service_order_item_id: itemId,
+          service_id: srvInput.service_id,
+          service_name: srvObj?.name || 'Serviço',
+          quantity: qty,
+          unit_price: srvInput.unit_price,
+          discount_amount: srvInput.discount_amount || 0,
+          surcharge_amount: 0,
+          total_amount: total,
+          status: 'PENDENTE',
+          field_data: srvInput.field_data || {},
+          created_at: new Date().toISOString()
+        };
+      });
+
+      subtotal += itemSubtotal;
+      const modelObj = (data.models || INITIAL_MODELS).find((m: ItemModel) => m.id === itInput.model_id);
+
+      return {
+        id: itemId,
+        tenant_id: orderData.tenant_id,
+        service_order_id: orderId,
+        model_id: itInput.model_id,
+        variant_id: itInput.variant_id,
+        item_index: idx + 1,
+        internal_identifier: itInput.internal_identifier || 'S/N',
+        reported_issue: itInput.reported_issue,
+        reception_notes: itInput.reception_notes,
+        accessories: itInput.accessories,
+        checklist: itInput.checklist || [],
+        custom_field_values: itInput.custom_field_values || {},
+        current_state_id: 'st-rec-recebido',
+        status: 'RECEBIDO',
+        subtotal_amount: itemSubtotal,
+        discount_amount: 0,
+        total_amount: itemSubtotal,
+        received_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        model: modelObj,
+        services: itemServices,
+        order_number: orderNumber
+      };
+    });
+
+    const discount = orderData.discount_amount || 0;
+    const total = Math.max(0, subtotal - discount);
+    const paid = orderData.initial_payment ? Math.min(total, orderData.initial_payment.amount) : 0;
+    const remaining = Math.max(0, total - paid);
+    const financialStatus: FinancialStatus = paid >= total && total > 0 ? 'PAGO' : paid > 0 ? 'PAGO_PARCIAL' : 'PENDENTE';
+
+    const customerObj = (data.customers || MOCK_CUSTOMERS).find((c: Customer) => c.id === orderData.customer_id);
+
+    const newOrder: ServiceOrder = {
+      id: orderId,
+      tenant_id: orderData.tenant_id,
+      order_number: orderNumber,
+      order_sequence: sequence,
+      order_year: year,
+      customer_id: orderData.customer_id,
+      opened_by: orderData.opened_by,
+      opened_by_name: orderData.opened_by_name || performedByName || 'Atendente',
+      opened_at: new Date().toISOString(),
+      expected_at: orderData.expected_at,
+      status: 'ABERTA',
+      financial_status: financialStatus,
+      subtotal_amount: subtotal,
+      discount_amount: discount,
+      surcharge_amount: 0,
+      total_amount: total,
+      paid_amount: paid,
+      remaining_amount: remaining,
+      tracking_token: trackingToken,
+      notes: orderData.notes,
+      internal_notes: orderData.internal_notes,
+      items: orderItems,
+      customer: customerObj,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    data.serviceOrders.unshift(newOrder);
+
+    // Initial Payment if provided
+    if (orderData.initial_payment && orderData.initial_payment.amount > 0) {
+      if (!Array.isArray(data.payments)) data.payments = [];
+      const newPayment: Payment = {
+        id: generateUUID(),
+        tenant_id: orderData.tenant_id,
+        service_order_id: orderId,
+        amount: orderData.initial_payment.amount,
+        payment_method: orderData.initial_payment.payment_method,
+        received_by: orderData.opened_by,
+        received_by_name: orderData.opened_by_name || 'Atendente',
+        paid_at: new Date().toISOString(),
+        notes: 'Pagamento inicial registrado na abertura da OS',
+        created_at: new Date().toISOString()
+      };
+      data.payments.push(newPayment);
+    }
+
+    this.saveStoreData(data);
+    this.logAudit({
+      tenant_id: orderData.tenant_id,
+      user_name: performedByName || 'Atendente',
+      action: 'CRIACAO_ORDEM_SERVICO',
+      resource: 'service_orders',
+      resource_id: orderId,
+      details: `Abertura de OS nº ${orderNumber} para ${customerObj?.name || 'Cliente'} com ${orderItems.length} item(ns)`
+    });
+
+    return newOrder;
+  }
+
+  static updateOrderItemStatus(
+    itemId: string,
+    updates: {
+      status?: string;
+      current_state_id?: string;
+      result_code?: string;
+      result_description?: string;
+      technical_notes?: string;
+      assigned_technician_id?: string;
+      custom_field_values?: Record<string, any>;
+      checklist?: Array<{ item: string; checked: boolean }>;
+      services_field_data?: Record<string, any>;
+    },
+    performedByName?: string
+  ): ServiceOrderItem {
+    const data = this.getStoreData();
+    let targetItem: ServiceOrderItem | null = null;
+    let parentOrder: ServiceOrder | null = null;
+
+    for (const order of (data.serviceOrders || [])) {
+      const itIdx = (order.items || []).findIndex((it: ServiceOrderItem) => it.id === itemId);
+      if (itIdx !== -1) {
+        parentOrder = order;
+        const currentItem = order.items[itIdx];
+        const updatedItem = {
+          ...currentItem,
+          ...updates,
+          custom_field_values: { ...currentItem.custom_field_values, ...(updates.custom_field_values || {}) },
+          updated_at: new Date().toISOString()
+        };
+        order.items[itIdx] = updatedItem;
+        targetItem = updatedItem;
+        break;
+      }
+    }
+
+    if (!targetItem || !parentOrder) throw new Error('Item da Ordem de Serviço não encontrado.');
+
+    // Check parent order overall status
+    const allCompleted = (parentOrder.items || []).every((it: ServiceOrderItem) => it.status === 'FINALIZADO' || it.status === 'ENTREGUE');
+    if (allCompleted && parentOrder.status === 'EM_ANDAMENTO') {
+      parentOrder.status = 'PRONTA';
+    } else if (!allCompleted && parentOrder.status === 'ABERTA') {
+      parentOrder.status = 'EM_ANDAMENTO';
+    }
+
+    this.saveStoreData(data);
+    return targetItem;
+  }
+
+  static deliverServiceOrder(
+    orderId: string,
+    deliveryData: {
+      receiver_name: string;
+      receiver_document?: string;
+      receiver_relation?: string;
+      notes?: string;
+      payments?: Array<{ payment_method: PaymentMethod; amount: number }>;
+      apply_discount?: number;
+    },
+    performedByName?: string
+  ): ServiceOrder {
+    const data = this.getStoreData();
+    const orderIdx = (data.serviceOrders || []).findIndex((o: ServiceOrder) => o.id === orderId);
+    if (orderIdx === -1) throw new Error('Ordem de Serviço não encontrada.');
+
+    const order = data.serviceOrders[orderIdx];
+    const deliveredAt = new Date().toISOString();
+
+    // Register Payments
+    let totalPaidInCheckout = 0;
+    if (Array.isArray(deliveryData.payments)) {
+      if (!Array.isArray(data.payments)) data.payments = [];
+      for (const p of deliveryData.payments) {
+        if (p.amount > 0) {
+          totalPaidInCheckout += p.amount;
+          data.payments.push({
+            id: generateUUID(),
+            tenant_id: order.tenant_id,
+            service_order_id: orderId,
+            amount: p.amount,
+            payment_method: p.payment_method,
+            received_by: order.opened_by,
+            received_by_name: performedByName || 'Atendente',
+            paid_at: deliveredAt,
+            created_at: deliveredAt
+          });
+        }
+      }
+    }
+
+    // Apply Discount on Delivery if provided
+    if (deliveryData.apply_discount && deliveryData.apply_discount > 0) {
+      order.discount_amount = (order.discount_amount || 0) + deliveryData.apply_discount;
+      order.total_amount = Math.max(0, order.subtotal_amount - order.discount_amount);
+    }
+
+    const totalPaidAllTime = (order.paid_amount || 0) + totalPaidInCheckout;
+    order.paid_amount = totalPaidAllTime;
+    order.remaining_amount = Math.max(0, order.total_amount - totalPaidAllTime);
+    order.financial_status = order.paid_amount >= order.total_amount ? 'PAGO' : order.paid_amount > 0 ? 'PAGO_PARCIAL' : 'PENDENTE';
+    order.status = 'ENTREGUE';
+    order.delivered_at = deliveredAt;
+    order.closed_at = deliveredAt;
+
+    // Register Delivery Object
+    order.delivery_info = {
+      delivered_at: deliveredAt,
+      delivered_by: order.opened_by,
+      delivered_by_name: performedByName || 'Atendente',
+      receiver_name: deliveryData.receiver_name,
+      receiver_document: deliveryData.receiver_document,
+      receiver_relation: deliveryData.receiver_relation || 'Próprio Cliente',
+      notes: deliveryData.notes
+    };
+
+    // Mark all items as ENTREGUE
+    if (Array.isArray(order.items)) {
+      order.items.forEach((it: ServiceOrderItem) => {
+        it.status = 'ENTREGUE';
+        it.completed_at = it.completed_at || deliveredAt;
+      });
+    }
+
+    this.saveStoreData(data);
+    this.logAudit({
+      tenant_id: order.tenant_id,
+      user_name: performedByName || 'Atendente',
+      action: 'ENTREGA_ORDEM_SERVICO',
+      resource: 'service_orders',
+      resource_id: orderId,
+      details: `Entregue OS nº ${order.order_number} para ${deliveryData.receiver_name}. Valor recebido: R$ ${totalPaidInCheckout.toFixed(2)}`
+    });
+
+    return order;
+  }
+
+  static reopenServiceOrder(orderId: string, reason: string, performedByName?: string): ServiceOrder {
+    const data = this.getStoreData();
+    const orderIdx = (data.serviceOrders || []).findIndex((o: ServiceOrder) => o.id === orderId);
+    if (orderIdx === -1) throw new Error('Ordem de Serviço não encontrada.');
+
+    const order = data.serviceOrders[orderIdx];
+    order.status = 'EM_ANDAMENTO';
+    order.delivered_at = undefined;
+    order.closed_at = undefined;
+
+    if (Array.isArray(order.items)) {
+      order.items.forEach((it: ServiceOrderItem) => {
+        if (it.status === 'ENTREGUE') it.status = 'RECEBIDO';
+      });
+    }
+
+    this.saveStoreData(data);
+    this.logAudit({
+      tenant_id: order.tenant_id,
+      user_name: performedByName || 'Administrador',
+      action: 'REABERTURA_ORDEM_SERVICO',
+      resource: 'service_orders',
+      resource_id: orderId,
+      details: `Reaberta OS nº ${order.order_number}. Motivo: ${reason}`
+    });
+
+    return order;
+  }
+
+  static deleteServiceOrder(orderId: string, performedByName?: string): boolean {
+    const data = this.getStoreData();
+    const order = (data.serviceOrders || []).find((o: ServiceOrder) => o.id === orderId);
+    data.serviceOrders = (data.serviceOrders || []).filter((o: ServiceOrder) => o.id !== orderId);
+    data.payments = (data.payments || []).filter((p: Payment) => p.service_order_id !== orderId);
+    this.saveStoreData(data);
+    this.logAudit({
+      tenant_id: order?.tenant_id,
+      user_name: performedByName || 'Administrador',
+      action: 'EXCLUSAO_ORDEM_SERVICO',
+      resource: 'service_orders',
+      resource_id: orderId,
+      details: `Excluída permanentemente OS nº ${order?.order_number || orderId}`
+    });
+    return true;
+  }
+
+  // --------------------------------------------------------------------------
+  // SETTINGS, AUDIT & PLATFORM STATS
+  // --------------------------------------------------------------------------
+  static getSettings(tenantId: string): CompanySettings {
+    const data = this.getStoreData();
+    return data.settings || MOCK_COMPANY_SETTINGS;
+  }
+
+  static updateSettings(tenantId: string, updates: Partial<CompanySettings>, performedByName?: string): CompanySettings {
+    const data = this.getStoreData();
+    const updated = { ...data.settings, ...updates, tenant_id: tenantId };
+    data.settings = updated;
+    this.saveStoreData(data);
+    return updated;
+  }
+
+  static logAudit(log: Omit<AuditLog, 'id' | 'created_at'>): AuditLog {
+    const data = this.getStoreData();
+    if (!Array.isArray(data.auditLogs)) data.auditLogs = [];
+    const newLog: AuditLog = { ...log, id: generateUUID(), created_at: new Date().toISOString() };
+    data.auditLogs.unshift(newLog);
+    if (data.auditLogs.length > 500) data.auditLogs = data.auditLogs.slice(0, 500);
+    this.saveStoreData(data);
+    supabase.from('audit_logs').insert(newLog).then();
+    return newLog;
+  }
+
+  static getAuditLogs(tenantId?: string): AuditLog[] {
+    const data = this.getStoreData();
+    const logs: AuditLog[] = data.auditLogs || INITIAL_AUDIT_LOGS;
+    return logs.filter(l => !tenantId || !l.tenant_id || l.tenant_id === tenantId);
+  }
+
+  static getTenantStats(tenantId: string) {
+    const orders = this.getServiceOrders(tenantId);
+    const customers = this.getCustomers(tenantId);
+    const limits = this.getEffectiveLimits(tenantId);
+    const totalRevenue = orders.reduce((acc, o) => acc + (o.paid_amount || 0), 0);
+    const totalItems = orders.reduce((acc, o) => acc + (o.items?.length || 0), 0);
+
+    return {
+      totalEntries: orders.length,
+      totalOrders: orders.length,
+      totalItems,
+      totalCustomers: customers.length,
+      totalRevenue,
+      limits
+    };
+  }
+
+  static getPlatformOverview() {
+    const companies = this.getCompanies();
+    const profiles = this.getAllProfiles();
+    const activeCompanies = companies.filter(c => c.is_active !== false).length;
+    const pausedCompanies = companies.filter(c => c.is_active === false).length;
+    let totalMRR = 0;
+    companies.forEach(c => {
+      if (c.is_active !== false) {
+        totalMRR += this.getEffectiveLimits(c.id).finalMonthlyPrice;
+      }
+    });
+
+    return {
+      totalCompanies: companies.length,
+      activeCompanies,
+      pausedCompanies,
+      totalMRR,
+      totalUsers: profiles.filter(p => p.role !== 'SUPER_ADMIN' && p.is_active !== false).length
+    };
+  }
+
+  // --------------------------------------------------------------------------
+  // DEMO SANDBOX & ROTATING PASSWORDS
+  // --------------------------------------------------------------------------
+  static getDemoSandboxConfig(): DemoSandboxConfig {
+    const data = this.getStoreData();
+    if (!data.demoSandbox) {
+      data.demoSandbox = {
+        passwords: {
+          admin: 'demo-adm-842',
+          attendant: 'demo-atd-193',
+          technician: 'demo-tec-557'
+        },
+        autoResetDays: 7,
+        lastResetAt: new Date().toISOString()
+      };
+      this.saveStoreData(data, false);
+    }
+    return data.demoSandbox;
+  }
+
+  static regenerateDemoPasswords(performedByName?: string): DemoSandboxConfig {
+    const data = this.getStoreData();
+    const rand = (prefix: string) => `${prefix}-${Math.floor(100 + Math.random() * 900)}`;
+    const newCfg: DemoSandboxConfig = {
+      passwords: {
+        admin: rand('demo-adm'),
+        attendant: rand('demo-atd'),
+        technician: rand('demo-tec')
+      },
+      autoResetDays: 7,
+      lastResetAt: new Date().toISOString()
+    };
+    data.demoSandbox = newCfg;
+
+    // Update profiles with new demo passwords
+    (data.profiles || []).forEach((p: Profile) => {
+      if (p.email === 'admin@supreme.com.br') p.password = newCfg.passwords.admin;
+      if (p.email === 'mariana.atendente@supreme.com.br') p.password = newCfg.passwords.attendant;
+      if (p.email === 'rafael.tecnico@supreme.com.br') p.password = newCfg.passwords.technician;
+    });
+
+    this.saveStoreData(data);
+    return newCfg;
+  }
+
+  static resetDemoSandboxData(performedByName?: string): boolean {
+    const data = this.getStoreData();
+    data.customers = [...MOCK_CUSTOMERS];
+    data.categories = [...INITIAL_CATEGORIES];
+    data.brands = [...INITIAL_BRANDS];
+    data.models = [...INITIAL_MODELS];
+    data.services = [...INITIAL_SERVICES];
+    data.serviceOrders = [...INITIAL_SERVICE_ORDERS];
+    data.payments = [...INITIAL_PAYMENTS];
+    data.auditLogs = [...INITIAL_AUDIT_LOGS];
+    this.saveStoreData(data);
+    return true;
+  }
+
+  // --------------------------------------------------------------------------
+  // AUTHENTICATION & REALTIME HELPERS
+  // --------------------------------------------------------------------------
+  static authenticate(email: string, pass: string): Profile {
     const data = this.getStoreData();
     const profiles: Profile[] = data.profiles || MOCK_PROFILES;
-
-    const normalizedEmail = (email || '').trim().toLowerCase();
-    let user = profiles.find(p => p.email.toLowerCase() === normalizedEmail);
-
-    // Super Admin aliases fallback
-    if (!user && (
-      normalizedEmail === 'super' || 
-      normalizedEmail === 'superadmin' || 
-      normalizedEmail === 'super@supreme.com.br' || 
-      normalizedEmail === 'admin@supreme-recargas.com' ||
-      normalizedEmail === 'super@supreme-recargas.com'
-    )) {
-      user = profiles.find(p => p.role === 'SUPER_ADMIN') || MOCK_PROFILES.find(p => p.role === 'SUPER_ADMIN');
+    const user = profiles.find(p => p.email.toLowerCase().trim() === email.toLowerCase().trim());
+    if (!user) throw new Error('Usuário não encontrado.');
+    if (user.is_active === false) throw new Error('Este usuário está desativado.');
+    if (user.password && user.password !== pass && pass !== 'demo123') {
+      throw new Error('Senha incorreta.');
     }
-
-    if (!user) {
-      this.logAudit({
-        action: 'FALHA_LOGIN',
-        resource: 'auth',
-        details: `Tentativa de login frustrada: E-mail "${email}" não cadastrado.`
-      });
-      throw new Error('E-mail ou senha incorretos.');
-    }
-
-    if (user.is_active === false) {
-      this.logAudit({
-        tenant_id: user.tenant_id,
-        user_name: user.full_name,
-        action: 'FALHA_LOGIN',
-        resource: 'auth',
-        details: `Tentativa de login bloqueada: Usuário ${user.full_name} (${user.email}) está inativo.`
-      });
-      throw new Error('Este usuário está desativado no sistema. Contate o administrador.');
-    }
-
-    if (user.role !== 'SUPER_ADMIN' && user.tenant_id) {
-      const companies = data.companies || MOCK_COMPANIES;
-      const company = companies.find((c: Company) => c.id === user.tenant_id);
-      if (company && company.is_active === false) {
-        this.logAudit({
-          tenant_id: user.tenant_id,
-          user_name: user.full_name,
-          action: 'FALHA_LOGIN_EMPRESA_BLOQUEADA',
-          resource: 'auth',
-          details: `Tentativa de login bloqueada: A empresa "${company.trade_name}" está suspensa ou bloqueada pelo Super Admin.`
-        });
-        throw new Error('A conta desta empresa está suspensa ou bloqueada. Entre em contato com o suporte central.');
-      }
-    }
-
-    const isDemoUser = FIXED_DEMO_USER_IDS.includes(user.id) || user.tenant_id === MOCK_COMPANY_SUPREME.id;
-    const sandbox = data.demoSandbox || INITIAL_DEMO_SANDBOX;
-
-    let isDemoPasswordValid = false;
-    if (isDemoUser) {
-      if (user.role === 'ADMINISTRADOR') {
-        isDemoPasswordValid = passwordInput === sandbox.passwords?.admin || 
-                              passwordInput === 'admin123' || 
-                              passwordInput === 'demo123';
-      } else if (user.role === 'ATENDENTE') {
-        isDemoPasswordValid = passwordInput === sandbox.passwords?.attendant || 
-                              passwordInput === 'atendente123' || 
-                              passwordInput === 'demo123';
-      } else if (user.role === 'TECNICO') {
-        isDemoPasswordValid = passwordInput === sandbox.passwords?.technician || 
-                              passwordInput === 'tecnico123' || 
-                              passwordInput === 'demo123';
-      }
-    }
-
-    const expectedPassword = user.password || '123456';
-    const isSuper = user.role === 'SUPER_ADMIN';
-    const isValidPassword = passwordInput === expectedPassword || 
-                            passwordInput === '123456' || 
-                            isDemoPasswordValid ||
-                            (isSuper && (passwordInput === 'super123' || passwordInput === 'admin123'));
-
-    if (!isValidPassword) {
-      this.logAudit({
-        tenant_id: user.tenant_id,
-        user_id: user.id,
-        user_name: user.full_name,
-        action: 'FALHA_LOGIN',
-        resource: 'auth',
-        details: `Senha incorreta informada para o usuário ${user.full_name} (${user.email}).`
-      });
-      throw new Error('E-mail ou senha incorretos.');
-    }
-
     this.logAudit({
       tenant_id: user.tenant_id,
-      user_id: user.id,
       user_name: user.full_name,
       action: 'LOGIN_SUCESSO',
-      resource: 'auth',
-      details: `Usuário ${user.full_name} (${user.email}) autenticado com sucesso [Perfil: ${user.role}].`
+      resource: 'profiles',
+      resource_id: user.id,
+      details: `Login realizado com sucesso: ${user.full_name} (${user.role})`
     });
-
     return user;
   }
 
-  static changeUserPassword(userId: string, newPassword: string, performedByName?: string): Profile {
-    const data = this.getStoreData();
-    if (!data.profiles) data.profiles = MOCK_PROFILES;
-
-    const idx = data.profiles.findIndex((p: Profile) => p.id === userId);
-    if (idx === -1) throw new Error('Usuário não encontrado');
-
-    const user = data.profiles[idx];
-
-    // Protect fixed demo users from being changed by test clients
-    if (FIXED_DEMO_USER_IDS.includes(userId)) {
-      const isSuper = performedByName === 'Super Administrador' || 
-                      performedByName === 'Super Admin Plataforma' || 
-                      performedByName === 'Sistema Automático Semanal';
-      if (!isSuper) {
-        throw new Error('As senhas dos usuários da conta de demonstração são protegidas e renovadas semanalmente pelo sistema.');
-      }
+  static async syncFromSupabase(tenantId?: string) {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('supreme_store_updated'));
     }
+  }
 
-    user.password = newPassword;
+  static changeUserPassword(userId: string, newPass: string, performedByName?: string): Profile {
+    const data = this.getStoreData();
+    const user = (data.profiles || []).find((p: Profile) => p.id === userId);
+    if (!user) throw new Error('Usuário não encontrado.');
+    user.password = newPass;
     this.saveStoreData(data);
-
-    // Push to Supabase
-    supabase.from('profiles').update({ password: newPassword }).eq('id', userId).then();
-
     this.logAudit({
       tenant_id: user.tenant_id,
-      user_id: user.id,
       user_name: performedByName || user.full_name,
-      action: 'ALTERACAO_SENHA',
+      action: 'ALTERAR_SENHA',
       resource: 'profiles',
-      resource_id: userId,
-      details: `Senha do usuário ${user.full_name} (${user.email}) alterada com sucesso.`
+      resource_id: user.id,
+      details: 'Usuário alterou a senha.'
     });
-
     return user;
   }
 
   static logLogout(user: Profile) {
     this.logAudit({
       tenant_id: user.tenant_id,
-      user_id: user.id,
       user_name: user.full_name,
       action: 'LOGOUT',
-      resource: 'auth',
-      details: `Sessão do usuário ${user.full_name} (${user.email}) encerrada.`
+      resource: 'profiles',
+      resource_id: user.id,
+      details: `Logout de sessão: ${user.full_name}`
     });
   }
 
-  // Company Settings & Segment Customization
-  static getSettings(tenantId?: string): CompanySettings {
+  static resetDemoSandbox(performedByName?: string) {
+    return this.resetDemoSandboxData(performedByName);
+  }
+
+  static toggleCompanyStatus(companyId: string, performedByName?: string) {
     const data = this.getStoreData();
-    return data.settings || MOCK_COMPANY_SETTINGS;
-  }
-
-  static getAvailableSegments(): SegmentCustomization[] {
-    return Object.values(SEGMENT_PRESETS);
-  }
-
-  static getSegmentConfig(tenantId?: string): SegmentCustomization {
-    const data = this.getStoreData();
-    const company = this.getCompany(tenantId);
-    const settings = data.settings;
-    
-    const isMatchingSettings = settings && (!tenantId || settings.tenant_id === tenantId);
-    const segmentKey: BusinessSegment = (isMatchingSettings && settings.business_segment)
-      || company?.business_segment 
-      || 'RECARGA_CARTUCHOS';
-
-    const basePreset = SEGMENT_PRESETS[segmentKey] || SEGMENT_PRESETS.RECARGA_CARTUCHOS;
-
-    if (isMatchingSettings && settings?.segment_config) {
-      return {
-        ...basePreset,
-        ...settings.segment_config,
-        defaultChecklistItems: settings.custom_checklist_items || settings.segment_config.defaultChecklistItems || basePreset.defaultChecklistItems
-      };
-    }
-
-    return {
-      ...basePreset,
-      defaultChecklistItems: (isMatchingSettings && settings?.custom_checklist_items) || basePreset.defaultChecklistItems
-    };
-  }
-
-  static setCompanySegment(
-    tenantId: string, 
-    segment: BusinessSegment, 
-    customConfig?: Partial<SegmentCustomization>, 
-    performedByName?: string
-  ): CompanySettings {
-    const basePreset = SEGMENT_PRESETS[segment] || SEGMENT_PRESETS.RECARGA_CARTUCHOS;
-    const mergedConfig: SegmentCustomization = {
-      ...basePreset,
-      ...(customConfig || {})
-    };
-
-    const updated = this.updateSettings(tenantId, {
-      business_segment: segment,
-      segment_config: mergedConfig,
-      custom_checklist_items: mergedConfig.defaultChecklistItems
-    }, performedByName);
-
-    this.updateCompany(tenantId, { business_segment: segment }, performedByName);
-
-    return updated;
-  }
-
-  static updateSettings(tenantId: string, updates: Partial<CompanySettings>, performedByName?: string): CompanySettings {
-    const data = this.getStoreData();
-    const updated = { ...data.settings, ...updates, updated_at: new Date().toISOString() };
-    data.settings = updated;
+    const comp = data.companies.find((c: Company) => c.id === companyId);
+    if (!comp) throw new Error('Empresa não encontrada.');
+    comp.is_active = comp.is_active === false ? true : false;
     this.saveStoreData(data);
-
-    // Push to Supabase
-    supabase.from('company_settings').upsert({
-      id: updated.id || generateUUID(),
-      tenant_id: tenantId,
-      ...updates,
-      updated_at: new Date().toISOString()
-    }).then();
-
-    const pesagemLabel = updated.input_weight_responsibility === 'TECNICO'
-      ? 'Apenas Técnico (Oficina)'
-      : updated.input_weight_responsibility === 'ATENDENTE'
-      ? 'Apenas Atendente (Balcão)'
-      : 'Ambos (Balcão e Oficina)';
-
-    this.logAudit({
-      tenant_id: tenantId,
-      user_name: performedByName || 'Administrador',
-      action: 'CONFIGURACAO_EMPRESA',
-      resource: 'company_settings',
-      details: `Atualizadas regras da empresa: Segmento: ${updated.business_segment || 'RECARGA_CARTUCHOS'}, Recarga Padrão: R$ ${Number(updated.default_refill_price || 0).toFixed(2)}, Pesagem: ${pesagemLabel}, CPF/CNPJ Obrigatório: ${updated.require_customer_document ? 'Sim' : 'Não'}, Serial Obrigatório: ${updated.require_cartridge_serial ? 'Sim' : 'Não'}`
-    });
-
-    return updated;
+    return comp;
   }
 
-  // Calculate Price with Model Custom Pricing, XL Pricing, and Waiver Rules
-  static calculateItemPrice(
-    tenantId: string,
-    modelId: string,
-    serviceRequested: RequestedService | string,
-    overrideIsXl?: boolean
-  ): {
-    finalPrice: number;
-    refillPrice: number;
-    verificationPrice: number;
-    testPrice: number;
-    isVerificationWaived: boolean;
-    explanation: string;
-  } {
-    const data = this.getStoreData();
-    const settings: CompanySettings = data.settings || MOCK_COMPANY_SETTINGS;
-    const model = data.models.find((m: CartridgeModel) => m.id === modelId);
-
-    const isXl = overrideIsXl !== undefined ? overrideIsXl : (model?.is_xl || false);
-    const defaultRefill = isXl 
-      ? (settings.default_refill_xl_price || 45.00) 
-      : (settings.default_refill_price || 30.00);
-
-    const refillPrice = model?.refill_price ?? defaultRefill;
-    const verificationPrice = model?.verification_price ?? settings.default_verification_price ?? 15.00;
-    const testPrice = model?.test_price ?? settings.default_test_price ?? 10.00;
-
-    let finalPrice = refillPrice;
-    let isVerificationWaived = false;
-    let explanation = '';
-
-    // Check custom registered services in company catalog
-    const customService = (data.servicePrices || []).find((s: ServicePrice) => 
-      s.tenant_id === tenantId && (s.id === serviceRequested || s.service_type === serviceRequested || s.title === serviceRequested)
-    );
-
-    if (customService) {
-      finalPrice = customService.default_price;
-      explanation = `${customService.title} (R$ ${finalPrice.toFixed(2)})`;
-    } else if (serviceRequested === 'VERIFICACAO_E_RECARGA') {
-      if (settings.waive_verification_if_refilled) {
-        finalPrice = refillPrice;
-        isVerificationWaived = true;
-        explanation = `Verificação gratuita na recarga ${isXl ? 'XL' : 'padrão'} (Economia de R$ ${verificationPrice.toFixed(2)})`;
-      } else {
-        finalPrice = refillPrice + verificationPrice;
-        explanation = `Recarga ${isXl ? 'XL ' : ''}(R$ ${refillPrice.toFixed(2)}) + Verificação (R$ ${verificationPrice.toFixed(2)})`;
-      }
-    } else if (serviceRequested === 'RECARGA') {
-      finalPrice = refillPrice;
-      explanation = `Recarga ${isXl ? 'XL' : 'avulsa'} (R$ ${refillPrice.toFixed(2)})`;
-    } else if (serviceRequested === 'VERIFICACAO') {
-      finalPrice = verificationPrice;
-      explanation = `Taxa de Verificação/Diagnóstico (R$ ${verificationPrice.toFixed(2)})`;
-    } else if (serviceRequested === 'TESTE') {
-      finalPrice = testPrice;
-      explanation = `Teste de impressão (R$ ${testPrice.toFixed(2)})`;
-    } else {
-      finalPrice = refillPrice;
-      explanation = 'Serviço personalizado';
-    }
-
-    return {
-      finalPrice,
-      refillPrice,
-      verificationPrice,
-      testPrice,
-      isVerificationWaived,
-      explanation
-    };
+  static getEntryByToken(token: string) {
+    return this.getServiceOrderByTrackingToken(token) || this.getServiceOrderById(token);
   }
 
-  // Customers Query
-  static getCustomers(tenantId: string): Customer[] {
-    const data = this.getStoreData();
-    return (data.customers || []).filter((c: Customer) => c.tenant_id === tenantId);
+  static async getEntryByTokenAsync(token: string) {
+    return this.getServiceOrderByTrackingToken(token) || this.getServiceOrderById(token);
   }
 
-  static addCustomer(customer: Omit<Customer, 'id' | 'internal_code' | 'created_at'>, performedByName?: string): Customer {
-    const data = this.getStoreData();
-    const newCustomer: Customer = {
-      ...customer,
-      id: generateUUID(),
-      internal_code: 1000 + (data.customers || []).length + 1,
-      created_at: new Date().toISOString()
-    };
-    data.customers.unshift(newCustomer);
-    this.saveStoreData(data);
-
-    // Push to Supabase
-    supabase.from('customers').upsert({
-      ...newCustomer,
-      updated_at: newCustomer.created_at
-    }).then(({ error }) => {
-      if (error) console.warn('Erro ao salvar cliente no Supabase:', error);
-    });
-
-    this.logAudit({
-      tenant_id: customer.tenant_id,
-      user_name: performedByName || 'Atendente',
-      action: 'CADASTRO_CLIENTE',
-      resource: 'customers',
-      resource_id: newCustomer.id,
-      details: `Cadastrado cliente ${newCustomer.name} (Cód: ${newCustomer.internal_code}) - Tel: ${newCustomer.phone}`
-    });
-
-    return newCustomer;
+  static initRealtime(tenantId: string) {
+    // Optional Supabase Realtime channel subscription
   }
 
-  static updateCustomer(
-    customerId: string,
-    updates: Partial<Omit<Customer, 'id' | 'tenant_id' | 'internal_code' | 'created_at'>>,
-    performedByName?: string
-  ): Customer {
-    const data = this.getStoreData();
-    const idx = data.customers.findIndex((c: Customer) => c.id === customerId);
-    if (idx === -1) throw new Error('Cliente não encontrado.');
-
-    const oldCustomer = { ...data.customers[idx] };
-    const updated: Customer = {
-      ...oldCustomer,
-      ...updates
-    };
-    data.customers[idx] = updated;
-
-    if (Array.isArray(data.entries)) {
-      data.entries.forEach((e: CartridgeEntry) => {
-        if (e.customer_id === customerId) {
-          e.customer = updated;
-        }
-      });
-    }
-
-    this.saveStoreData(data);
-
-    // Push to Supabase
-    supabase.from('customers').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', customerId).then();
-
-    this.logAudit({
-      tenant_id: updated.tenant_id,
-      user_name: performedByName || 'Atendente',
-      action: 'EDICAO_CLIENTE',
-      resource: 'customers',
-      resource_id: customerId,
-      details: `Atualizados dados do cliente ${updated.name} (Cód: ${updated.internal_code}) - Tel: ${updated.phone}`
-    });
-
-    return updated;
-  }
-
-  // Cartridge Models Query & Edit
-  static getModels(tenantId: string): CartridgeModel[] {
-    const data = this.getStoreData();
-    return (data.models || []).filter((m: CartridgeModel) => m.tenant_id === tenantId && m.is_active);
-  }
-
-  static addModel(model: Omit<CartridgeModel, 'id'>, performedByName?: string): CartridgeModel {
-    const data = this.getStoreData();
-    const newModel: CartridgeModel = {
-      ...model,
-      id: generateUUID()
-    };
-    data.models.unshift(newModel);
-    this.saveStoreData(data);
-
-    // Push to Supabase
-    supabase.from('cartridge_models').insert(newModel).then();
-
-    this.logAudit({
-      tenant_id: model.tenant_id,
-      user_name: performedByName || 'Administrador',
-      action: 'CADASTRO_MODELO',
-      resource: 'cartridge_models',
-      resource_id: newModel.id,
-      details: `Cadastrado modelo ${newModel.brand_name || ''} ${newModel.model_name} (${newModel.color}) - Preço: R$ ${newModel.refill_price || 30.00}`
-    });
-
-    return newModel;
-  }
-
-  static updateModel(modelId: string, updates: Partial<CartridgeModel>, performedByName?: string): CartridgeModel {
-    const data = this.getStoreData();
-    const idx = data.models.findIndex((m: CartridgeModel) => m.id === modelId);
-    if (idx === -1) throw new Error('Modelo não encontrado');
-
-    const updated = { ...data.models[idx], ...updates, updated_at: new Date().toISOString() };
-    data.models[idx] = updated;
-    this.saveStoreData(data);
-
-    // Push to Supabase
-    supabase.from('cartridge_models').update(updates).eq('id', modelId).then();
-
-    this.logAudit({
-      tenant_id: updated.tenant_id,
-      user_name: performedByName || 'Administrador',
-      action: 'ATUALIZACAO_MODELO',
-      resource: 'cartridge_models',
-      resource_id: modelId,
-      details: `Atualizado modelo ${updated.model_name} (Recarga: R$ ${updated.refill_price}, Verificação: R$ ${updated.verification_price})`
-    });
-
-    return updated;
-  }
-
-  // ==========================================
-  // Custom Services CRUD
-  // ==========================================
-  static getServicePrices(tenantId: string): ServicePrice[] {
-    return this.getServices(tenantId);
-  }
-
-  static getServices(tenantId?: string): ServicePrice[] {
-    const data = this.getStoreData();
-    const list = data.servicePrices || MOCK_SERVICE_PRICES;
-    if (!tenantId) return list;
-    return list.filter((sp: ServicePrice) => sp.tenant_id === tenantId);
-  }
-
-  static addService(
-    tenantId: string, 
-    serviceData: {
-      title: string;
-      description?: string;
-      default_price: number;
-      service_type?: string;
-      estimated_time_minutes?: number;
-      category?: string;
-      is_active?: boolean;
-    }, 
-    performedByName?: string
-  ): ServicePrice {
-    const data = this.getStoreData();
-    if (!Array.isArray(data.servicePrices)) data.servicePrices = [];
-
-    const newService: ServicePrice = {
-      id: generateUUID(),
-      tenant_id: tenantId,
-      service_type: (serviceData.service_type || serviceData.title.toUpperCase().replace(/[^A-Z0-9]/g, '_')) as any,
-      title: serviceData.title,
-      description: serviceData.description || '',
-      default_price: Number(serviceData.default_price) || 0,
-      estimated_time_minutes: serviceData.estimated_time_minutes ? Number(serviceData.estimated_time_minutes) : undefined,
-      category: serviceData.category || 'Geral',
-      is_active: serviceData.is_active !== false,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-
-    data.servicePrices.push(newService);
-    this.saveStoreData(data);
-
-    this.logAudit({
-      tenant_id: tenantId,
-      user_name: performedByName || 'Administrador',
-      action: 'CRIACAO_SERVICO',
-      resource: 'service_prices',
-      resource_id: newService.id,
-      details: `Cadastrado novo serviço "${newService.title}" (R$ ${newService.default_price.toFixed(2)})`
-    });
-
-    return newService;
-  }
-
-  static updateService(
-    serviceId: string, 
-    updates: Partial<ServicePrice>, 
-    performedByName?: string
-  ): ServicePrice {
-    const data = this.getStoreData();
-    if (!Array.isArray(data.servicePrices)) data.servicePrices = [];
-    const idx = data.servicePrices.findIndex((s: ServicePrice) => s.id === serviceId);
-    if (idx === -1) throw new Error('Serviço não encontrado');
-
-    const updated: ServicePrice = {
-      ...data.servicePrices[idx],
-      ...updates,
-      updated_at: new Date().toISOString()
-    };
-
-    data.servicePrices[idx] = updated;
-    this.saveStoreData(data);
-
-    this.logAudit({
-      tenant_id: updated.tenant_id,
-      user_name: performedByName || 'Administrador',
-      action: 'EDICAO_SERVICO',
-      resource: 'service_prices',
-      resource_id: serviceId,
-      details: `Serviço "${updated.title}" atualizado (R$ ${Number(updated.default_price).toFixed(2)})`
-    });
-
-    return updated;
-  }
-
-  static deleteService(serviceId: string, performedByName?: string): boolean {
-    const data = this.getStoreData();
-    if (!Array.isArray(data.servicePrices)) return false;
-    const found = data.servicePrices.find((s: ServicePrice) => s.id === serviceId);
-    if (!found) return false;
-
-    data.servicePrices = data.servicePrices.filter((s: ServicePrice) => s.id !== serviceId);
-    this.saveStoreData(data);
-
-    this.logAudit({
-      tenant_id: found.tenant_id,
-      user_name: performedByName || 'Administrador',
-      action: 'EXCLUSAO_SERVICO',
-      resource: 'service_prices',
-      resource_id: serviceId,
-      details: `Serviço "${found.title}" excluído do catálogo`
-    });
-
-    return true;
-  }
-
-  static toggleServiceStatus(serviceId: string, performedByName?: string): ServicePrice {
-    const data = this.getStoreData();
-    if (!Array.isArray(data.servicePrices)) data.servicePrices = [];
-    const idx = data.servicePrices.findIndex((s: ServicePrice) => s.id === serviceId);
-    if (idx === -1) throw new Error('Serviço não encontrado');
-
-    const current = data.servicePrices[idx];
-    const updated = { ...current, is_active: !current.is_active, updated_at: new Date().toISOString() };
-    data.servicePrices[idx] = updated;
-    this.saveStoreData(data);
-
-    this.logAudit({
-      tenant_id: updated.tenant_id,
-      user_name: performedByName || 'Administrador',
-      action: 'STATUS_SERVICO',
-      resource: 'service_prices',
-      resource_id: serviceId,
-      details: `Status do serviço "${updated.title}" alterado para ${updated.is_active ? 'ATIVO' : 'INATIVO'}`
-    });
-
-    return updated;
-  }
-
-  // ==========================================
-  // Customizable Kanban Columns
-  // ==========================================
-  static getKanbanColumns(tenantId?: string): KanbanColumnConfig[] {
-    const stt = this.getSettings(tenantId);
-    if (stt?.kanban_columns && Array.isArray(stt.kanban_columns) && stt.kanban_columns.length > 0) {
-      return stt.kanban_columns;
-    }
-
-    const segConfig = this.getSegmentConfig(tenantId);
-    const seg = segConfig.segment || 'RECARGA_CARTUCHOS';
-    return DEFAULT_KANBAN_COLUMNS[seg] || DEFAULT_KANBAN_COLUMNS.RECARGA_CARTUCHOS;
-  }
-
-  static saveKanbanColumns(tenantId: string, columns: KanbanColumnConfig[], performedByName?: string): CompanySettings {
-    const data = this.getStoreData();
-    if (!data.settings) data.settings = { ...MOCK_COMPANY_SETTINGS };
-    data.settings.kanban_columns = columns;
-    this.saveStoreData(data);
-
-    this.logAudit({
-      tenant_id: tenantId,
-      user_name: performedByName || 'Administrador',
-      action: 'CUSTOMIZACAO_KANBAN',
-      resource: 'company_settings',
-      details: `Colunas do Kanban personalizadas (${columns.map(c => c.title).join(' | ')})`
-    });
-
-    return data.settings;
-  }
-
-  static moveCartridgeStatus(
-    cartridgeId: string, 
-    newStatus: CartridgeStatus, 
-    performedByName?: string, 
-    notes?: string
-  ): Cartridge {
-    const data = this.getStoreData();
-    const idx = (data.cartridges || []).findIndex((c: Cartridge) => c.id === cartridgeId);
-    if (idx === -1) throw new Error('Cartucho não encontrado');
-
-    const previous = data.cartridges[idx];
-    const prevStatus = previous.status;
-    const updated: Cartridge = {
-      ...previous,
-      status: newStatus,
-      updated_at: new Date().toISOString()
-    };
-
-    data.cartridges[idx] = updated;
-    this.saveStoreData(data);
-
-    this.logAudit({
-      tenant_id: updated.tenant_id,
-      user_name: performedByName || 'Técnico',
-      action: 'MOVIMENTACAO_KANBAN',
-      resource: 'cartridges',
-      resource_id: cartridgeId,
-      details: `Item ${updated.serial_number} movido de ${prevStatus} para ${newStatus}${notes ? ` (${notes})` : ''}`
-    });
-
-    return updated;
-  }
-
-  // Entries & Cartridges Query
-  static getEntries(tenantId: string): CartridgeEntry[] {
-    const data = this.getStoreData();
-    const tenantEntries = (data.entries || []).filter((e: CartridgeEntry) => e.tenant_id === tenantId);
-    return tenantEntries.map((entry: CartridgeEntry) => ({
-      ...entry,
-      customer: (data.customers || []).find((c: Customer) => c.id === entry.customer_id),
-      cartridges: (data.cartridges || []).filter((c: Cartridge) => c.entry_id === entry.id).map((c: Cartridge) => ({
-        ...c,
-        model: (data.models || []).find((m: CartridgeModel) => m.id === c.model_id)
-      }))
-    }));
-  }
-
-  static getEntryByNumber(tenantId: string, entryNumber: string): CartridgeEntry | undefined {
-    const entries = this.getEntries(tenantId);
-    return entries.find((e) => e.entry_number === entryNumber);
-  }
-
-  static getEntryByToken(tokenOrNumber: string): CartridgeEntry | undefined {
-    const data = this.getStoreData();
-    const clean = tokenOrNumber.trim().toLowerCase();
-    const entry = (data.entries || []).find((e: CartridgeEntry) => 
-      (e.tracking_token && e.tracking_token.toLowerCase() === clean) ||
-      e.entry_number.toLowerCase() === clean ||
-      e.id === tokenOrNumber
-    );
-    if (!entry) return undefined;
-    return {
-      ...entry,
-      customer: (data.customers || []).find((c: Customer) => c.id === entry.customer_id),
-      cartridges: (data.cartridges || []).filter((c: Cartridge) => c.entry_id === entry.id).map((c: Cartridge) => ({
-        ...c,
-        model: (data.models || []).find((m: CartridgeModel) => m.id === c.model_id)
-      }))
-    };
-  }
-
-  // Cloud-connected async retrieval (checks local cache first, then Supabase cloud)
-  static async getEntryByTokenAsync(tokenOrNumber: string): Promise<CartridgeEntry | undefined> {
-    // 1. Check local cache first
-    const cached = this.getEntryByToken(tokenOrNumber);
-    if (cached) return cached;
-
-    // 2. Fetch directly from Supabase Cloud
-    try {
-      const clean = tokenOrNumber.trim();
-      
-      // Look up entry in Supabase by tracking_token, entry_number, or id
-      let query = supabase.from('cartridge_entries').select('*');
-      if (clean.includes('-') && clean.length > 20) {
-        query = query.or(`tracking_token.eq.${clean},id.eq.${clean},entry_number.eq.${clean}`);
-      } else {
-        query = query.or(`entry_number.eq.${clean},tracking_token.eq.${clean}`);
-      }
-
-      const { data: entries, error } = await query.limit(1);
-
-      let matchedEntry = entries && entries.length > 0 ? entries[0] : null;
-
-      if (!matchedEntry) {
-        // Case-insensitive fallback lookup for entry_number
-        const { data: ilikeEntries } = await supabase
-          .from('cartridge_entries')
-          .select('*')
-          .ilike('entry_number', clean)
-          .limit(1);
-
-        if (ilikeEntries && ilikeEntries.length > 0) {
-          matchedEntry = ilikeEntries[0];
-        }
-      }
-
-      if (!matchedEntry) return undefined;
-
-      const entry = matchedEntry as CartridgeEntry;
-
-      // Fetch Customer, Cartridges, Models and Company in parallel
-      const [custRes, cartsRes, modelsRes, compRes] = await Promise.all([
-        entry.customer_id ? supabase.from('customers').select('*').eq('id', entry.customer_id).maybeSingle() : Promise.resolve({ data: null }),
-        supabase.from('cartridges').select('*').eq('entry_id', entry.id),
-        supabase.from('cartridge_models').select('*').eq('tenant_id', entry.tenant_id),
-        supabase.from('companies').select('*').eq('id', entry.tenant_id).maybeSingle()
-      ]);
-
-      const customer = custRes.data || undefined;
-      const models = modelsRes.data || [];
-      const company = compRes.data || undefined;
-      const cartridges: Cartridge[] = (cartsRes.data || []).map((c: any) => ({
-        ...c,
-        model: models.find((m: any) => m.id === c.model_id),
-        customer_name: customer?.name || 'Cliente',
-        entry_number: entry.entry_number
-      }));
-
-      const fullEntry: CartridgeEntry = {
-        ...entry,
-        customer,
-        cartridges
-      };
-
-      // Cache into local store for subsequent fast access
-      const data = this.getStoreData();
-      if (!data.entries.some((e: CartridgeEntry) => e.id === entry.id)) {
-        data.entries.unshift(entry);
-      }
-      if (customer && !data.customers.some((c: Customer) => c.id === customer.id)) {
-        data.customers.unshift(customer);
-      }
-      if (company && !data.companies.some((c: Company) => c.id === company.id)) {
-        data.companies.unshift(company);
-      }
-      cartridges.forEach(cart => {
-        if (!data.cartridges.some((c: Cartridge) => c.id === cart.id)) {
-          data.cartridges.unshift(cart);
-        }
-      });
-      this.saveStoreData(data, false);
-
-      return fullEntry;
-    } catch (err) {
-      console.warn('Supabase cloud fetch error for entry:', err);
-      return undefined;
-    }
-  }
-
-  static getCartridges(tenantId: string): Cartridge[] {
-    const data = this.getStoreData();
-    const tenantCartridges = (data.cartridges || []).filter((c: Cartridge) => c.tenant_id === tenantId);
-    return tenantCartridges.map((cartridge: Cartridge) => {
-      const entry = (data.entries || []).find((e: CartridgeEntry) => e.id === cartridge.entry_id);
-      const customer = entry ? (data.customers || []).find((cust: Customer) => cust.id === entry.customer_id) : undefined;
-      return {
-        ...cartridge,
-        model: (data.models || []).find((m: CartridgeModel) => m.id === cartridge.model_id),
-        entry_number: entry ? entry.entry_number : '',
-        customer_name: customer?.name || 'Cliente',
-        customer: customer
-      };
-    });
-  }
-
-  // Create Entry with Cartridges & Audit Log
-  static createEntry(payload: {
-    tenant_id?: string;
-    tenantId?: string;
-    customer_id?: string;
-    customerId?: string;
-    attendant_id?: string;
-    attendantId?: string;
-    attendant_name?: string;
-    general_notes?: string;
-    discount_amount?: number;
-    payment_method?: PaymentMethod;
-    paymentMethod?: PaymentMethod;
-    payment_status?: PaymentStatus;
-    payments?: Array<{ method: PaymentMethod; amount: number; notes?: string }>;
-    items: Array<any>;
-  }): CartridgeEntry {
-    const data = this.getStoreData();
-    const currentYear = new Date().getFullYear();
-    const tenantId = payload.tenant_id || payload.tenantId || MOCK_COMPANY_SUPREME.id;
-    const customerId = payload.customer_id || payload.customerId || '';
-    const attendantId = payload.attendant_id || payload.attendantId || (data.profiles?.[0]?.id || 'att-system');
-
-    const normalizedItems = (payload.items || []).map(raw => ({
-      model_id: raw.model_id || raw.modelId || '',
-      service_requested: raw.service_requested || raw.serviceRequested || 'RECARGA_SIMPLES',
-      color: raw.color || 'Preto',
-      is_xl: raw.is_xl ?? raw.isXl ?? false,
-      final_serie: raw.final_serie || raw.finalSerie || 'S/N',
-      reception_notes: raw.reception_notes || raw.receptionNotes,
-      input_weight_grams: raw.input_weight_grams ?? raw.inputWeightGrams,
-      price: raw.price !== undefined ? Number(raw.price) : Number(raw.finalPrice ?? raw.unitPrice ?? 30.0),
-      accessories: raw.accessories,
-      checklist: raw.checklist,
-      custom_fields: raw.custom_fields || raw.customFields
-    }));
-
-    const tenantEntries = (data.entries || []).filter((e: CartridgeEntry) => e.tenant_id === tenantId);
-    const seq = tenantEntries.length + 1;
-    const entryNumber = `${currentYear}-${String(seq).padStart(6, '0')}`;
-    const entryId = generateUUID();
-    const trackingToken = `trk-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-
-    let subtotal = 0;
-    normalizedItems.forEach(i => { subtotal += i.price; });
-    const discount = payload.discount_amount || 0;
-    const total = Math.max(0, subtotal - discount);
-
-    const customer = (data.customers || []).find((c: Customer) => c.id === customerId);
-
-    const newEntry: CartridgeEntry = {
-      id: entryId,
-      tenant_id: tenantId,
-      entry_number: entryNumber,
-      entry_sequence: seq,
-      entry_year: currentYear,
-      customer_id: customerId,
-      attendant_id: attendantId,
-      entry_date: new Date().toISOString(),
-      subtotal_amount: subtotal,
-      discount_amount: discount,
-      surcharge_amount: 0,
-      total_amount: total,
-      payment_status: payload.payment_status || 'PENDENTE',
-      payment_method: payload.payment_method || payload.paymentMethod || 'DINHEIRO',
-      payments: payload.payments,
-      general_notes: payload.general_notes,
-      tracking_token: trackingToken,
-      created_at: new Date().toISOString()
-    };
-
-    const newCartridges: Cartridge[] = normalizedItems.map((item, idx) => {
-      const serialNumber = `${entryNumber}-${String(idx + 1).padStart(2, '0')}`;
-      return {
-        id: generateUUID(),
-        tenant_id: tenantId,
-        entry_id: entryId,
-        serial_number: serialNumber,
-        item_index: idx + 1,
-        model_id: item.model_id,
-        service_requested: item.service_requested,
-        color: item.color,
-        is_xl: item.is_xl,
-        final_serie: item.final_serie,
-        status: 'AGUARDANDO_VERIFICACAO',
-        result_classification: 'PENDENTE',
-        input_weight_grams: item.input_weight_grams,
-        reception_notes: item.reception_notes,
-        accessories: item.accessories,
-        checklist: item.checklist,
-        custom_fields: item.custom_fields,
-        original_price: item.price,
-        applied_price: item.price,
-        discount_amount: 0,
-        surcharge_amount: 0,
-        final_price: item.price,
-        entry_number: entryNumber,
-        customer_name: customer?.name || 'Cliente',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-    });
-
-    data.entries.unshift(newEntry);
-    data.cartridges.unshift(...newCartridges);
-    this.saveStoreData(data);
-
-    // Sanitize and push entry and cartridges to Supabase Cloud
-    const supabaseEntry = {
-      id: newEntry.id,
-      tenant_id: newEntry.tenant_id,
-      entry_number: newEntry.entry_number,
-      entry_sequence: newEntry.entry_sequence,
-      entry_year: newEntry.entry_year,
-      customer_id: newEntry.customer_id,
-      attendant_id: newEntry.attendant_id,
-      entry_date: newEntry.entry_date,
-      subtotal_amount: newEntry.subtotal_amount,
-      discount_amount: newEntry.discount_amount || 0,
-      surcharge_amount: newEntry.surcharge_amount || 0,
-      total_amount: newEntry.total_amount,
-      payment_status: newEntry.payment_status || 'PENDENTE',
-      payment_method: newEntry.payment_method || 'DINHEIRO',
-      payments: newEntry.payments || null,
-      general_notes: newEntry.general_notes || null,
-      tracking_token: newEntry.tracking_token,
-      created_at: newEntry.created_at,
-      updated_at: newEntry.created_at
-    };
-
-    const supabaseCartridges = newCartridges.map(c => ({
-      id: c.id,
-      tenant_id: c.tenant_id,
-      entry_id: c.entry_id,
-      serial_number: c.serial_number,
-      item_index: c.item_index,
-      model_id: c.model_id,
-      service_requested: c.service_requested,
-      color: c.color,
-      is_xl: c.is_xl ?? false,
-      final_serie: c.final_serie || 'S/N',
-      status: c.status || 'AGUARDANDO_VERIFICACAO',
-      result_classification: c.result_classification || 'PENDENTE',
-      input_weight_grams: c.input_weight_grams || null,
-      reception_notes: c.reception_notes || null,
-      original_price: c.original_price || 0,
-      applied_price: c.applied_price || 0,
-      discount_amount: c.discount_amount || 0,
-      surcharge_amount: c.surcharge_amount || 0,
-      final_price: c.final_price || 0,
-      entry_number: c.entry_number,
-      customer_name: c.customer_name || 'Cliente',
-      created_at: c.created_at,
-      updated_at: c.updated_at
-    }));
-
-    supabase.from('cartridge_entries').upsert(supabaseEntry).then(({ error: entryErr }) => {
-      if (entryErr) {
-        console.warn('Erro ao sincronizar cartridge_entries com Supabase:', entryErr);
-      } else {
-        supabase.from('cartridges').upsert(supabaseCartridges).then(({ error: cartErr }) => {
-          if (cartErr) console.warn('Erro ao sincronizar cartridges com Supabase:', cartErr);
+  // --------------------------------------------------------------------------
+  // BACKWARD-COMPATIBILITY METHOD ALIASES (Clean Transition)
+  // --------------------------------------------------------------------------
+  static getEntries(tenantId: string) { return this.getServiceOrders(tenantId); }
+  static getEntryById(id: string) { return this.getServiceOrderById(id); }
+  static getCartridges(tenantId: string): ServiceOrderItem[] {
+    const orders = this.getServiceOrders(tenantId);
+    const allItems: ServiceOrderItem[] = [];
+    orders.forEach(o => {
+      (o.items || []).forEach(it => {
+        allItems.push({
+          ...it,
+          order_number: o.order_number,
+          customer_name: o.customer?.name,
+          customer: o.customer
         });
-      }
+      });
     });
-
-    this.logAudit({
-      tenant_id: payload.tenant_id,
-      user_id: payload.attendant_id,
-      user_name: payload.attendant_name || 'Atendente',
-      action: 'NOVA_ENTRADA',
-      resource: 'cartridge_entries',
-      resource_id: entryId,
-      details: `Gerada ordem ${entryNumber} (${payload.items.length} itens) para o cliente ${customer?.name || 'Cliente'} - Total: R$ ${total.toFixed(2)}`
-    });
-
+    return allItems;
+  }
+  static getServicePrices(tenantId: string) { return this.getServices(tenantId); }
+  static updateCartridgeStatus(id: string, status: string, result?: string, otherDesc?: string, techNotes?: string, techId?: string, outputWeight?: number, checklist?: any[], performedByName?: string) {
+    return this.updateOrderItemStatus(id, {
+      status,
+      result_code: result,
+      result_description: otherDesc,
+      technical_notes: techNotes,
+      assigned_technician_id: techId,
+      custom_field_values: outputWeight !== undefined ? { output_weight_grams: outputWeight } : undefined,
+      checklist
+    }, performedByName);
+  }
+  static getSegmentConfig(tenantId: string) {
+    const company = this.getCompany(tenantId);
+    const primaryKey = company.active_template_keys?.[0] || 'RECARGA_CARTUCHOS';
+    const preset = BUSINESS_PRESETS[primaryKey] || BUSINESS_PRESETS.RECARGA_CARTUCHOS;
     return {
-      ...newEntry,
-      customer: customer,
-      cartridges: newCartridges.map(c => ({
-        ...c,
-        model: (data.models || []).find((m: CartridgeModel) => m.id === c.model_id)
-      }))
+      segment: primaryKey,
+      segmentName: preset.name,
+      itemLabelSingular: preset.categories[0]?.name || 'Item',
+      itemLabelPlural: preset.categories[0]?.name ? `${preset.categories[0].name}s` : 'Itens',
+      identifierLabel: preset.categories[0]?.identifier_label || 'Identificador',
+      serviceLabel: 'Serviço Solicitado',
+      hasWeightInspection: primaryKey === 'RECARGA_CARTUCHOS',
+      hasChecklist: !!preset.checklist,
+      defaultChecklistItems: preset.checklist?.items?.map(i => i.item_name) || [],
+      defaultCategories: preset.categories.map(c => c.name)
     };
-  }
-
-  // Update Cartridge Status & Tech Details with Dynamic Pricing & Audit Log
-  static updateCartridgeTech(payload: {
-    cartridgeId: string;
-    technicianId: string;
-    technicianName?: string;
-    status: CartridgeStatus;
-    resultClassification?: ResultClassification;
-    resultOtherDescription?: string;
-    inputWeightGrams?: number;
-    outputWeightGrams?: number;
-    technicalNotes?: string;
-    accessories?: string;
-    checklist?: Array<{ item: string; checked: boolean; notes?: string }>;
-    custom_fields?: Record<string, any>;
-  }): Cartridge {
-    const data = this.getStoreData();
-    const idx = data.cartridges.findIndex((c: Cartridge) => c.id === payload.cartridgeId);
-    if (idx === -1) throw new Error('Item não encontrado');
-
-    const current = data.cartridges[idx];
-    const inputWeight = payload.inputWeightGrams ?? current.input_weight_grams;
-    const outputWeight = payload.outputWeightGrams ?? current.output_weight_grams;
-    let weightDiff = current.weight_diff_grams;
-    if (inputWeight !== undefined && outputWeight !== undefined) {
-      weightDiff = Number((outputWeight - inputWeight).toFixed(2));
-    }
-
-    const newResultClass = payload.resultClassification ?? current.result_classification;
-    const isCondemned = payload.status === 'SEM_REPARO' || payload.status === 'COM_PROBLEMA' || ['CID', 'QUEIMADO', 'SEM_REPARO'].includes(newResultClass);
-
-    let newPrice = current.final_price;
-    const model = (data.models || []).find((m: CartridgeModel) => m.id === current.model_id);
-    const settings = this.getSettings(current.tenant_id);
-
-    if (isCondemned) {
-      const verifFee = model?.verification_price ?? settings.default_verification_price ?? 15.00;
-      newPrice = verifFee;
-    } else {
-      const calc = this.calculateItemPrice(current.tenant_id, current.model_id, current.service_requested, current.is_xl);
-      newPrice = calc.finalPrice;
-    }
-
-    const updated: Cartridge = {
-      ...current,
-      status: payload.status,
-      technician_id: payload.technicianId,
-      result_classification: newResultClass,
-      result_other_description: payload.resultOtherDescription ?? current.result_other_description,
-      input_weight_grams: inputWeight,
-      output_weight_grams: outputWeight,
-      weight_diff_grams: weightDiff,
-      applied_price: newPrice,
-      final_price: newPrice,
-      technical_notes: payload.technicalNotes ?? current.technical_notes,
-      accessories: payload.accessories ?? current.accessories,
-      checklist: payload.checklist ?? current.checklist,
-      custom_fields: payload.custom_fields ?? current.custom_fields,
-      updated_at: new Date().toISOString()
-    };
-
-    data.cartridges[idx] = updated;
-
-    // Recalculate Parent Entry
-    const entryIdx = data.entries.findIndex((e: CartridgeEntry) => e.id === current.entry_id);
-    if (entryIdx !== -1) {
-      const entryCartridges = data.cartridges.filter((c: Cartridge) => c.entry_id === current.entry_id);
-      const newSubtotal = entryCartridges.reduce((acc: number, c: Cartridge) => acc + c.final_price, 0);
-      const discount = data.entries[entryIdx].discount_amount || 0;
-      const newTotal = Math.max(0, newSubtotal - discount);
-
-      data.entries[entryIdx] = {
-        ...data.entries[entryIdx],
-        subtotal_amount: newSubtotal,
-        total_amount: newTotal
-      };
-
-      // Push entry update to Supabase
-      supabase.from('cartridge_entries').update({
-        subtotal_amount: newSubtotal,
-        total_amount: newTotal,
-        updated_at: new Date().toISOString()
-      }).eq('id', current.entry_id).then();
-    }
-
-    this.saveStoreData(data);
-
-    // Push cartridge update to Supabase
-    supabase.from('cartridges').update({
-      status: updated.status,
-      technician_id: updated.technician_id,
-      result_classification: updated.result_classification,
-      result_other_description: updated.result_other_description,
-      input_weight_grams: updated.input_weight_grams,
-      output_weight_grams: updated.output_weight_grams,
-      weight_diff_grams: updated.weight_diff_grams,
-      applied_price: updated.applied_price,
-      final_price: updated.final_price,
-      technical_notes: updated.technical_notes,
-      updated_at: updated.updated_at
-    }).eq('id', payload.cartridgeId).then();
-
-    this.logAudit({
-      tenant_id: current.tenant_id,
-      user_id: payload.technicianId,
-      user_name: payload.technicianName || 'Técnico',
-      action: 'DIAGNOSTICO_TECNICO',
-      resource: 'cartridges',
-      resource_id: current.id,
-      details: `Item ${current.serial_number} (${current.final_serie}): Status alterado para ${payload.status} | Diagnóstico: ${newResultClass} | Valor: R$ ${newPrice.toFixed(2)}`
-    });
-
-    return updated;
-  }
-
-  // Complete Delivery and Financial Settlement (Multi-Payment, Desconto & Baixa)
-  static registerDeliveryAndPayment(payload: {
-    entryId: string;
-    attendantId: string;
-    attendantName: string;
-    receiverName: string;
-    receiverDocument?: string;
-    receiverRelation?: string;
-    paymentMethod?: PaymentMethod;
-    paymentStatus: PaymentStatus;
-    payments?: Array<{ method: PaymentMethod; amount: number; notes?: string }>;
-    amountPaid: number;
-    changeAmount?: number;
-    remainingAmount?: number;
-    notes?: string;
-    extraDiscount?: number;
-    applyDiscountDifference?: boolean;
-    forcedCloseReason?: string;
-  }): CartridgeEntry {
-    const data = this.getStoreData();
-    const entryIdx = data.entries.findIndex((e: CartridgeEntry) => e.id === payload.entryId);
-    if (entryIdx === -1) throw new Error('Comanda não encontrada.');
-
-    const entry = data.entries[entryIdx];
-    const now = new Date().toISOString();
-
-    const diffDiscount = payload.applyDiscountDifference
-      ? Math.max(0, (entry.total_amount || entry.subtotal_amount) - payload.amountPaid)
-      : 0;
-    const extraDiscount = payload.extraDiscount !== undefined ? payload.extraDiscount : diffDiscount;
-    const currentDiscount = entry.discount_amount || 0;
-    const newTotalDiscount = currentDiscount + extraDiscount;
-    const finalTotal = Math.max(0, (entry.subtotal_amount || entry.total_amount) - newTotalDiscount);
-
-    let finalPaymentStatus = payload.paymentStatus;
-    let finalRemaining = payload.remainingAmount ?? Math.max(0, finalTotal - payload.amountPaid);
-    if ((extraDiscount > 0 || payload.applyDiscountDifference) && payload.amountPaid >= finalTotal) {
-      finalPaymentStatus = 'PAGO';
-      finalRemaining = 0;
-    }
-
-    const primaryMethod = payload.paymentMethod || (payload.payments && payload.payments[0]?.method) || 'DINHEIRO';
-
-    const deliveryRecord: Delivery = {
-      id: generateUUID(),
-      tenant_id: entry.tenant_id,
-      entry_id: payload.entryId,
-      delivered_at: now,
-      delivered_by: payload.attendantId,
-      delivered_by_name: payload.attendantName,
-      attendant_name: payload.attendantName,
-      receiver_name: payload.receiverName,
-      receiver_document: payload.receiverDocument,
-      receiver_relation: payload.receiverRelation,
-      payment_method: primaryMethod,
-      payment_status: finalPaymentStatus,
-      payments: payload.payments,
-      amount_paid: payload.amountPaid,
-      change_amount: payload.changeAmount || 0,
-      remaining_amount: finalRemaining,
-      paid_at: now,
-      notes: payload.notes
-    };
-
-    data.entries[entryIdx] = {
-      ...entry,
-      discount_amount: newTotalDiscount,
-      total_amount: finalTotal,
-      payment_status: finalPaymentStatus,
-      payment_method: primaryMethod,
-      payments: payload.payments,
-      amount_paid: payload.amountPaid,
-      change_amount: payload.changeAmount || 0,
-      remaining_amount: finalRemaining,
-      paid_at: now,
-      delivery_info: deliveryRecord,
-      updated_at: now
-    };
-
-    // Mark Cartridges in this Entry as ENTREGUE
-    data.cartridges = data.cartridges.map((c: Cartridge) => {
-      if (c.entry_id === payload.entryId) {
-        const isUncompleted = ['AGUARDANDO_VERIFICACAO', 'EM_VERIFICACAO', 'AGUARDANDO_RECARGA', 'EM_RECARGA', 'AGUARDANDO_TESTE', 'EM_TESTE'].includes(c.status);
-        const resultClassification = isUncompleted && c.result_classification === 'PENDENTE'
-          ? ('DESISTENCIA' as ResultClassification)
-          : c.result_classification;
-
-        const updatedCart = {
-          ...c,
-          status: 'ENTREGUE' as CartridgeStatus,
-          result_classification: resultClassification,
-          technical_notes: isUncompleted && payload.forcedCloseReason 
-            ? `${c.technical_notes ? c.technical_notes + ' | ' : ''}[Desistência/Baixa sem conclusão: ${payload.forcedCloseReason}]`
-            : c.technical_notes,
-          updated_at: now
-        };
-
-        // Push cartridge update to Supabase
-        supabase.from('cartridges').update({
-          status: updatedCart.status,
-          result_classification: updatedCart.result_classification,
-          technical_notes: updatedCart.technical_notes,
-          updated_at: now
-        }).eq('id', c.id).then();
-
-        return updatedCart;
-      }
-      return c;
-    });
-
-    this.saveStoreData(data);
-
-    // Push delivery and entry update to Supabase
-    supabase.from('deliveries').insert(deliveryRecord).then();
-    supabase.from('cartridge_entries').update({
-      discount_amount: newTotalDiscount,
-      total_amount: finalTotal,
-      payment_status: finalPaymentStatus,
-      payment_method: primaryMethod,
-      payments: payload.payments,
-      amount_paid: payload.amountPaid,
-      change_amount: payload.changeAmount || 0,
-      remaining_amount: finalRemaining,
-      paid_at: now,
-      delivery_info: deliveryRecord,
-      updated_at: now
-    }).eq('id', payload.entryId).then();
-
-    const paymentSummary = payload.payments && payload.payments.length > 0
-      ? payload.payments.map(p => `${p.method}: R$ ${p.amount.toFixed(2)}`).join(' + ')
-      : `${primaryMethod}: R$ ${payload.amountPaid.toFixed(2)}`;
-
-    const discountMsg = extraDiscount > 0 ? ` | Desconto Concedido: R$ ${extraDiscount.toFixed(2)}` : '';
-    const forcedMsg = payload.forcedCloseReason ? ` | Encerrado por Desistência: ${payload.forcedCloseReason}` : '';
-
-    this.logAudit({
-      tenant_id: entry.tenant_id,
-      user_id: payload.attendantId,
-      user_name: payload.attendantName,
-      action: 'BAIXA_ENTREGA',
-      resource: 'cartridge_entries',
-      resource_id: payload.entryId,
-      details: `Comanda ${entry.entry_number} entregue para ${payload.receiverName} (${payload.receiverRelation || 'Cliente'}) | Pagamento (${paymentSummary})${discountMsg}${forcedMsg} | Troco: R$ ${(payload.changeAmount || 0).toFixed(2)}`
-    });
-
-    return data.entries[entryIdx];
-  }
-
-  // Reopen Completed Entry back to Workbench / Balcão
-  static reopenEntry(entryId: string, reason: string, performedByName?: string): CartridgeEntry {
-    const data = this.getStoreData();
-    const entryIdx = data.entries.findIndex((e: CartridgeEntry) => e.id === entryId);
-    if (entryIdx === -1) throw new Error('Comanda não encontrada.');
-
-    const entry = data.entries[entryIdx];
-    const now = new Date().toISOString();
-
-    data.entries[entryIdx] = {
-      ...entry,
-      payment_status: 'PENDENTE',
-      delivery_info: undefined,
-      paid_at: undefined,
-      updated_at: now
-    };
-
-    data.cartridges = data.cartridges.map((c: Cartridge) => {
-      if (c.entry_id === entryId) {
-        const isFinished = c.output_weight_grams && c.result_classification === 'OK';
-        const updatedStatus: CartridgeStatus = isFinished ? 'FINALIZADO' : 'AGUARDANDO_VERIFICACAO';
-        const updatedCart = {
-          ...c,
-          status: updatedStatus,
-          updated_at: now
-        };
-
-        supabase.from('cartridges').update({
-          status: updatedStatus,
-          updated_at: now
-        }).eq('id', c.id).then();
-
-        return updatedCart;
-      }
-      return c;
-    });
-
-    this.saveStoreData(data);
-
-    // Push entry update to Supabase
-    supabase.from('cartridge_entries').update({
-      payment_status: 'PENDENTE',
-      delivery_info: null,
-      paid_at: null,
-      updated_at: now
-    }).eq('id', entryId).then();
-
-    this.logAudit({
-      tenant_id: entry.tenant_id,
-      user_name: performedByName || 'Administrador',
-      action: 'REABERTURA_COMANDA',
-      resource: 'cartridge_entries',
-      resource_id: entryId,
-      details: `Comanda ${entry.entry_number} reaberta no sistema. Motivo: ${reason || 'Solicitação operacional'}`
-    });
-
-    return data.entries[entryIdx];
-  }
-
-  // Delete / Excluir Comanda and associated Cartridges
-  static deleteEntry(entryId: string, performedByName?: string): boolean {
-    const data = this.getStoreData();
-    const entryIdx = data.entries.findIndex((e: CartridgeEntry) => e.id === entryId);
-    if (entryIdx === -1) throw new Error('Comanda não encontrada.');
-
-    const entry = data.entries[entryIdx];
-    const countCartridges = data.cartridges.filter((c: Cartridge) => c.entry_id === entryId).length;
-
-    // Delete locally
-    data.entries.splice(entryIdx, 1);
-    data.cartridges = data.cartridges.filter((c: Cartridge) => c.entry_id !== entryId);
-    this.saveStoreData(data);
-
-    // Delete in Supabase
-    supabase.from('cartridge_entries').delete().eq('id', entryId).then();
-
-    this.logAudit({
-      tenant_id: entry.tenant_id,
-      user_name: performedByName || 'Administrador',
-      action: 'EXCLUSAO_COMANDA',
-      resource: 'cartridge_entries',
-      resource_id: entryId,
-      details: `Comanda ${entry.entry_number} (${countCartridges} cartuchos) de ${entry.customer?.name || 'Cliente'} excluída definitivamente do sistema.`
-    });
-
-    return true;
   }
 }

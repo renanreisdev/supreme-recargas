@@ -2,12 +2,12 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Search, ChevronDown, Check, X, Tag, Sparkles } from 'lucide-react';
-import { CartridgeModel } from '@/types';
+import { ItemModel } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { formatCurrency } from '@/lib/utils';
 
 interface ModelComboboxProps {
-  models: CartridgeModel[];
+  models: ItemModel[];
   selectedModelId: string;
   onSelect: (modelId: string) => void;
   placeholder?: string;
@@ -32,20 +32,25 @@ export function ModelCombobox({
   const [highlightedIndex, setHighlightedIndex] = useState<number>(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLUListElement>(null);
 
   const selectedModel = useMemo(() => {
     return models.find(m => m.id === selectedModelId);
   }, [models, selectedModelId]);
 
+  const getModelDisplayName = (m?: ItemModel) => {
+    if (!m) return '';
+    const brand = m.brand_name ? `${m.brand_name} ` : '';
+    const name = m.name || (m as any).model_name || '';
+    const colorTag = m.attributes?.color ? ` (${m.attributes.color})` : (m as any).color ? ` (${(m as any).color})` : '';
+    const xlTag = m.attributes?.is_xl || (m as any).is_xl ? ' [XL]' : '';
+    return `${brand}${name}${colorTag}${xlTag}`.trim();
+  };
+
   // Sync display value when selectedModel changes and dropdown is closed
   useEffect(() => {
     if (!isOpen) {
       if (selectedModel) {
-        const xlTag = selectedModel.is_xl ? ' [XL]' : '';
-        const colorTag = selectedModel.color ? ` (${selectedModel.color})` : '';
-        const brand = selectedModel.brand_name ? `${selectedModel.brand_name} ` : '';
-        setSearchQuery(`${brand}${selectedModel.model_name}${colorTag}${xlTag}`);
+        setSearchQuery(getModelDisplayName(selectedModel));
       } else {
         setSearchQuery('');
       }
@@ -58,10 +63,7 @@ export function ModelCombobox({
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setIsOpen(false);
         if (selectedModel) {
-          const xlTag = selectedModel.is_xl ? ' [XL]' : '';
-          const colorTag = selectedModel.color ? ` (${selectedModel.color})` : '';
-          const brand = selectedModel.brand_name ? `${selectedModel.brand_name} ` : '';
-          setSearchQuery(`${brand}${selectedModel.model_name}${colorTag}${xlTag}`);
+          setSearchQuery(getModelDisplayName(selectedModel));
         } else {
           setSearchQuery('');
         }
@@ -82,22 +84,21 @@ export function ModelCombobox({
     const queryParts = query.split(/\s+/);
 
     return models.filter(m => {
-      const targetStr = `${m.brand_name || ''} ${m.model_name} ${m.color || ''} ${m.category || ''} ${m.is_xl ? 'xl' : ''}`.toLowerCase();
+      const modelName = m.name || (m as any).model_name || '';
+      const brandName = m.brand_name || '';
+      const cat = m.category?.name || (m as any).category || '';
+      const targetStr = `${brandName} ${modelName} ${cat} ${m.internal_code || ''}`.toLowerCase();
       return queryParts.every(part => targetStr.includes(part));
     });
   }, [models, searchQuery, isOpen, selectedModel]);
 
-  // Reset highlight index on filter change
   useEffect(() => {
     setHighlightedIndex(0);
   }, [filteredModels]);
 
-  const handleSelectModel = (model: CartridgeModel) => {
+  const handleSelectModel = (model: ItemModel) => {
     onSelect(model.id);
-    const xlTag = model.is_xl ? ' [XL]' : '';
-    const colorTag = model.color ? ` (${model.color})` : '';
-    const brand = model.brand_name ? `${model.brand_name} ` : '';
-    setSearchQuery(`${brand}${model.model_name}${colorTag}${xlTag}`);
+    setSearchQuery(getModelDisplayName(model));
     setIsOpen(false);
     inputRef.current?.blur();
   };
@@ -132,171 +133,127 @@ export function ModelCombobox({
         e.preventDefault();
         setIsOpen(false);
         if (selectedModel) {
-          const xlTag = selectedModel.is_xl ? ' [XL]' : '';
-          const colorTag = selectedModel.color ? ` (${selectedModel.color})` : '';
-          const brand = selectedModel.brand_name ? `${selectedModel.brand_name} ` : '';
-          setSearchQuery(`${brand}${selectedModel.model_name}${colorTag}${xlTag}`);
+          setSearchQuery(getModelDisplayName(selectedModel));
         }
         break;
-      case 'Tab':
-        setIsOpen(false);
-        break;
     }
-  };
-
-  const handleFocus = () => {
-    setIsOpen(true);
-    // Select input text for instant replacement if user starts typing
-    inputRef.current?.select();
   };
 
   const handleClear = (e: React.MouseEvent) => {
     e.stopPropagation();
     onSelect('');
     setSearchQuery('');
-    setIsOpen(true);
     inputRef.current?.focus();
   };
 
   return (
     <div ref={containerRef} className={`relative w-full ${className}`}>
-      {/* Searchable Input Bar */}
-      <div className="relative flex items-center">
-        <Search className="w-3.5 h-3.5 absolute left-2.5 text-slate-400 pointer-events-none" />
+      <div
+        className={`flex items-center w-full px-3 py-2 text-sm bg-white dark:bg-slate-900 border rounded-xl transition-all duration-200 shadow-sm ${
+          disabled
+            ? 'opacity-60 cursor-not-allowed bg-slate-100 dark:bg-slate-800/50 border-slate-200 dark:border-slate-800'
+            : isOpen
+            ? 'border-emerald-500 ring-2 ring-emerald-500/20 shadow-md dark:border-emerald-500'
+            : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+        }`}
+        onClick={() => {
+          if (!disabled) {
+            setIsOpen(true);
+            inputRef.current?.focus();
+          }
+        }}
+      >
+        <Search className="w-4 h-4 text-slate-400 dark:text-slate-500 mr-2 shrink-0" />
         
         <input
           ref={inputRef}
           type="text"
           value={searchQuery}
-          onChange={(e) => {
+          onChange={e => {
             setSearchQuery(e.target.value);
             if (!isOpen) setIsOpen(true);
           }}
-          onFocus={handleFocus}
+          onFocus={() => setIsOpen(true)}
           onKeyDown={handleKeyDown}
+          placeholder={placeholder}
           disabled={disabled}
           required={required && !selectedModelId}
-          placeholder={placeholder}
-          className="w-full h-9 pl-8 pr-16 text-xs font-semibold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-md shadow-sm outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all text-slate-900 dark:text-slate-100 placeholder:text-slate-400"
-          autoComplete="off"
+          className="w-full bg-transparent text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none text-xs md:text-sm font-medium"
         />
 
-        <div className="absolute right-2 flex items-center gap-1">
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={handleClear}
-              className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-              title="Limpar pesquisa"
-            >
-              <X className="w-3 h-3" />
-            </button>
-          )}
-
+        {selectedModelId && !disabled && (
           <button
             type="button"
-            onClick={() => {
-              if (!disabled) {
-                setIsOpen(prev => !prev);
-                inputRef.current?.focus();
-              }
-            }}
-            className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+            onClick={handleClear}
+            className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 mr-1 transition-colors"
+            title="Limpar seleção"
           >
-            <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isOpen ? 'rotate-180 text-emerald-600' : ''}`} />
+            <X className="w-3.5 h-3.5" />
           </button>
-        </div>
+        )}
+
+        <ChevronDown
+          className={`w-4 h-4 text-slate-400 transition-transform duration-200 shrink-0 ${
+            isOpen ? 'transform rotate-180 text-emerald-600 dark:text-emerald-400' : ''
+          }`}
+        />
       </div>
 
-      {/* Floating Search Results Dropdown */}
-      {isOpen && (
-        <div className="absolute z-50 left-0 right-0 mt-1 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 max-h-72 flex flex-col">
-          {/* Header Info */}
-          <div className="px-3 py-1.5 bg-slate-50 dark:bg-slate-850 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-500">
-            <span>
-              {filteredModels.length} {filteredModels.length === 1 ? 'item encontrado' : 'itens encontrados'}
-            </span>
-            <span className="text-[10px] text-slate-400">
-              {searchQuery ? `Filtro: "${searchQuery}"` : 'Mostrando catálogo completo'}
-            </span>
+      {/* Dropdown Menu */}
+      {isOpen && !disabled && (
+        <div className="absolute z-50 w-full mt-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl overflow-hidden max-h-64 flex flex-col animate-in fade-in-0 zoom-in-95 duration-150">
+          <div className="p-2 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-950/40 text-[11px] font-semibold text-slate-500 dark:text-slate-400 flex items-center justify-between">
+            <span>Modelos cadastrados ({filteredModels.length})</span>
+            <span className="text-[10px] text-slate-400 font-normal">Use ↑ ↓ e Enter</span>
           </div>
 
-          {/* List of Models */}
-          <ul
-            ref={listRef}
-            className="overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/60 p-1 space-y-0.5"
-          >
+          <ul className="overflow-y-auto py-1 divide-y divide-slate-100 dark:divide-slate-800/40 flex-1">
             {filteredModels.length === 0 ? (
-              <li className="p-4 text-center text-xs text-slate-500 space-y-1">
-                <p className="font-semibold text-slate-700 dark:text-slate-300">
-                  Nenhum {itemLabelSingular.toLowerCase()} encontrado para &quot;{searchQuery}&quot;
-                </p>
-                <p className="text-[11px] text-slate-400">
-                  Verifique a grafia ou cadastre novos modelos no menu <strong>Modelos</strong>.
-                </p>
+              <li className="px-4 py-4 text-center text-xs text-slate-400 dark:text-slate-500">
+                Nenhum modelo encontrado para "{searchQuery}".
               </li>
             ) : (
-              filteredModels.map((m, idx) => {
-                const isSelected = m.id === selectedModelId;
+              filteredModels.map((model, idx) => {
+                const isSelected = model.id === selectedModelId;
                 const isHighlighted = idx === highlightedIndex;
+                const modelName = model.name || (model as any).model_name || '';
 
                 return (
                   <li
-                    key={m.id}
-                    onClick={() => handleSelectModel(m)}
+                    key={model.id}
                     onMouseEnter={() => setHighlightedIndex(idx)}
-                    className={`p-2 rounded-lg cursor-pointer transition-all text-xs flex items-center justify-between gap-2 ${
+                    onClick={() => handleSelectModel(model)}
+                    className={`px-3 py-2 cursor-pointer transition-colors flex items-center justify-between text-xs md:text-sm ${
                       isSelected
-                        ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-100 font-bold border border-emerald-300/80 dark:border-emerald-800'
+                        ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200 font-semibold'
                         : isHighlighted
-                        ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100'
-                        : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-850'
+                        ? 'bg-slate-100 dark:bg-slate-800/70 text-slate-900 dark:text-slate-100'
+                        : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/40'
                     }`}
                   >
-                    <div className="flex items-center gap-2 min-w-0">
-                      {isSelected ? (
-                        <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                      ) : (
-                        <div className="w-4 h-4 rounded-full border border-slate-300 dark:border-slate-700 shrink-0" />
-                      )}
-
+                    <div className="flex items-center gap-2 overflow-hidden">
+                      <div className="w-6 h-6 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0 text-slate-500">
+                        <Tag className="w-3.5 h-3.5" />
+                      </div>
                       <div className="truncate">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          {m.brand_name && (
-                            <Badge 
-                              variant="outline" 
-                              className="text-[9px] px-1.5 py-0 bg-slate-100 dark:bg-slate-800 font-bold border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 shrink-0"
-                            >
-                              {m.brand_name}
-                            </Badge>
-                          )}
-                          <span className="font-bold text-slate-900 dark:text-slate-100 truncate">
-                            {m.model_name}
-                          </span>
-                          {m.color && (
-                            <span className="text-[11px] text-slate-500 font-normal">
-                              ({m.color})
+                        <div className="flex items-center gap-1.5 truncate">
+                          {model.brand_name && (
+                            <span className="font-bold text-slate-900 dark:text-white shrink-0">
+                              {model.brand_name}
                             </span>
                           )}
-                          {m.is_xl && (
-                            <Badge className="bg-purple-700 text-white font-bold text-[9px] px-1 py-0 shrink-0">
-                              XL
-                            </Badge>
+                          <span className="truncate">{modelName}</span>
+                          {model.internal_code && (
+                            <span className="text-[10px] text-slate-400 font-mono">
+                              ({model.internal_code})
+                            </span>
                           )}
                         </div>
-
-                        {m.category && (
-                          <span className="text-[10px] text-slate-400 block truncate mt-0.5">
-                            Categoria: {m.category}
-                          </span>
-                        )}
                       </div>
                     </div>
 
-                    <div className="text-right shrink-0">
-                      <span className="font-extrabold text-emerald-700 dark:text-emerald-400 text-xs font-mono block">
-                        {formatCurrency(m.refill_price || 30.00)}
-                      </span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {isSelected && <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />}
                     </div>
                   </li>
                 );

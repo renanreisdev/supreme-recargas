@@ -31,12 +31,13 @@ import {
   Lock,
   X,
   Phone,
-  MessageSquare
+  MessageSquare,
+  QrCode
 } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { AppStore } from '@/lib/store';
-import { CartridgeEntry, PaymentMethod, PaymentStatus, PaymentSplit } from '@/types';
+import { ServiceOrder, PaymentMethod, PaymentStatus, PaymentSplit } from '@/types';
 import { formatCurrency, formatDateTime, getPaymentMethodLabel, getPaymentStatusBadge, getStatusBadgeConfig } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -49,44 +50,39 @@ function EntriesListContent() {
   const initialSearch = searchParams.get('search') || '';
 
   const { currentCompany, currentUser, hasPermission } = useAuth();
-  const [entries, setEntries] = useState<CartridgeEntry[]>([]);
+  const [orders, setOrders] = useState<ServiceOrder[]>([]);
   const [searchTerm, setSearchTerm] = useState(initialSearch);
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'READY' | 'DELIVERED' | 'PROCESSING'>('ALL');
   
   // Delivery Checkout Modal State
-  const [selectedEntryForDelivery, setSelectedEntryForDelivery] = useState<CartridgeEntry | null>(null);
+  const [selectedOrderForDelivery, setSelectedOrderForDelivery] = useState<ServiceOrder | null>(null);
   const [receiverName, setReceiverName] = useState('');
   const [receiverDoc, setReceiverDoc] = useState('');
   const [receiverRelation, setReceiverRelation] = useState('Próprio Cliente');
   const [payments, setPayments] = useState<Array<{ id: string; method: PaymentMethod; amount: number }>>([]);
   const [deliveryNotes, setDeliveryNotes] = useState('');
-  
-  // Uncompleted & Discount Options in Delivery Modal
-  const [hasUncompletedCartridges, setHasUncompletedCartridges] = useState(false);
-  const [forcedCloseReason, setForcedCloseReason] = useState('Desistência do Cliente');
   const [discountOption, setDiscountOption] = useState<'SALDO_PENDENTE' | 'CONCEDER_DESCONTO'>('SALDO_PENDENTE');
 
   // Reopen Modal State
-  const [entryToReopen, setEntryToReopen] = useState<CartridgeEntry | null>(null);
+  const [orderToReopen, setOrderToReopen] = useState<ServiceOrder | null>(null);
   const [reopenReason, setReopenReason] = useState('Cliente solicitou reteste/retrabalho');
   const [showReopenModal, setShowReopenModal] = useState(false);
 
   // Delete Modal State
-  const [entryToDelete, setEntryToDelete] = useState<CartridgeEntry | null>(null);
+  const [orderToDelete, setOrderToDelete] = useState<ServiceOrder | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   // Notification
   const [actionAlert, setActionAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  const canRegisterDelivery = hasPermission('register_delivery');
-  const canCloseUncompleted = hasPermission('close_uncompleted_entry');
-  const canApplyDiscount = hasPermission('apply_discount_on_delivery');
-  const canReopenEntry = hasPermission('reopen_entry');
-  const canDeleteEntry = hasPermission('delete_entry');
+  const canRegisterDelivery = hasPermission('register_delivery') || hasPermission('orders_deliver') || currentUser?.role === 'ADMINISTRADOR';
+  const canApplyDiscount = hasPermission('apply_discount_on_delivery') || hasPermission('orders_discount') || currentUser?.role === 'ADMINISTRADOR';
+  const canReopenEntry = hasPermission('reopen_entry') || hasPermission('orders_reopen') || currentUser?.role === 'ADMINISTRADOR';
+  const canDeleteEntry = hasPermission('delete_entry') || hasPermission('orders_cancel') || currentUser?.role === 'ADMINISTRADOR';
 
   const loadData = () => {
-    const data = AppStore.getEntries(currentCompany.id);
-    setEntries(data);
+    const data = AppStore.getServiceOrders(currentCompany.id);
+    setOrders(data);
   };
 
   useEffect(() => {
@@ -104,16 +100,15 @@ function EntriesListContent() {
 
   if (!currentUser) return null;
 
-  // Permission Guard for view_entries
-  if (!hasPermission('view_entries')) {
+  if (!hasPermission('view_entries') && !hasPermission('orders_view')) {
     return (
       <div className="max-w-2xl mx-auto mt-10 p-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-xl text-center space-y-4">
         <div className="w-14 h-14 rounded-2xl bg-rose-100 dark:bg-rose-950 text-rose-600 flex items-center justify-center mx-auto">
           <ClipboardList className="w-7 h-7" />
         </div>
-        <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Acesso Restrito às Entradas</h2>
+        <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Acesso Restrito às Ordens de Serviço</h2>
         <p className="text-sm text-slate-600 dark:text-slate-400">
-          Seu usuário não possui permissão para visualizar a lista geral de comandas. Solicite ao Administrador o ajuste.
+          Seu usuário não possui permissão para visualizar a lista geral de ordens de serviço. Solicite ao Administrador o ajuste.
         </p>
         <div className="pt-2">
           <Link href="/dashboard">
@@ -125,45 +120,37 @@ function EntriesListContent() {
   }
 
   // Open Delivery Checkout Modal
-  const handleOpenDeliveryModal = (entry: CartridgeEntry) => {
-    const hasUncompleted = entry.cartridges?.some(c => 
-      ['RECEBIDO', 'AGUARDANDO_VERIFICACAO', 'EM_VERIFICACAO', 'AGUARDANDO_RECARGA', 'EM_RECARGA', 'AGUARDANDO_TESTE', 'EM_TESTE'].includes(c.status)
-    ) || false;
-
-    if (hasUncompleted && !canCloseUncompleted) {
-      alert('Esta comanda possui cartuchos em andamento na oficina técnica. Você não possui a permissão de "Encerrar Comanda sem Conclusão Técnica / Desistência". Solicite a liberação ao administrador nas configurações da empresa.');
-      return;
-    }
-
-    setHasUncompletedCartridges(hasUncompleted);
-    setForcedCloseReason('Desistência do Cliente');
-    setDiscountOption('SALDO_PENDENTE');
-    setSelectedEntryForDelivery(entry);
-    setReceiverName(entry.customer?.name || '');
-    setReceiverDoc(entry.customer?.document || '');
+  const handleOpenDeliveryModal = (order: ServiceOrder) => {
+    setSelectedOrderForDelivery(order);
+    setReceiverName(order.customer?.name || '');
+    setReceiverDoc(order.customer?.document || '');
     setReceiverRelation('Próprio Cliente');
     setDeliveryNotes('');
+    setDiscountOption('SALDO_PENDENTE');
+
+    const remainingToPay = Math.max(0, order.total_amount - (order.paid_amount || 0));
 
     setPayments([
       {
         id: `pay-${Date.now()}-1`,
-        method: entry.payment_method || 'PIX',
-        amount: entry.total_amount
+        method: 'PIX',
+        amount: remainingToPay
       }
     ]);
   };
 
   const handleAddPaymentLine = () => {
-    if (!selectedEntryForDelivery) return;
-    const currentTotalPaid = payments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
-    const remaining = Math.max(0, selectedEntryForDelivery.total_amount - currentTotalPaid);
+    if (!selectedOrderForDelivery) return;
+    const currentPaidSum = payments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+    const orderRemaining = Math.max(0, selectedOrderForDelivery.total_amount - (selectedOrderForDelivery.paid_amount || 0));
+    const stillDue = Math.max(0, orderRemaining - currentPaidSum);
 
     setPayments([
       ...payments,
       {
         id: `pay-${Date.now()}-${payments.length + 1}`,
         method: 'DINHEIRO',
-        amount: remaining
+        amount: stillDue
       }
     ]);
   };
@@ -185,61 +172,39 @@ function EntriesListContent() {
     }));
   };
 
-  const modalTotal = selectedEntryForDelivery ? selectedEntryForDelivery.total_amount : 0;
+  const modalRemainingToPay = selectedOrderForDelivery 
+    ? Math.max(0, selectedOrderForDelivery.total_amount - (selectedOrderForDelivery.paid_amount || 0))
+    : 0;
   const totalPaidSum = payments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
-  const diff = totalPaidSum - modalTotal;
+  const diff = totalPaidSum - modalRemainingToPay;
   const liveChange = diff > 0 ? diff : 0;
   const liveRemaining = diff < 0 ? Math.abs(diff) : 0;
   const isUnderpaid = liveRemaining > 0;
 
   const handleRegisterDelivery = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedEntryForDelivery) return;
-
-    if (hasUncompletedCartridges && !canCloseUncompleted) {
-      alert('Operação cancelada: você não possui permissão para encerrar comandas com cartuchos não concluídos.');
-      return;
-    }
+    if (!selectedOrderForDelivery) return;
 
     if (isUnderpaid && discountOption === 'CONCEDER_DESCONTO' && !canApplyDiscount) {
       alert('Você não possui permissão para conceder descontos na baixa. O administrador precisa liberar esta permissão nas configurações.');
       return;
     }
 
-    const primaryMethod = payments[0]?.method || 'DINHEIRO';
-    const isAPrazoOnly = payments.every(p => p.method === 'A_PRAZO');
-    const shouldApplyDiscount = isUnderpaid && discountOption === 'CONCEDER_DESCONTO';
-
-    const paymentStatus: PaymentStatus = shouldApplyDiscount
-      ? 'PAGO'
-      : isAPrazoOnly || liveRemaining > 0 
-        ? 'PENDENTE' 
-        : 'PAGO';
-
     try {
-      AppStore.registerDeliveryAndPayment({
-        entryId: selectedEntryForDelivery.id,
-        attendantId: currentUser.id,
-        attendantName: currentUser.full_name,
-        receiverName: receiverName.trim(),
-        receiverDocument: receiverDoc.trim(),
-        receiverRelation: receiverRelation,
-        paymentMethod: primaryMethod,
-        paymentStatus: paymentStatus,
-        payments: payments.map(p => ({ method: p.method, amount: p.amount })),
-        amountPaid: totalPaidSum,
-        changeAmount: liveChange,
-        remainingAmount: shouldApplyDiscount ? 0 : liveRemaining,
+      AppStore.deliverServiceOrder(selectedOrderForDelivery.id, {
+        receiver_name: receiverName.trim(),
+        receiver_document: receiverDoc.trim(),
+        receiver_relation: receiverRelation,
         notes: deliveryNotes,
-        applyDiscountDifference: shouldApplyDiscount,
-        forcedCloseReason: hasUncompletedCartridges ? forcedCloseReason : undefined
-      });
+        payments: payments.map(p => ({ payment_method: p.method, amount: p.amount })),
+        apply_discount: isUnderpaid && discountOption === 'CONCEDER_DESCONTO' ? liveRemaining : 0
+      }, currentUser.full_name);
 
       loadData();
-      setSelectedEntryForDelivery(null);
+      setSelectedOrderForDelivery(null);
       setActionAlert({ 
         type: 'success', 
-        message: `Baixa da comanda concluída com sucesso! ${shouldApplyDiscount ? `(Desconto de R$ ${liveRemaining.toFixed(2)} aplicado)` : ''}` 
+        message: `Baixa e entrega da OS concluída com sucesso!` 
       });
       setTimeout(() => setActionAlert(null), 4000);
     } catch (err: any) {
@@ -247,584 +212,454 @@ function EntriesListContent() {
     }
   };
 
-  const handleOpenReopenModal = (entry: CartridgeEntry) => {
-    if (!canReopenEntry) {
-      alert('Seu usuário não possui permissão para reabrir comandas. Solicite ao Administrador.');
-      return;
-    }
-    setEntryToReopen(entry);
-    setReopenReason('Cliente solicitou reteste ou retrabalho técnico');
+  const handleOpenReopenModal = (order: ServiceOrder) => {
+    setOrderToReopen(order);
+    setReopenReason('Cliente solicitou reteste/retrabalho na bancada');
     setShowReopenModal(true);
   };
 
   const handleConfirmReopen = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!entryToReopen) return;
+    if (!orderToReopen) return;
+
     try {
-      AppStore.reopenEntry(entryToReopen.id, reopenReason, currentUser?.full_name || 'Administrador');
+      AppStore.reopenServiceOrder(orderToReopen.id, reopenReason, currentUser.full_name);
       loadData();
       setShowReopenModal(false);
-      setEntryToReopen(null);
-      setActionAlert({ type: 'success', message: `Comanda ${entryToReopen.entry_number} reaberta com sucesso no sistema!` });
+      setOrderToReopen(null);
+      setActionAlert({ type: 'success', message: 'Ordem de serviço reaberta com sucesso e enviada de volta à bancada!' });
       setTimeout(() => setActionAlert(null), 4000);
     } catch (err: any) {
-      alert(`Erro ao reabrir comanda: ${err?.message || 'Erro inesperado'}`);
+      alert(`Erro ao reabrir: ${err?.message || 'Erro inesperado'}`);
     }
   };
 
-  const handleOpenDeleteModal = (entry: CartridgeEntry) => {
-    if (!canDeleteEntry) {
-      alert('Seu usuário não possui permissão para excluir comandas. Solicite ao Administrador.');
-      return;
-    }
-    setEntryToDelete(entry);
+  const handleOpenDeleteModal = (order: ServiceOrder) => {
+    setOrderToDelete(order);
     setShowDeleteModal(true);
   };
 
   const handleConfirmDelete = () => {
-    if (!entryToDelete) return;
+    if (!orderToDelete) return;
     try {
-      AppStore.deleteEntry(entryToDelete.id, currentUser?.full_name || 'Administrador');
+      AppStore.deleteServiceOrder(orderToDelete.id, currentUser.full_name);
       loadData();
       setShowDeleteModal(false);
-      const num = entryToDelete.entry_number;
-      setEntryToDelete(null);
-      setActionAlert({ type: 'success', message: `Comanda ${num} excluída permanentemente com sucesso!` });
+      setOrderToDelete(null);
+      setActionAlert({ type: 'success', message: 'Ordem de serviço excluída com sucesso.' });
       setTimeout(() => setActionAlert(null), 4000);
     } catch (err: any) {
-      alert(`Erro ao excluir comanda: ${err?.message || 'Erro inesperado'}`);
+      alert(`Erro ao excluir: ${err?.message || 'Erro inesperado'}`);
     }
   };
 
-  // Search & Filter
-  const filteredEntries = entries.filter(e => {
-    const matchesSearch = 
-      e.entry_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (e.customer?.name && e.customer.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (e.customer?.phone && e.customer.phone.includes(searchTerm)) ||
-      (e.customer?.secondary_phone && e.customer.secondary_phone.includes(searchTerm)) ||
-      (e.cartridges && e.cartridges.some(c => c.serial_number.includes(searchTerm) || c.final_serie.toLowerCase().includes(searchTerm.toLowerCase())));
+  // Filter Orders
+  const filteredOrders = orders.filter(o => {
+    if (statusFilter === 'READY') {
+      if (o.status !== 'PRONTA') return false;
+    } else if (statusFilter === 'DELIVERED') {
+      if (o.status !== 'ENTREGUE') return false;
+    } else if (statusFilter === 'PROCESSING') {
+      if (o.status === 'ENTREGUE' || o.status === 'CANCELADA') return false;
+    }
 
-    if (!matchesSearch) return false;
+    if (!searchTerm.trim()) return true;
+    const query = searchTerm.toLowerCase().trim();
+    const orderNum = o.order_number.toLowerCase();
+    const custName = o.customer?.name.toLowerCase() || '';
+    const custPhone = o.customer?.phone.toLowerCase() || '';
+    const custDoc = o.customer?.document?.toLowerCase() || '';
+    const hasMatchingItem = o.items?.some(it => 
+      it.internal_identifier.toLowerCase().includes(query) || 
+      (it.model?.name || '').toLowerCase().includes(query)
+    );
 
-    const isDelivered = e.cartridges?.every(c => c.status === 'ENTREGUE');
-    const isReady = !isDelivered && e.cartridges?.some(c => c.status === 'FINALIZADO');
-
-    if (statusFilter === 'READY') return isReady;
-    if (statusFilter === 'DELIVERED') return isDelivered;
-    if (statusFilter === 'PROCESSING') return !isDelivered && !isReady;
-    return true;
+    return orderNum.includes(query) || custName.includes(query) || custPhone.includes(query) || custDoc.includes(query) || !!hasMatchingItem;
   });
 
   return (
-    <div className="space-y-6">
-      {/* Alert Notification */}
+    <div className="space-y-6 pb-20">
+      {/* Alert banner */}
       {actionAlert && (
-        <div className={`p-4 rounded-2xl border flex items-center justify-between text-xs font-semibold shadow-sm animate-in fade-in slide-in-from-top-2 ${
-          actionAlert.type === 'success' 
-            ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200' 
-            : 'bg-rose-50 dark:bg-rose-950/60 border-rose-300 dark:border-rose-800 text-rose-800 dark:text-rose-200'
+        <div className={`p-4 rounded-2xl border text-xs font-bold flex items-center justify-between animate-in fade-in-0 duration-150 ${
+          actionAlert.type === 'success' ? 'bg-emerald-50 text-emerald-900 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-200' : 'bg-rose-50 text-rose-900 border-rose-300'
         }`}>
-          <div className="flex items-center gap-2">
-            {actionAlert.type === 'success' ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <AlertTriangle className="w-4 h-4 text-rose-600" />}
-            <span>{actionAlert.message}</span>
-          </div>
-          <Button variant="ghost" size="sm" onClick={() => setActionAlert(null)} className="h-6 w-6 p-0">
-            <X className="w-3.5 h-3.5" />
-          </Button>
+          <span>{actionAlert.message}</span>
+          <button onClick={() => setActionAlert(null)}><X className="w-4 h-4" /></button>
         </div>
       )}
 
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-[#0e1626] p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-4">
         <div>
-          <div className="flex items-center gap-2">
-            <ClipboardList className="w-5 h-5 text-emerald-600" />
-            <h1 className="text-xl font-black text-slate-900 dark:text-slate-100">
-              Atendimentos & Ordens de Serviço
-            </h1>
-            <Badge className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono font-bold text-[10px]">
-              {entries.length} Total
-            </Badge>
-          </div>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Gerenciamento de comandas, conferência de status, baixa financeira e entrega de cartuchos
+          <h1 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2.5">
+            <span className="p-2 rounded-xl bg-slate-900 text-white shadow-md">
+              <ClipboardList className="w-5 h-5" />
+            </span>
+            Ordens de Serviço & Entregas
+          </h1>
+          <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 mt-1">
+            Histórico completo de atendimentos, controle financeiro e baixa no balcão.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          {hasPermission('create_entry') && (
-            <Link href="/entradas/nova">
-              <Button className="bg-emerald-600 hover:bg-emerald-700 text-xs font-bold gap-1.5 shadow-md shadow-emerald-950/30 text-white h-9 rounded-xl px-4">
-                <PlusCircle className="w-4 h-4" />
-                <span>+ Nova Entrada / OS</span>
-              </Button>
-            </Link>
-          )}
+        <Link href="/entradas/nova">
+          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs h-9 gap-1.5 shadow-md shadow-emerald-600/20">
+            <PlusCircle className="w-4 h-4" />
+            <span>+ Nova Ordem / Comanda</span>
+          </Button>
+        </Link>
+      </div>
+
+      {/* Filter Tabs & Search */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800/60 p-1 rounded-xl border border-slate-200 dark:border-slate-800 w-full sm:w-auto">
+          <button
+            type="button"
+            onClick={() => setStatusFilter('ALL')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+              statusFilter === 'ALL' ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+          >
+            Todas ({orders.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter('PROCESSING')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+              statusFilter === 'PROCESSING' ? 'bg-white dark:bg-slate-900 text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+          >
+            Em Andamento
+          </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter('READY')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+              statusFilter === 'READY' ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+          >
+            Prontas p/ Retirada
+          </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter('DELIVERED')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+              statusFilter === 'DELIVERED' ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+          >
+            Entregues
+          </button>
+        </div>
+
+        <div className="relative w-full sm:w-80">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Input
+            placeholder="Buscar por OS, cliente, serial ou modelo..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            className="pl-9 h-9 text-xs rounded-xl"
+          />
         </div>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="bg-white dark:bg-[#0e1626] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-4 space-y-3">
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="relative w-full sm:w-80">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Buscar por N° comanda, cliente, telefone ou serial..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-8 py-2 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:border-emerald-500 text-slate-900 dark:text-slate-100 font-medium"
-            />
-            {searchTerm && (
-              <button 
-                onClick={() => setSearchTerm('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-
-          <div className="flex items-center gap-1.5 w-full sm:w-auto overflow-x-auto pb-1">
-            <button
-              onClick={() => setStatusFilter('ALL')}
-              className={`px-3 py-1.5 text-xs rounded-xl font-bold transition-all ${statusFilter === 'ALL' ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
-            >
-              Todas ({entries.length})
-            </button>
-            <button
-              onClick={() => setStatusFilter('READY')}
-              className={`px-3 py-1.5 text-xs rounded-xl font-bold transition-all ${statusFilter === 'READY' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100'}`}
-            >
-              Prontas ({entries.filter(e => !e.cartridges?.every(c => c.status === 'ENTREGUE') && e.cartridges?.some(c => c.status === 'FINALIZADO')).length})
-            </button>
-            <button
-              onClick={() => setStatusFilter('PROCESSING')}
-              className={`px-3 py-1.5 text-xs rounded-xl font-bold transition-all ${statusFilter === 'PROCESSING' ? 'bg-amber-600 text-white shadow-xs' : 'bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 hover:bg-amber-100'}`}
-            >
-              Em Andamento ({entries.filter(e => !e.cartridges?.every(c => c.status === 'ENTREGUE') && !e.cartridges?.some(c => c.status === 'FINALIZADO')).length})
-            </button>
-            <button
-              onClick={() => setStatusFilter('DELIVERED')}
-              className={`px-3 py-1.5 text-xs rounded-xl font-bold transition-all ${statusFilter === 'DELIVERED' ? 'bg-slate-700 text-white shadow-xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'}`}
-            >
-              Entregues ({entries.filter(e => e.cartridges?.every(c => c.status === 'ENTREGUE')).length})
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Entries Table */}
-      <div className="bg-white dark:bg-[#0e1626] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+      {/* Orders List Table */}
+      <Card className="rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm bg-white dark:bg-slate-900 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider text-[10px]">
-              <tr>
-                <th className="p-3.5">Comanda / Data</th>
-                <th className="p-3.5">Cliente</th>
-                <th className="p-3.5">Itens / Equipamentos</th>
-                <th className="p-3.5">Valor Total</th>
-                <th className="p-3.5">Pagamento</th>
-                <th className="p-3.5">Status Geral</th>
-                <th className="p-3.5 text-right">Ações Operacionais</th>
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-950/40 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                <th className="py-3 px-4">Nº da OS</th>
+                <th className="py-3 px-4">Cliente</th>
+                <th className="py-3 px-4">Itens / Equipamentos</th>
+                <th className="py-3 px-4">Data Abertura</th>
+                <th className="py-3 px-4">Status Operacional</th>
+                <th className="py-3 px-4">Financeiro</th>
+                <th className="py-3 px-4 text-right">Valor Total</th>
+                <th className="py-3 px-4 text-right">Ações</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
-              {filteredEntries.map(entry => {
-                const isDelivered = entry.cartridges?.every(c => c.status === 'ENTREGUE');
-                const isReady = !isDelivered && entry.cartridges?.some(c => c.status === 'FINALIZADO');
-                const payBadge = getPaymentStatusBadge(entry.payment_status);
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50 text-xs">
+              {filteredOrders.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="py-8 text-center text-slate-400 dark:text-slate-600">
+                    Nenhuma ordem de serviço encontrada.
+                  </td>
+                </tr>
+              ) : (
+                filteredOrders.map(order => {
+                  const statusConfig = getStatusBadgeConfig(order.status);
+                  const finConfig = getPaymentStatusBadge(order.financial_status);
 
-                return (
-                  <tr key={entry.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
-                    <td className="p-3.5">
-                      <div className="font-mono font-black text-slate-900 dark:text-slate-100 text-sm">
-                        {entry.entry_number}
-                      </div>
-                      <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
-                        <Calendar className="w-3 h-3 text-slate-400" />
-                        <span>{formatDateTime(entry.entry_date)}</span>
-                      </div>
-                    </td>
+                  return (
+                    <tr key={order.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors">
+                      {/* OS Number & Token */}
+                      <td className="py-3.5 px-4 font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                        {order.order_number}
+                      </td>
 
-                    <td className="p-3.5">
-                      <div className="font-bold text-slate-900 dark:text-slate-100">
-                        {entry.customer?.name}
-                      </div>
-                      <div className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5">
-                        <span>{entry.customer?.phone}</span>
-                        {entry.customer?.phone_is_whatsapp && (
-                          <a
-                            href={`https://wa.me/55${(entry.customer.whatsapp || entry.customer.phone || '').replace(/\D/g, '')}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-emerald-600 hover:text-emerald-700"
-                            title="Conversar no WhatsApp"
-                          >
-                            <MessageSquare className="w-3 h-3" />
-                          </a>
-                        )}
-                      </div>
-                    </td>
-
-                    <td className="p-3.5">
-                      <div className="space-y-1">
-                        {entry.cartridges?.map(c => (
-                          <div key={c.id} className="text-[11px] text-slate-600 dark:text-slate-300 font-mono flex items-center gap-1.5">
-                            <span className="font-bold text-slate-800 dark:text-slate-200">• {c.serial_number}</span>
-                            <span className="text-slate-400">[{c.final_serie}]</span>
-                          </div>
-                        ))}
-                      </div>
-                    </td>
-
-                    <td className="p-3.5">
-                      <div className="font-black text-slate-900 dark:text-slate-100 text-sm font-mono">
-                        {formatCurrency(entry.total_amount)}
-                      </div>
-                      {entry.discount_amount > 0 && (
-                        <div className="text-[10px] text-rose-500 font-medium">
-                          Desconto: {formatCurrency(entry.discount_amount)}
+                      {/* Customer Info */}
+                      <td className="py-3.5 px-4">
+                        <div className="font-bold text-slate-900 dark:text-white">
+                          {order.customer?.name || 'Cliente'}
                         </div>
-                      )}
-                    </td>
+                        <div className="text-[11px] text-slate-500 flex items-center gap-1">
+                          <Phone className="w-3 h-3 text-emerald-600" />
+                          <span>{order.customer?.phone}</span>
+                        </div>
+                      </td>
 
-                    <td className="p-3.5">
-                      <Badge className={payBadge.className}>{payBadge.label}</Badge>
-                      <div className="text-[10px] text-slate-500 mt-0.5 font-medium">
-                        {getPaymentMethodLabel(entry.payment_method || 'DINHEIRO')}
-                      </div>
-                    </td>
+                      {/* Items Summary */}
+                      <td className="py-3.5 px-4">
+                        <div className="space-y-0.5 max-w-xs">
+                          {order.items?.map((it, i) => (
+                            <div key={i} className="text-[11px] text-slate-700 dark:text-slate-300 truncate">
+                              <span className="font-semibold text-slate-900 dark:text-white">{it.model?.name}</span>
+                              <span className="font-mono text-slate-400 ml-1">({it.internal_identifier})</span>
+                            </div>
+                          ))}
+                        </div>
+                      </td>
 
-                    <td className="p-3.5">
-                      {isDelivered ? (
-                        <Badge className="bg-slate-700 text-white font-bold">📦 Entregue</Badge>
-                      ) : isReady ? (
-                        <Badge className="bg-emerald-600 text-white font-bold animate-pulse">✅ Pronto p/ Retirada</Badge>
-                      ) : (
-                        <Badge className="bg-amber-600 text-white font-bold">⚙️ Em Andamento</Badge>
-                      )}
-                    </td>
+                      {/* Date */}
+                      <td className="py-3.5 px-4 text-slate-500 text-[11px] whitespace-nowrap">
+                        {formatDateTime(order.opened_at)}
+                      </td>
 
-                    <td className="p-3.5 text-right">
-                      <div className="flex items-center justify-end gap-1.5 flex-wrap">
-                        {/* Delivery Button */}
-                        {canRegisterDelivery && !isDelivered && (
+                      {/* Operational Status */}
+                      <td className="py-3.5 px-4">
+                        <Badge className={`${statusConfig.className} text-[10px] font-bold`}>
+                          {statusConfig.label}
+                        </Badge>
+                      </td>
+
+                      {/* Financial Status */}
+                      <td className="py-3.5 px-4">
+                        <Badge className={`${finConfig.className} text-[10px]`}>
+                          {finConfig.label}
+                        </Badge>
+                      </td>
+
+                      {/* Total Amount */}
+                      <td className="py-3.5 px-4 text-right font-black text-slate-900 dark:text-white whitespace-nowrap">
+                        {formatCurrency(order.total_amount)}
+                      </td>
+
+                      {/* Actions */}
+                      <td className="py-3.5 px-4 text-right whitespace-nowrap space-x-1.5">
+                        {order.status !== 'ENTREGUE' && (
                           <Button
                             size="sm"
-                            onClick={() => handleOpenDeliveryModal(entry)}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold h-8 px-2.5 rounded-xl gap-1 shadow-xs"
+                            onClick={() => handleOpenDeliveryModal(order)}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-8 rounded-xl px-2.5 shadow-sm"
                           >
-                            <PackageCheck className="w-3.5 h-3.5" />
-                            <span>Dar Baixa</span>
+                            <PackageCheck className="w-3.5 h-3.5 mr-1" />
+                            <span>Baixa / Entrega</span>
                           </Button>
                         )}
 
-                        {/* Thermal Voucher Print */}
-                        <Link href={`/impressao?entry=${entry.entry_number}`}>
-                          <Button size="sm" variant="outline" className="h-8 text-[11px] px-2 rounded-xl text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700">
-                            <Printer className="w-3.5 h-3.5" />
-                          </Button>
-                        </Link>
-
-                        {/* Reopen Button */}
-                        {canReopenEntry && isDelivered && (
+                        {order.status === 'ENTREGUE' && canReopenEntry && (
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => handleOpenReopenModal(entry)}
-                            className="h-8 text-[11px] px-2 rounded-xl text-amber-700 border-amber-300 hover:bg-amber-50"
-                            title="Reabrir Comanda"
+                            onClick={() => handleOpenReopenModal(order)}
+                            className="text-amber-600 border-amber-300 dark:border-amber-900/50 hover:bg-amber-50 dark:hover:bg-amber-950/40 text-xs h-8 rounded-xl px-2"
+                            title="Reabrir Ordem"
                           >
                             <RotateCcw className="w-3.5 h-3.5" />
                           </Button>
                         )}
 
-                        {/* Delete Button */}
-                        {canDeleteEntry && (
+                        <Link href={`/impressao?orderId=${order.id}`}>
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => handleOpenDeleteModal(entry)}
-                            className="h-8 text-[11px] px-2 rounded-xl text-rose-600 border-rose-200 hover:bg-rose-50"
-                            title="Excluir Comanda"
+                            className="text-xs h-8 rounded-xl px-2 text-slate-600 dark:text-slate-300"
+                            title="Imprimir Térmica"
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                          </Button>
+                        </Link>
+
+                        <Link href={`/acompanhar/${order.tracking_token}`} target="_blank">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs h-8 rounded-xl px-2 text-purple-600 border-purple-200 dark:border-purple-900/40"
+                            title="Rastreio Online"
+                          >
+                            <QrCode className="w-3.5 h-3.5" />
+                          </Button>
+                        </Link>
+
+                        {canDeleteEntry && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleOpenDeleteModal(order)}
+                            className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/50 text-xs h-8 rounded-xl px-2"
+                            title="Excluir Ordem"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </Button>
                         )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-
-              {filteredEntries.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="text-center py-10 text-slate-400 text-xs">
-                    Nenhum atendimento ou comanda encontrado para os filtros selecionados.
-                  </td>
-                </tr>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
-      </div>
+      </Card>
 
-      {/* Multi-Payment Delivery Checkout Modal */}
-      {selectedEntryForDelivery && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
-          <div className="bg-white dark:bg-[#0e1626] rounded-3xl border border-slate-200 dark:border-slate-800 w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 max-h-[92vh] flex flex-col">
-            <div className="bg-slate-900 text-white p-4 flex items-center justify-between border-b border-slate-800 shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-emerald-600 flex items-center justify-center font-bold text-white shadow-md">
-                  <PackageCheck className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-sm">Baixa Financeira & Entrega</h3>
-                  <p className="text-[11px] text-slate-400">
-                    Comanda: <strong className="text-white font-mono">{selectedEntryForDelivery.entry_number}</strong> — {selectedEntryForDelivery.customer?.name}
-                  </p>
-                </div>
+      {/* Delivery Checkout Modal */}
+      {selectedOrderForDelivery && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in-0 duration-150">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div>
+                <h3 className="font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
+                  <PackageCheck className="w-5 h-5 text-emerald-600" />
+                  Registro de Baixa & Entrega
+                </h3>
+                <span className="text-xs text-slate-500 font-mono">
+                  Ordem nº {selectedOrderForDelivery.order_number}
+                </span>
               </div>
-              <Button size="sm" variant="ghost" onClick={() => setSelectedEntryForDelivery(null)} className="h-8 w-8 p-0 text-slate-400 hover:text-white">
-                <X className="w-4 h-4" />
-              </Button>
+              <button
+                type="button"
+                onClick={() => setSelectedOrderForDelivery(null)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            <form onSubmit={handleRegisterDelivery} className="p-5 space-y-4 overflow-y-auto flex-1">
-              {/* Uncompleted Cartridges Warning */}
-              {hasUncompletedCartridges && (
-                <div className="p-3.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 rounded-2xl space-y-2">
-                  <div className="flex items-center gap-2 text-amber-900 dark:text-amber-200 text-xs font-bold">
-                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                    <span>Cartuchos Não Concluídos na Bancada</span>
-                  </div>
-                  <p className="text-[11px] text-amber-800 dark:text-amber-300 leading-relaxed">
-                    Esta comanda contém itens em andamento na oficina. A baixa registrará os itens como Devolvidos ao cliente por desistência.
-                  </p>
-                  <div>
-                    <label className="text-[11px] font-semibold text-amber-900 dark:text-amber-200 mb-0.5 block">
-                      Motivo da Baixa *
-                    </label>
-                    <Select
-                      value={forcedCloseReason}
-                      onChange={(e) => setForcedCloseReason(e.target.value)}
-                      className="text-xs bg-white dark:bg-slate-900 rounded-xl"
-                    >
-                      <option value="Desistência do Cliente">Desistência do Cliente (Retirada antes do reparo)</option>
-                      <option value="Devolução sem serviço">Devolução sem serviço (Cliente não aguardou)</option>
-                      <option value="Cliente não aprovou orçamento">Cliente não aprovou orçamento</option>
-                      <option value="Equipamento incompatível">Equipamento incompatível</option>
-                      <option value="Outro motivo">Outro motivo operacional</option>
-                    </Select>
-                  </div>
-                </div>
-              )}
-
-              {/* Total Card */}
-              <div className="p-4 bg-emerald-50 dark:bg-emerald-950/30 rounded-2xl border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-between">
+            <form onSubmit={handleRegisterDelivery} className="space-y-4">
+              {/* Receiver Info */}
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <p className="text-xs text-slate-600 dark:text-slate-300 font-semibold">Valor Total da Comanda:</p>
-                  <p className="text-2xl font-black text-emerald-700 dark:text-emerald-400 font-mono">
-                    {formatCurrency(selectedEntryForDelivery.total_amount)}
-                  </p>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Nome do Recebedor *
+                  </label>
+                  <Input
+                    required
+                    placeholder="Quem está retirando..."
+                    value={receiverName}
+                    onChange={e => setReceiverName(e.target.value)}
+                    className="h-9 text-xs rounded-xl"
+                  />
                 </div>
-                <div className="text-right text-xs">
-                  <span className="text-slate-500">Itens:</span>
-                  <p className="font-bold text-slate-800 dark:text-slate-200">{selectedEntryForDelivery.cartridges?.length} itens</p>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Relação c/ Cliente:
+                  </label>
+                  <Select
+                    value={receiverRelation}
+                    onChange={e => setReceiverRelation(e.target.value)}
+                    className="h-9 text-xs rounded-xl"
+                  >
+                    <option value="Próprio Cliente">Próprio Cliente</option>
+                    <option value="Funcionário / Portador">Funcionário / Portador</option>
+                    <option value="Familiar">Familiar</option>
+                    <option value="Outro">Outro</option>
+                  </Select>
                 </div>
               </div>
 
-              {/* Multi-Payment Methods */}
-              <div className="space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                    <DollarSign className="w-4 h-4 text-emerald-600" />
-                    <span>Formas de Pagamento Recebidas</span>
-                  </label>
+              {/* Payments Split Box */}
+              <div className="p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-slate-900 dark:text-white">Pagamentos & Baixa Financeira</span>
+                  <span className="font-bold text-emerald-600">Saldo a Pagar: {formatCurrency(modalRemainingToPay)}</span>
+                </div>
+
+                {payments.map((p, pIdx) => (
+                  <div key={p.id} className="flex items-center gap-2">
+                    <Select
+                      value={p.method}
+                      onChange={e => handleUpdatePaymentLine(p.id, 'method', e.target.value)}
+                      className="h-8 text-xs rounded-lg flex-1"
+                    >
+                      <option value="PIX">PIX</option>
+                      <option value="DINHEIRO">Dinheiro</option>
+                      <option value="CARTAO_DEBITO">Cartão de Débito</option>
+                      <option value="CARTAO_CREDITO">Cartão de Crédito</option>
+                      <option value="A_PRAZO">A Prazo / Faturado</option>
+                      <option value="ISENTO">Isento / Garantia</option>
+                    </Select>
+
+                    <Input
+                      type="number"
+                      step="0.01"
+                      placeholder="Valor"
+                      value={p.amount || ''}
+                      onChange={e => handleUpdatePaymentLine(p.id, 'amount', e.target.value)}
+                      className="h-8 text-xs rounded-lg w-28 text-right font-bold"
+                    />
+
+                    {payments.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemovePaymentLine(p.id)}
+                        className="text-rose-500 hover:text-rose-700 p-1"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+
+                <div className="flex justify-between items-center pt-2 border-t border-slate-200 dark:border-slate-800">
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
                     onClick={handleAddPaymentLine}
-                    className="text-[11px] h-7 gap-1 text-emerald-700 dark:text-emerald-300 border-emerald-300 rounded-lg"
+                    className="text-xs text-emerald-600 h-7 px-2"
                   >
-                    <Plus className="w-3 h-3" />
-                    <span>Adicionar Outra Forma</span>
+                    + Dividir em Outra Forma (Split)
                   </Button>
-                </div>
 
-                <div className="space-y-2">
-                  {payments.map((p) => (
-                    <div key={p.id} className="flex items-center gap-2 p-2.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700">
-                      <div className="flex-1">
-                        <Select
-                          value={p.method}
-                          onChange={(e) => handleUpdatePaymentLine(p.id, 'method', e.target.value as PaymentMethod)}
-                          className="text-xs font-semibold h-9 rounded-lg"
-                        >
-                          <option value="PIX">⚡ PIX Instantâneo</option>
-                          <option value="DINHEIRO">💵 Dinheiro em Espécie</option>
-                          <option value="CARTAO_DEBITO">💳 Cartão de Débito</option>
-                          <option value="CARTAO_CREDITO">💳 Cartão de Crédito</option>
-                          <option value="A_PRAZO">📝 A Prazo / Faturado</option>
-                          <option value="ISENTO">🎁 Isento / Garantia</option>
-                        </Select>
-                      </div>
-
-                      <div className="w-32">
-                        <Input
-                          type="number"
-                          step="0.50"
-                          required
-                          value={p.amount}
-                          onChange={(e) => handleUpdatePaymentLine(p.id, 'amount', e.target.value)}
-                          className="text-xs font-bold text-slate-900 dark:text-slate-100 h-9 rounded-lg"
-                          placeholder="Valor R$"
-                        />
-                      </div>
-
-                      {payments.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => handleRemovePaymentLine(p.id)}
-                          className="text-rose-500 hover:text-rose-700 p-1.5"
-                          title="Remover forma"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Calculation Indicator */}
-                <div className="pt-1 space-y-2">
-                  {liveChange > 0 && (
-                    <div className="p-3 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800 rounded-xl flex items-center justify-between text-xs">
-                      <span className="font-bold text-emerald-800 dark:text-emerald-300">Troco a Devolver:</span>
-                      <strong className="text-base font-black text-emerald-900 dark:text-emerald-200 font-mono">
-                        {formatCurrency(liveChange)}
-                      </strong>
-                    </div>
-                  )}
-
-                  {isUnderpaid && (
-                    <div className="p-3.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 rounded-2xl space-y-2.5">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-bold text-amber-900 dark:text-amber-200 flex items-center gap-1">
-                          <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-                          <span>Diferença a menor:</span>
-                        </span>
-                        <strong className="text-sm font-black text-rose-600 font-mono">
-                          {formatCurrency(liveRemaining)}
-                        </strong>
-                      </div>
-
-                      <div className="space-y-2 text-xs pt-1 border-t border-amber-200 dark:border-amber-800/80">
-                        <label className="flex items-start gap-2 cursor-pointer p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
-                          <input
-                            type="radio"
-                            name="discount_decision"
-                            checked={discountOption === 'SALDO_PENDENTE'}
-                            onChange={() => setDiscountOption('SALDO_PENDENTE')}
-                            className="mt-0.5 text-amber-600"
-                          />
-                          <div>
-                            <span className="font-bold text-slate-800 dark:text-slate-200 block">
-                              Manter {formatCurrency(liveRemaining)} como Saldo Devedor
-                            </span>
-                            <span className="text-[11px] text-slate-500">
-                              A comanda permanecerá com status PENDENTE.
-                            </span>
-                          </div>
-                        </label>
-
-                        <label className={`flex items-start gap-2 p-2 rounded-xl border transition-all ${
-                          !canApplyDiscount 
-                            ? 'bg-slate-100 dark:bg-slate-850 opacity-60 cursor-not-allowed border-slate-300' 
-                            : 'bg-white dark:bg-slate-900 cursor-pointer'
-                        }`}>
-                          <input
-                            type="radio"
-                            name="discount_decision"
-                            disabled={!canApplyDiscount}
-                            checked={discountOption === 'CONCEDER_DESCONTO'}
-                            onChange={() => setDiscountOption('CONCEDER_DESCONTO')}
-                            className="mt-0.5 text-emerald-600"
-                          />
-                          <div className="flex-1">
-                            <span className="font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
-                              <Percent className="w-3.5 h-3.5" />
-                              <span>Conceder Desconto de {formatCurrency(liveRemaining)} e Quitar</span>
-                            </span>
-                          </div>
-                        </label>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Who Received */}
-              <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
-                    Quem está retirando? *
-                  </label>
-                  {selectedEntryForDelivery.customer?.name && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setReceiverName(selectedEntryForDelivery.customer?.name || '');
-                        setReceiverDoc(selectedEntryForDelivery.customer?.document || '');
-                        setReceiverRelation('Próprio Cliente');
-                      }}
-                      className="text-[11px] text-emerald-600 hover:underline font-semibold"
-                    >
-                      Preencher dados do cliente
-                    </button>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[11px] text-slate-500 mb-0.5 block">Nome do Recebedor *</label>
-                    <Input
-                      required
-                      placeholder="Nome completo"
-                      value={receiverName}
-                      onChange={(e) => setReceiverName(e.target.value)}
-                      className="text-xs h-9 rounded-xl"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[11px] text-slate-500 mb-0.5 block">Relação</label>
-                    <Select
-                      value={receiverRelation}
-                      onChange={(e) => setReceiverRelation(e.target.value)}
-                      className="text-xs h-9 rounded-xl"
-                    >
-                      <option value="Próprio Cliente">Próprio Cliente</option>
-                      <option value="Funcionário / Portador">Funcionário / Portador</option>
-                      <option value="Familiar">Familiar</option>
-                      <option value="Motoboy / Entrega">Motoboy / Entrega</option>
-                      <option value="Outro">Outro</option>
-                    </Select>
+                  <div className="text-right text-xs">
+                    {liveChange > 0 && <span className="text-emerald-600 font-bold">Troco: {formatCurrency(liveChange)}</span>}
+                    {liveRemaining > 0 && <span className="text-amber-600 font-bold">Faltante: {formatCurrency(liveRemaining)}</span>}
                   </div>
                 </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
-                <Button type="button" variant="outline" size="sm" onClick={() => setSelectedEntryForDelivery(null)} className="rounded-xl">
+              {/* Delivery Notes */}
+              <div>
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                  Observações de Entrega (Opcional)
+                </label>
+                <Input
+                  placeholder="Ex: Entregue testado na frente do cliente..."
+                  value={deliveryNotes}
+                  onChange={e => setDeliveryNotes(e.target.value)}
+                  className="h-9 text-xs rounded-xl"
+                />
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedOrderForDelivery(null)}
+                  className="rounded-xl text-xs h-9"
+                >
                   Cancelar
                 </Button>
-                <Button type="submit" size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-1.5 shadow-md rounded-xl">
-                  <CheckCircle className="w-4 h-4" />
-                  <span>Confirmar Baixa & Concluir</span>
+                <Button
+                  type="submit"
+                  size="sm"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs h-9 px-4"
+                >
+                  Confirmar Baixa & Entregar
                 </Button>
               </div>
             </form>
@@ -833,44 +668,36 @@ function EntriesListContent() {
       )}
 
       {/* Reopen Modal */}
-      {showReopenModal && entryToReopen && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 w-full max-w-md p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
-              <div className="flex items-center gap-2 text-amber-600">
-                <RotateCcw className="w-5 h-5" />
-                <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">Reabrir Comanda</h3>
-              </div>
-              <Button size="sm" variant="ghost" onClick={() => setShowReopenModal(false)} className="h-8 w-8 p-0 text-slate-400">
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-
-            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-              Deseja reabrir a comanda <strong className="text-slate-900 dark:text-slate-100 font-mono">#{entryToReopen.entry_number}</strong>? A comanda voltará para a fila de atendimento.
+      {showReopenModal && orderToReopen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in-0 duration-150">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-md w-full p-6 space-y-4">
+            <h3 className="font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
+              <RotateCcw className="w-5 h-5 text-amber-600" />
+              Reabertura de Ordem de Serviço
+            </h3>
+            <p className="text-xs text-slate-500">
+              A ordem <strong>{orderToReopen.order_number}</strong> voltará ao status "Em Andamento" e seus itens retornarão à bancada técnica.
             </p>
 
             <form onSubmit={handleConfirmReopen} className="space-y-3">
               <div>
-                <label className="text-xs font-semibold mb-1 block text-slate-700 dark:text-slate-300">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
                   Motivo da Reabertura *
                 </label>
                 <Input
                   required
                   value={reopenReason}
-                  onChange={(e) => setReopenReason(e.target.value)}
-                  placeholder="Ex: Cliente retornou para reteste..."
-                  className="text-xs h-9 rounded-xl"
+                  onChange={e => setReopenReason(e.target.value)}
+                  className="h-9 text-xs rounded-xl"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
-                <Button type="button" variant="outline" size="sm" onClick={() => setShowReopenModal(false)} className="rounded-xl">
+              <div className="flex justify-end gap-2 pt-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => setShowReopenModal(false)} className="rounded-xl text-xs">
                   Cancelar
                 </Button>
-                <Button type="submit" size="sm" className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs gap-1 rounded-xl">
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Confirmar Reabertura</span>
+                <Button type="submit" size="sm" className="bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs">
+                  Confirmar Reabertura
                 </Button>
               </div>
             </form>
@@ -879,35 +706,24 @@ function EntriesListContent() {
       )}
 
       {/* Delete Modal */}
-      {showDeleteModal && entryToDelete && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 w-full max-w-md p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
-              <div className="flex items-center gap-2 text-rose-600">
-                <Trash2 className="w-5 h-5" />
-                <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">Excluir Comanda</h3>
-              </div>
-              <Button size="sm" variant="ghost" onClick={() => setShowDeleteModal(false)} className="h-8 w-8 p-0 text-slate-400">
-                <X className="w-4 h-4" />
-              </Button>
+      {showDeleteModal && orderToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in-0 duration-150">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-md w-full p-6 text-center space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
             </div>
-
-            <div className="p-3.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-2xl space-y-1">
-              <p className="text-xs font-bold text-rose-800 dark:text-rose-200">
-                Atenção: Ação permanente e irreversível!
-              </p>
-              <p className="text-[11px] text-rose-700 dark:text-rose-300 leading-relaxed">
-                Tem certeza que deseja excluir definitivamente a comanda <strong className="font-mono">#{entryToDelete.entry_number}</strong>?
-              </p>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
-              <Button type="button" variant="outline" size="sm" onClick={() => setShowDeleteModal(false)} className="rounded-xl">
+            <h3 className="font-bold text-base text-slate-900 dark:text-white">
+              Excluir Ordem de Serviço {orderToDelete.order_number}?
+            </h3>
+            <p className="text-xs text-slate-500">
+              Esta ação removerá permanentemente a comanda e todos os itens vinculados.
+            </p>
+            <div className="flex justify-center gap-2 pt-2">
+              <Button variant="outline" size="sm" onClick={() => setShowDeleteModal(false)} className="rounded-xl text-xs">
                 Cancelar
               </Button>
-              <Button type="button" size="sm" onClick={handleConfirmDelete} className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs gap-1 rounded-xl shadow-sm">
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Sim, Excluir</span>
+              <Button size="sm" onClick={handleConfirmDelete} className="bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs">
+                Sim, Excluir Permanentemente
               </Button>
             </div>
           </div>
@@ -917,9 +733,9 @@ function EntriesListContent() {
   );
 }
 
-export default function EntriesListPage() {
+export default function EntriesPage() {
   return (
-    <Suspense fallback={<div className="p-6 text-xs text-slate-500">Carregando atendimentos...</div>}>
+    <Suspense fallback={<div className="p-8 text-center text-xs text-slate-500">Carregando ordens de serviço...</div>}>
       <EntriesListContent />
     </Suspense>
   );

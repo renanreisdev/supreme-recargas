@@ -1,43 +1,26 @@
 // ============================================================================
-// SUPREME RECARGAS 2 - TYPES & INTERFACES
-// Core TypeScript Definitions for SaaS Multi-Tenant Architecture
+// SUPREME RECARGAS 2 - TYPES & DOMAIN INTERFACES
+// Generic, Modular Multi-Tenant SaaS Architecture for Technical Services,
+// Maintenance, Refills, Electronics and Workshops
 // ============================================================================
 
 export type UserRole = 'SUPER_ADMIN' | 'ADMINISTRADOR' | 'ATENDENTE' | 'TECNICO';
 
 export type SubscriptionStatus = 'ACTIVE' | 'TRIAL' | 'PAUSED' | 'EXPIRED' | 'CANCELLED';
 
-export type RequestedService = 
-  | 'VERIFICACAO' 
-  | 'RECARGA' 
-  | 'VERIFICACAO_E_RECARGA' 
-  | 'TESTE' 
-  | 'OUTRO';
-
-export type CartridgeStatus = 
-  | 'RECEBIDO'
-  | 'AGUARDANDO_VERIFICACAO'
-  | 'EM_VERIFICACAO'
-  | 'AGUARDANDO_RECARGA'
-  | 'EM_RECARGA'
-  | 'AGUARDANDO_TESTE'
-  | 'EM_TESTE'
-  | 'FINALIZADO'
+export type OrderStatus = 
+  | 'ABERTA'
+  | 'EM_ANDAMENTO'
+  | 'AGUARDANDO_APROVACAO'
+  | 'PRONTA'
   | 'ENTREGUE'
-  | 'COM_PROBLEMA'
-  | 'SEM_REPARO'
-  | 'CANCELADO';
+  | 'CANCELADA';
 
-export type ResultClassification = 
+export type FinancialStatus = 
   | 'PENDENTE'
-  | 'OK'
-  | 'CID'
-  | 'QUEIMADO'
-  | 'FALHA_IMPRESSAO'
-  | 'ENTUPIDO'
-  | 'SEM_REPARO'
-  | 'DESISTENCIA'
-  | 'OUTRO';
+  | 'PAGO_PARCIAL'
+  | 'PAGO'
+  | 'ISENTO';
 
 export type PaymentMethod = 
   | 'DINHEIRO' 
@@ -47,42 +30,52 @@ export type PaymentMethod =
   | 'A_PRAZO' 
   | 'ISENTO';
 
-export type PaymentStatus = 
-  | 'PAGO' 
-  | 'PENDENTE' 
-  | 'ISENTO';
+export type PaymentStatus = FinancialStatus;
 
-export type BusinessSegment = 
+export type AttributeDataType = 
+  | 'text' 
+  | 'textarea' 
+  | 'integer' 
+  | 'decimal' 
+  | 'boolean' 
+  | 'select' 
+  | 'multi_select' 
+  | 'currency';
+
+export type FieldDataType = 
+  | 'decimal' 
+  | 'text' 
+  | 'textarea' 
+  | 'checkbox' 
+  | 'select';
+
+export type StageType = 
+  | 'RECEBIDO' 
+  | 'EM_ANDAMENTO' 
+  | 'AGUARDANDO_APROVACAO' 
+  | 'CONCLUIDO' 
+  | 'CANCELADO';
+
+export type KanbanColumnColor = 
+  | 'slate' 
+  | 'amber' 
+  | 'purple' 
+  | 'blue' 
+  | 'emerald' 
+  | 'rose' 
+  | 'teal' 
+  | 'indigo';
+
+export type BusinessTemplateKey = 
   | 'RECARGA_CARTUCHOS' 
-  | 'ASSISTENCIA_CELULARES_INFORMATICA' 
+  | 'ASSISTENCIA_INFORMATICA' 
+  | 'ASSISTENCIA_CELULARES' 
   | 'FERRAMENTAS_MOTORES' 
   | 'OFICINA_GERAL';
 
-export interface SegmentCustomization {
-  segment: BusinessSegment;
-  segmentName: string;
-  itemLabelSingular: string; // "Cartucho", "Aparelho", "Equipamento", "Item"
-  itemLabelPlural: string;   // "Cartuchos", "Aparelhos", "Equipamentos", "Itens"
-  identifierLabel: string;   // "Final de Série", "IMEI / Serial", "Nº de Série", "Código"
-  serviceLabel: string;      // "Serviço Solicitado", "Tipo de Manutenção"
-  hasWeightInspection: boolean; // Balança / Pesagem em gramas
-  hasChecklist: boolean;     // Checklist de Inspeção
-  defaultChecklistItems: string[];
-  defaultCategories: string[];
-  iconName?: string;
-}
-
-export interface PermissionGroup {
-  id: string;
-  tenant_id: string;
-  name: string;
-  description?: string;
-  is_system_default?: boolean;
-  default_role: UserRole;
-  permissions: Record<string, boolean>;
-  created_at?: string;
-  updated_at?: string;
-}
+// ============================================================================
+// 1. SAAS, TENANCY & USERS
+// ============================================================================
 
 export interface Plan {
   id: string;
@@ -92,10 +85,10 @@ export interface Plan {
   max_users: number;
   monthly_price: number;
   extra_user_price: number;
+  max_total_users?: number;
   max_administrators?: number;
   max_attendants?: number;
   max_technicians?: number;
-  max_total_users?: number;
   extra_attendant_price?: number;
   extra_technician_price?: number;
   extra_admin_price?: number;
@@ -120,6 +113,7 @@ export interface Company {
   responsible_name?: string;
   logo_url?: string;
   business_segment?: BusinessSegment;
+  active_template_keys?: BusinessTemplateKey[];
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -134,23 +128,22 @@ export interface Subscription {
   expires_at?: string;
   custom_max_users?: number;
   extra_users?: number;
-  custom_max_administrators?: number;
-  custom_max_attendants?: number;
-  custom_max_technicians?: number;
-  extra_attendants?: number;
-  extra_technicians?: number;
-  extra_administrators?: number;
   custom_price?: number;
   billing_cycle?: 'MONTHLY' | 'ANNUAL' | 'CUSTOM';
   notes?: string;
   plan?: Plan;
 }
 
-export interface PaymentSplit {
-  id?: string;
-  method: PaymentMethod;
-  amount: number;
-  notes?: string;
+export interface PermissionGroup {
+  id: string;
+  tenant_id?: string;
+  name: string;
+  description?: string;
+  is_system_default?: boolean;
+  default_role: UserRole;
+  permissions: Record<string, boolean>;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Profile {
@@ -183,169 +176,386 @@ export interface Customer {
   whatsapp?: string;
   email?: string;
   company_name?: string;
+  address?: string;
   notes?: string;
   created_at: string;
+  updated_at?: string;
 }
 
-export interface CartridgeBrand {
+// ============================================================================
+// 2. CATALOG: CATEGORIES, BRANDS, MODELS, VARIANTS & ATTRIBUTES
+// ============================================================================
+
+export interface ItemCategory {
   id: string;
-  tenant_id: string;
+  tenant_id?: string;
   name: string;
-}
-
-export interface CartridgeModel {
-  id: string;
-  tenant_id: string;
-  brand_id?: string;
-  brand_name?: string;
-  model_name: string;
-  category?: string; // e.g., 'Smartphones', 'Notebooks', 'Cartuchos', 'Ferramentas'
-  color: string;
-  is_xl: boolean;
-  capacity_ml?: number;
-  empty_weight_grams?: number;
-  full_weight_grams?: number;
-  technical_notes?: string;
-  refill_price?: number;
-  verification_price?: number;
-  test_price?: number;
-  is_active: boolean;
-}
-
-export type KanbanColumnColor = 'amber' | 'purple' | 'blue' | 'emerald' | 'rose' | 'indigo' | 'slate' | 'teal';
-
-export interface KanbanColumnConfig {
-  id: string;
-  title: string;
-  color: KanbanColumnColor;
-  statuses: CartridgeStatus[];
+  slug: string;
   description?: string;
-}
-
-export interface ServicePrice {
-  id: string;
-  tenant_id: string;
-  service_type: RequestedService | string;
-  title: string;
-  description?: string;
-  default_price: number;
-  estimated_time_minutes?: number;
-  category?: string;
+  icon?: string;
+  identifier_label?: string; // e.g. "Final de Série", "IMEI / Serial", "Nº de Série"
+  is_system?: boolean;
   is_active: boolean;
   created_at?: string;
   updated_at?: string;
 }
 
-export interface CartridgeModelPrice {
+export interface Brand {
+  id: string;
+  tenant_id?: string;
+  name: string;
+  slug: string;
+  is_system?: boolean;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ItemAttributeDefinition {
+  id: string;
+  tenant_id?: string;
+  category_id: string;
+  name: string;
+  key: string;
+  data_type: AttributeDataType;
+  unit?: string; // e.g., "g", "ml", "GB", "V"
+  options?: string[];
+  is_required: boolean;
+  is_filterable?: boolean;
+  sort_order: number;
+  is_active: boolean;
+}
+
+export interface ItemModel {
+  id: string;
+  tenant_id: string;
+  category_id: string;
+  brand_id?: string;
+  brand_name?: string;
+  name: string;
+  internal_code?: string;
+  description?: string;
+  technical_notes?: string;
+  attributes?: Record<string, any>;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+  
+  // Relations
+  category?: ItemCategory;
+  brand?: Brand;
+  variants?: ItemVariant[];
+}
+
+export interface ItemVariant {
   id: string;
   tenant_id: string;
   model_id: string;
-  service_type: RequestedService;
+  name: string; // e.g. "Preto Normal", "Preto XL", "Tricolor", "128GB Azul"
+  sku?: string;
+  attributes?: Record<string, any>;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface CustomerAsset {
+  id: string;
+  tenant_id: string;
+  customer_id: string;
+  model_id: string;
+  variant_id?: string;
+  serial_number: string;
+  nickname?: string;
+  attributes?: Record<string, any>;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+  
+  // Relations
+  model?: ItemModel;
+  variant?: ItemVariant;
+  customer?: Customer;
+}
+
+// ============================================================================
+// 3. SERVICES, PRICING, FIELD DEFINITIONS & RESULTS
+// ============================================================================
+
+export interface Service {
+  id: string;
+  tenant_id: string;
+  name: string;
+  code: string;
+  description?: string;
+  default_price: number;
+  estimated_time_minutes?: number;
+  is_active: boolean;
+  category_ids?: string[]; // Compatible category IDs
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ServiceCategory {
+  id: string;
+  tenant_id: string;
+  service_id: string;
+  category_id: string;
+}
+
+export interface ServicePriceRule {
+  id: string;
+  tenant_id: string;
+  service_id: string;
+  category_id?: string;
+  model_id?: string;
+  variant_id?: string;
   price: number;
   promotional_price?: number;
+  promo_start_date?: string;
+  promo_end_date?: string;
+}
+
+export interface ServiceFieldDefinition {
+  id: string;
+  tenant_id?: string;
+  service_id?: string;
+  category_id?: string;
+  label: string;
+  field_key: string;
+  field_type: FieldDataType;
+  unit?: string;
+  options?: string[];
+  is_required: boolean;
+  sort_order: number;
+}
+
+export interface ServiceResultDefinition {
+  id: string;
+  tenant_id?: string;
+  category_id?: string;
+  service_id?: string;
+  code: string; // e.g., 'OK', 'CID', 'QUEIMADO', 'DEFEITO_PLACA', 'SEM_REPARO'
+  label: string;
+  description?: string;
+  color?: string; // hex or badge color key
+  is_approval: boolean;
+  is_active: boolean;
+}
+
+// ============================================================================
+// 4. WORKFLOW ENGINE & CHECKLISTS
+// ============================================================================
+
+export interface WorkflowTemplate {
+  id: string;
+  tenant_id?: string;
+  category_id?: string;
+  name: string;
+  description?: string;
+  is_default: boolean;
+  states: WorkflowState[];
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface WorkflowState {
+  id: string;
+  tenant_id?: string;
+  workflow_id: string;
+  code: string;
+  name: string;
+  color: KanbanColumnColor;
+  stage_type: StageType;
+  sort_order: number;
+  is_initial: boolean;
+  is_final: boolean;
+  description?: string;
+}
+
+export interface WorkflowTransition {
+  id: string;
+  tenant_id?: string;
+  workflow_id: string;
+  from_state_id: string;
+  to_state_id: string;
+  allowed_roles?: UserRole[];
+}
+
+export interface ChecklistTemplateItem {
+  id: string;
+  item_name: string;
+  is_required?: boolean;
+  sort_order: number;
+}
+
+export interface ChecklistTemplate {
+  id: string;
+  tenant_id?: string;
+  category_id?: string;
+  name: string;
+  description?: string;
+  items: ChecklistTemplateItem[];
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ChecklistExecutionItem {
+  item: string;
+  checked: boolean;
+  notes?: string;
+}
+
+// ============================================================================
+// 5. SERVICE ORDERS, ITEMS, SERVICES & DELIVERIES
+// ============================================================================
+
+export interface ServiceOrderItemService {
+  id: string;
+  tenant_id: string;
+  service_order_item_id: string;
+  service_id: string;
+  service_name?: string;
+  technician_id?: string;
+  quantity: number;
+  unit_price: number;
+  discount_amount: number;
+  surcharge_amount: number;
+  total_amount: number;
+  status: 'PENDENTE' | 'EM_EXECUCAO' | 'CONCLUIDO' | 'CANCELADO';
+  field_data?: Record<string, any>; // Dynamic technical fields (e.g. input_weight, output_weight)
+  started_at?: string;
+  completed_at?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ServiceOrderItem {
+  id: string;
+  tenant_id: string;
+  service_order_id: string;
+  customer_asset_id?: string;
+  model_id: string;
+  variant_id?: string;
+  item_index: number;
+  internal_identifier: string; // Serial / IMEI / Final de série
+  reported_issue?: string;
+  reception_notes?: string;
+  technical_notes?: string;
+  accessories?: string;
+  checklist?: ChecklistExecutionItem[];
+  custom_field_values?: Record<string, any>;
+  
+  current_state_id: string;
+  status: string; // Code matching workflow state (e.g., 'RECEBIDO', 'EM_ANDAMENTO', 'FINALIZADO')
+  result_id?: string;
+  result_code?: string;
+  result_description?: string;
+  assigned_technician_id?: string;
+  
+  // Financial sub-totals for this item
+  subtotal_amount: number;
+  discount_amount: number;
+  total_amount: number;
+
+  received_at: string;
+  completed_at?: string;
+  created_at: string;
+  updated_at: string;
+
+  // Relations
+  model?: ItemModel;
+  variant?: ItemVariant;
+  technician?: Profile;
+  services?: ServiceOrderItemService[];
+  order_number?: string;
+  customer_name?: string;
+  customer?: Customer;
+}
+
+export interface PaymentSplit {
+  id?: string;
+  payment_method: PaymentMethod;
+  amount: number;
+  notes?: string;
+  paid_at?: string;
+  received_by?: string;
+}
+
+export interface Payment {
+  id: string;
+  tenant_id: string;
+  service_order_id: string;
+  amount: number;
+  payment_method: PaymentMethod;
+  received_by: string; // Profile ID
+  received_by_name?: string;
+  paid_at: string;
+  notes?: string;
+  created_at: string;
 }
 
 export interface Delivery {
   id?: string;
   tenant_id?: string;
-  entry_id?: string;
+  service_order_id?: string;
   delivered_at: string;
-  delivered_by: string; // Attendant user ID
+  delivered_by: string;
+  delivered_by_name?: string;
   receiver_name: string;
   receiver_document?: string;
   receiver_relation?: string; // 'Proprio Cliente', 'Funcionario', 'Familiar', 'Outro'
-  payment_method?: PaymentMethod;
-  payment_status?: PaymentStatus;
-  payments?: PaymentSplit[];
-  amount_paid?: number;
-  change_amount?: number;
-  remaining_amount?: number;
-  paid_at?: string;
   notes?: string;
-  delivered_by_name?: string;
-  attendant_name?: string;
 }
 
-export interface CartridgeEntry {
+export interface ServiceOrder {
   id: string;
   tenant_id: string;
-  entry_number: string; // e.g., '2026-000001'
-  entry_sequence: number;
-  entry_year: number;
+  order_number: string; // e.g., '2026-000001'
+  order_sequence: number;
+  order_year: number;
   customer_id: string;
-  attendant_id: string;
-  entry_date: string;
+  opened_by: string; // Profile ID
+  opened_by_name?: string;
+  opened_at: string;
+  expected_at?: string;
+  closed_at?: string;
+  delivered_at?: string;
+  
+  status: OrderStatus;
+  financial_status: FinancialStatus;
+  
   subtotal_amount: number;
   discount_amount: number;
   surcharge_amount: number;
   total_amount: number;
-  general_notes?: string;
-  tracking_token: string;
-  payment_status?: PaymentStatus;
-  payment_method?: PaymentMethod;
-  payments?: PaymentSplit[];
-  amount_paid?: number;
+  paid_amount: number;
+  remaining_amount: number;
   change_amount?: number;
-  remaining_amount?: number;
-  paid_at?: string;
+
+  tracking_token: string;
+  notes?: string;
+  internal_notes?: string;
+
+  // Relations & Sub-objects
+  items?: ServiceOrderItem[];
+  payments?: Payment[];
   delivery_info?: Delivery;
   customer?: Customer;
   attendant?: Profile;
-  cartridges?: Cartridge[];
   created_at: string;
   updated_at?: string;
 }
 
-export interface Cartridge {
+export interface OrderStatusHistory {
   id: string;
   tenant_id: string;
-  entry_id: string;
-  serial_number: string; // e.g., '2026-000001-01'
-  item_index: number;
-  model_id: string;
-  service_requested: RequestedService;
-  color: string;
-  is_xl: boolean;
-  final_serie: string;
-  status: CartridgeStatus;
-  result_classification: ResultClassification;
-  result_other_description?: string;
-  
-  technician_id?: string;
-  input_weight_grams?: number;
-  output_weight_grams?: number;
-  weight_diff_grams?: number;
-  reception_notes?: string;
-  technical_notes?: string;
-  accessories?: string; // e.g., 'Cabo carregador + capinha' or 'Maleta + 2 brocas'
-  checklist?: Array<{ item: string; checked: boolean; notes?: string }>;
-  custom_fields?: Record<string, any>;
-  
-  original_price: number;
-  applied_price: number;
-  discount_amount: number;
-  surcharge_amount: number;
-  final_price: number;
-  price_override_reason?: string;
-  price_modified_by?: string;
-
-  model?: CartridgeModel;
-  technician?: Profile;
-  entry_number?: string;
-  customer_name?: string;
-  customer?: Customer;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface CartridgeStatusHistory {
-  id: string;
-  tenant_id: string;
-  cartridge_id: string;
-  previous_status?: CartridgeStatus;
-  new_status: CartridgeStatus;
+  service_order_id: string;
+  item_id?: string;
+  previous_status?: string;
+  new_status: string;
   changed_by: string;
-  changed_by_profile?: Profile;
+  changed_by_name?: string;
   notes?: string;
   created_at: string;
 }
@@ -365,25 +575,79 @@ export interface AuditLog {
   created_at: string;
 }
 
+// ============================================================================
+// 6. SETTINGS & BUSINESS TEMPLATES
+// ============================================================================
+
+export interface BusinessTemplate {
+  key: BusinessTemplateKey;
+  name: string;
+  description: string;
+  icon: string;
+  categories: ItemCategory[];
+  brands: Brand[];
+  models: Partial<ItemModel>[];
+  services: Partial<Service>[];
+  attributes: Partial<ItemAttributeDefinition>[];
+  fieldDefinitions: Partial<ServiceFieldDefinition>[];
+  results: Partial<ServiceResultDefinition>[];
+  workflow: Partial<WorkflowTemplate>;
+  checklist?: Partial<ChecklistTemplate>;
+}
+
 export interface CompanySettings {
   id: string;
   tenant_id: string;
-  business_segment?: BusinessSegment;
-  segment_config?: SegmentCustomization;
+  active_templates?: BusinessTemplateKey[];
   show_prices_on_receipt: boolean;
   receipt_header_note?: string;
   receipt_footer_note?: string;
-  verification_waiver_policy: 'ALWAYS_CHARGE' | 'WAIVE_IF_REFILLED' | 'CREDIT_IF_REFILLED';
-  waive_verification_if_refilled: boolean;
-  default_refill_price: number;
-  default_refill_xl_price: number;
-  default_verification_price: number;
-  default_test_price: number;
-  input_weight_responsibility: 'ATENDENTE' | 'TECNICO' | 'AMBOS';
   thermal_paper_width_mm: number;
-  require_customer_document: boolean; // Define se CPF/CNPJ é obrigatório no cadastro de clientes
-  require_cartridge_serial: boolean;  // Define se o número/final de série do cartucho é obrigatório na entrada
+  require_customer_document: boolean;
+  require_item_serial: boolean;
+  require_cartridge_serial?: boolean;
   custom_checklist_items?: string[];
-  kanban_columns?: KanbanColumnConfig[];
+  allow_partial_delivery?: boolean;
+  default_refill_price?: number;
+  default_refill_xl_price?: number;
+  default_verification_price?: number;
+  default_test_price?: number;
+  input_weight_responsibility?: 'ATENDENTE' | 'TECNICO' | 'AMBOS';
+  waive_verification_if_refilled?: boolean;
 }
 
+// ============================================================================
+// 7. BACKWARD-COMPATIBILITY ALIASES (Clean Transition Layer)
+// ============================================================================
+
+export type CartridgeEntry = ServiceOrder;
+export type Cartridge = ServiceOrderItem;
+export type CartridgeModel = ItemModel;
+export type CartridgeBrand = Brand;
+export type CartridgeStatus = string;
+export type ResultClassification = string;
+export type RequestedService = string;
+export type BusinessSegment = BusinessTemplateKey;
+export type ServicePrice = Service;
+
+export interface SegmentCustomization {
+  segment: BusinessTemplateKey;
+  segmentName: string;
+  itemLabelSingular: string;
+  itemLabelPlural: string;
+  identifierLabel: string;
+  serviceLabel: string;
+  hasWeightInspection: boolean;
+  hasChecklist: boolean;
+  defaultChecklistItems: string[];
+  defaultCategories: string[];
+  iconName?: string;
+}
+
+export interface KanbanColumnConfig {
+  id: string;
+  title: string;
+  color: KanbanColumnColor;
+  statuses: string[];
+  description?: string;
+}

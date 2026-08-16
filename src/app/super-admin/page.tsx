@@ -36,7 +36,7 @@ import {
   Wrench
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
-import { AppStore, DemoSandboxConfig, SEGMENT_PRESETS } from '@/lib/store';
+import { AppStore, DemoSandboxConfig, SEGMENT_PRESETS, BUSINESS_PRESETS } from '@/lib/store';
 import { formatCurrency, formatDate, getRoleBadgeConfig, cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -151,7 +151,8 @@ export default function SuperAdminPage() {
 
   const handleForceResetDemo = () => {
     try {
-      const updated = AppStore.resetDemoSandbox(currentUser?.full_name || 'Super Administrador');
+      AppStore.resetDemoSandboxData(currentUser?.full_name || 'Super Administrador');
+      const updated = AppStore.getDemoSandboxConfig();
       setSandbox(updated);
       loadPlatformData();
       showToast('Ambiente Demo resetado com sucesso! Novas senhas semanais geradas e usuários extras removidos.');
@@ -263,7 +264,7 @@ Olá! Conforme solicitado, aqui estão os dados para você testar nosso sistema 
 
       loadPlatformData();
       setShowAddTenantModal(false);
-      showToast(`Empresa "${newTradeName}" cadastrada com sucesso no segmento ${SEGMENT_PRESETS[newBusinessSegment]?.segmentName}!`);
+      showToast(`Empresa "${newTradeName}" cadastrada com sucesso no segmento ${BUSINESS_PRESETS[newBusinessSegment]?.name || 'Geral'}!`);
 
       // Reset form
       setNewCorpName('');
@@ -348,7 +349,7 @@ Olá! Conforme solicitado, aqui estão os dados para você testar nosso sistema 
     const limits = AppStore.getEffectiveLimits(c.id);
     setTenantForPlanManage(c);
     setSubSelectedPlanId(limits.subscription.plan_id || limits.plan.id);
-    setSubExtraUsers(limits.subscription.extra_users || (limits.subscription.extra_attendants || 0) + (limits.subscription.extra_technicians || 0) + (limits.subscription.extra_administrators || 0));
+    setSubExtraUsers(limits.subscription.extra_users || 0);
     setSubCustomPrice(limits.subscription.custom_price !== undefined ? String(limits.subscription.custom_price) : '');
     setSubCustomMaxUsers(limits.subscription.custom_max_users !== undefined ? String(limits.subscription.custom_max_users) : '');
     setShowManagePlanModal(true);
@@ -424,13 +425,6 @@ Olá! Conforme solicitado, aqui estão os dados para você testar nosso sistema 
           monthly_price: Number(planMonthlyPrice),
           max_users: Number(planMaxUsers),
           extra_user_price: Number(planExtraUserPrice),
-          max_administrators: Number(planMaxUsers),
-          max_attendants: Number(planMaxUsers),
-          max_technicians: Number(planMaxUsers),
-          max_total_users: Number(planMaxUsers),
-          extra_attendant_price: Number(planExtraUserPrice),
-          extra_technician_price: Number(planExtraUserPrice),
-          extra_admin_price: Number(planExtraUserPrice),
           features: featureList
         }, currentUser.full_name);
         showToast(`Plano "${planName}" atualizado com sucesso!`);
@@ -442,13 +436,6 @@ Olá! Conforme solicitado, aqui estão os dados para você testar nosso sistema 
           monthly_price: Number(planMonthlyPrice),
           max_users: Number(planMaxUsers),
           extra_user_price: Number(planExtraUserPrice),
-          max_administrators: Number(planMaxUsers),
-          max_attendants: Number(planMaxUsers),
-          max_technicians: Number(planMaxUsers),
-          max_total_users: Number(planMaxUsers),
-          extra_attendant_price: Number(planExtraUserPrice),
-          extra_technician_price: Number(planExtraUserPrice),
-          extra_admin_price: Number(planExtraUserPrice),
           features: featureList,
           is_active: true
         }, currentUser.full_name);
@@ -516,7 +503,7 @@ Olá! Conforme solicitado, aqui estão os dados para você testar nosso sistema 
       extraUsersCost,
       subtotal,
       total,
-      totalUsers: (selectedCalcPlan.max_users || selectedCalcPlan.max_total_users || 5) + calcExtraUsers
+      totalUsers: (selectedCalcPlan.max_users || 5) + calcExtraUsers
     };
   }, [selectedCalcPlan, calcExtraUsers, calcDiscount]);
 
@@ -819,24 +806,14 @@ Incluso: Emissão de Comandas, Bancada Técnica Kanban, Rastreio e Impressão T�
                           <td className="p-3.5">
                             <div className="space-y-1 max-w-[200px]">
                               <div className="flex justify-between text-[11px]">
-                                <span className="text-slate-500">Admins:</span>
-                                <span className={cn("font-bold", limits.usedAdmins >= limits.maxAdmins ? "text-amber-600" : "text-slate-700 dark:text-slate-300")}>
-                                  {limits.usedAdmins} / {limits.maxAdmins}
+                                <span className="text-slate-500">Operadores Ativos:</span>
+                                <span className={cn("font-bold", limits.usedUsers >= limits.maxUsers ? "text-amber-600" : "text-slate-700 dark:text-slate-300")}>
+                                  {limits.usedUsers} / {limits.maxUsers}
+                                  {limits.extraUsers > 0 ? ` (+${limits.extraUsers} extras)` : ''}
                                 </span>
                               </div>
-                              <div className="flex justify-between text-[11px]">
-                                <span className="text-slate-500">Atendentes:</span>
-                                <span className={cn("font-bold", limits.usedAttendants >= limits.maxAttendants ? "text-amber-600" : "text-slate-700 dark:text-slate-300")}>
-                                  {limits.usedAttendants} / {limits.maxAttendants}
-                                  {limits.subscription.extra_attendants ? ` (+${limits.subscription.extra_attendants} ext)` : ''}
-                                </span>
-                              </div>
-                              <div className="flex justify-between text-[11px]">
-                                <span className="text-slate-500">Técnicos:</span>
-                                <span className={cn("font-bold", limits.usedTechs >= limits.maxTechs ? "text-amber-600" : "text-slate-700 dark:text-slate-300")}>
-                                  {limits.usedTechs} / {limits.maxTechs}
-                                  {limits.subscription.extra_technicians ? ` (+${limits.subscription.extra_technicians} ext)` : ''}
-                                </span>
+                              <div className="text-[10px] text-slate-400">
+                                Capacidade unificada
                               </div>
                             </div>
                           </td>
@@ -845,16 +822,16 @@ Incluso: Emissão de Comandas, Bancada Técnica Kanban, Rastreio e Impressão T�
                             <div className="font-extrabold text-emerald-600 dark:text-emerald-400 text-sm">
                               {formatCurrency(limits.finalMonthlyPrice)}
                             </div>
-                            {(limits.extraAttPrice > 0 || limits.extraTechPrice > 0 || limits.extraAdmPrice > 0) && (
+                            {limits.extraUsers > 0 && (
                               <p className="text-[10px] text-slate-400 mt-0.5">
-                                Base: {formatCurrency(limits.basePrice)} + Extras: {formatCurrency(limits.extraAttPrice + limits.extraTechPrice + limits.extraAdmPrice)}
+                                Base: {formatCurrency(limits.plan.monthly_price)} + Extras ({limits.extraUsers}): {formatCurrency(limits.extraUserPrice * limits.extraUsers)}
                               </p>
                             )}
                           </td>
 
                           <td className="p-3.5">
-                            <div className="font-bold text-slate-800 dark:text-slate-200">{stats.totalCartridges} un</div>
-                            <div className="text-[10px] text-slate-400">{stats.totalEntries} comandas</div>
+                            <div className="font-bold text-slate-800 dark:text-slate-200">{stats.totalItems || 0} itens</div>
+                            <div className="text-[10px] text-slate-400">{stats.totalOrders || stats.totalEntries || 0} ordens</div>
                           </td>
 
                           <td className="p-3.5">
@@ -981,7 +958,7 @@ Incluso: Emissão de Comandas, Bancada Técnica Kanban, Rastreio e Impressão T�
                         <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-200 dark:border-emerald-900/50 flex items-center justify-between">
                           <div>
                             <span className="text-xs text-slate-500 block">Usuários Inclusos no Plano</span>
-                            <span className="text-xl font-black text-emerald-600 dark:text-emerald-400">{p.max_users || p.max_total_users || 5} usuários</span>
+                            <span className="text-xl font-black text-emerald-600 dark:text-emerald-400">{p.max_users || 5} usuários</span>
                           </div>
                           <Badge className="bg-emerald-600 text-white font-bold text-[10px]">
                             Sem limite por cargo
@@ -1152,7 +1129,7 @@ Incluso: Emissão de Comandas, Bancada Técnica Kanban, Rastreio e Impressão T�
                   >
                     {plans.map(p => (
                       <option key={p.id} value={p.id}>
-                        {p.name} — {p.monthly_price === 0 ? 'Gratuito' : formatCurrency(p.monthly_price)}/mês ({p.max_administrators} Admin, {p.max_attendants} Atendentes, {p.max_technicians} Técnico)
+                        {p.name} — {p.monthly_price === 0 ? 'Gratuito' : formatCurrency(p.monthly_price)}/mês ({p.max_users || 5} Usuários inclusos)
                       </option>
                     ))}
                   </Select>
@@ -1281,11 +1258,9 @@ Incluso: Emissão de Comandas, Bancada Técnica Kanban, Rastreio e Impressão T�
               <p className="text-xs text-slate-300 leading-relaxed">
                 Este ambiente é utilizado por potenciais clientes para testar o sistema. A cada <strong>7 dias</strong> o sistema gera automaticamente novas senhas para os 6 perfis fixos (1 Admin, 3 Atendentes, 2 Técnicos) e exclui quaisquer operadores extras criados durante os testes.
               </p>
-              {sandbox?.nextResetAt && (
+              {sandbox?.lastResetAt && (
                 <div className="flex items-center gap-4 text-xs text-emerald-300/80 font-mono pt-1">
                   <span>Último Reset: {formatDate(sandbox.lastResetAt)}</span>
-                  <span>•</span>
-                  <span>Próximo Reset Semanal: {formatDate(sandbox.nextResetAt)}</span>
                 </div>
               )}
             </div>
@@ -1632,9 +1607,9 @@ Incluso: Emissão de Comandas, Bancada Técnica Kanban, Rastreio e Impressão T�
                     onChange={e => setNewBusinessSegment(e.target.value as BusinessSegment)}
                     className="text-xs font-semibold"
                   >
-                    {Object.values(SEGMENT_PRESETS).map(seg => (
-                      <option key={seg.segment} value={seg.segment}>
-                        {seg.segmentName} ({seg.itemLabelPlural})
+                    {Object.values(BUSINESS_PRESETS).map(seg => (
+                      <option key={seg.key} value={seg.key}>
+                        {seg.name}
                       </option>
                     ))}
                   </Select>

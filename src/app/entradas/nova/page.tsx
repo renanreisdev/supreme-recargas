@@ -21,21 +21,24 @@ import {
   CreditCard,
   Banknote,
   QrCode,
-  Share2
+  Share2,
+  Tag,
+  Layers,
+  Wrench,
+  Laptop,
+  Smartphone
 } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { AppStore } from '@/lib/store';
 import { 
-  CartridgeModel, 
+  ItemCategory,
+  ItemModel, 
   Customer, 
-  CartridgeEntry, 
-  RequestedService, 
+  ServiceOrder, 
+  Service,
   PaymentMethod, 
-  PaymentStatus,
-  CompanySettings,
-  ServicePrice,
-  SegmentCustomization
+  CompanySettings
 } from '@/types';
 import { formatCurrency } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -46,20 +49,28 @@ import { Badge } from '@/components/ui/badge';
 import { CustomerCombobox } from '@/components/CustomerCombobox';
 import { ModelCombobox } from '@/components/ModelCombobox';
 
-interface CartridgeItemInput {
+interface ServiceItemServiceInput {
+  service_id: string;
+  selected: boolean;
+  unit_price: number;
+  quantity: number;
+  discount_amount: number;
+  field_data?: Record<string, any>;
+}
+
+interface ServiceOrderItemInput {
   id: string;
+  category_id: string;
   model_id: string;
-  service_requested: RequestedService | string;
-  color: string;
-  is_xl: boolean;
-  final_serie: string;
+  variant_id?: string;
+  internal_identifier: string; // Serial / IMEI / Final de série
+  reported_issue: string;
   reception_notes: string;
   accessories?: string;
-  checklist?: Array<{ item: string; checked: boolean; notes?: string }>;
+  checklist?: Array<{ item: string; checked: boolean }>;
+  custom_field_values?: Record<string, any>;
   input_weight_grams?: number;
-  price: number;
-  isVerificationWaived?: boolean;
-  priceExplanation?: string;
+  services: ServiceItemServiceInput[];
 }
 
 export default function NovaEntradaPage() {
@@ -67,39 +78,22 @@ export default function NovaEntradaPage() {
   const { currentCompany, currentUser, hasPermission } = useAuth();
 
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [models, setModels] = useState<CartridgeModel[]>([]);
-  const [services, setServices] = useState<ServicePrice[]>([]);
+  const [categories, setCategories] = useState<ItemCategory[]>([]);
+  const [models, setModels] = useState<ItemModel[]>([]);
+  const [allServices, setAllServices] = useState<Service[]>([]);
   const [settings, setSettings] = useState<CompanySettings>(AppStore.getSettings(currentCompany.id));
-  
-  // Segment Dynamic Configuration
-  const [segmentConfig, setSegmentConfig] = useState<SegmentCustomization>(AppStore.getSegmentConfig(currentCompany.id));
 
   // Form State
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [generalNotes, setGeneralNotes] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('DINHEIRO');
-  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('PENDENTE');
   const [generalDiscount, setGeneralDiscount] = useState<number>(0);
-  
-  const [items, setItems] = useState<CartridgeItemInput[]>([
-    {
-      id: '1',
-      model_id: '',
-      service_requested: 'VERIFICACAO_E_RECARGA',
-      color: '',
-      is_xl: false,
-      final_serie: '',
-      reception_notes: '',
-      accessories: '',
-      checklist: (segmentConfig.defaultChecklistItems || []).map((item: string) => ({ item, checked: false })),
-      input_weight_grams: undefined,
-      price: 0,
-      isVerificationWaived: false,
-      priceExplanation: 'Selecione um modelo'
-    }
-  ]);
+  const [hasInitialPayment, setHasInitialPayment] = useState(false);
+  const [initialPaymentAmount, setInitialPaymentAmount] = useState<number>(0);
+  const [initialPaymentMethod, setInitialPaymentMethod] = useState<PaymentMethod>('PIX');
 
-  // Inline Customer Quick Creation Modal
+  const [items, setItems] = useState<ServiceOrderItemInput[]>([]);
+
+  // Quick Customer Creation Modal
   const [showQuickCustomerModal, setShowQuickCustomerModal] = useState(false);
   const [newCustName, setNewCustName] = useState('');
   const [newCustPhone, setNewCustPhone] = useState('');
@@ -108,14 +102,48 @@ export default function NovaEntradaPage() {
   const [newCustSecondaryPhoneIsWhatsapp, setNewCustSecondaryPhoneIsWhatsapp] = useState(false);
   const [newCustDoc, setNewCustDoc] = useState('');
 
-  // Created Entry Result (for thermal printing modal)
-  const [createdEntry, setCreatedEntry] = useState<CartridgeEntry | null>(null);
+  // Created Order Result (for thermal printing modal)
+  const [createdOrder, setCreatedOrder] = useState<ServiceOrder | null>(null);
 
   const loadData = () => {
-    setCustomers(AppStore.getCustomers(currentCompany.id));
-    setModels(AppStore.getModels(currentCompany.id));
-    setServices(AppStore.getServicePrices(currentCompany.id));
-    setSettings(AppStore.getSettings(currentCompany.id));
+    const custs = AppStore.getCustomers(currentCompany.id);
+    const cats = AppStore.getCategories(currentCompany.id);
+    const mods = AppStore.getModels(currentCompany.id);
+    const srvs = AppStore.getServices(currentCompany.id);
+    const stts = AppStore.getSettings(currentCompany.id);
+
+    setCustomers(custs);
+    setCategories(cats);
+    setModels(mods);
+    setAllServices(srvs);
+    setSettings(stts);
+
+    if (items.length === 0 && cats.length > 0) {
+      const defaultCat = cats[0];
+      const compatibleServices = srvs.filter(s => !s.category_ids || s.category_ids.length === 0 || s.category_ids.includes(defaultCat.id));
+      
+      setItems([
+        {
+          id: '1',
+          category_id: defaultCat.id,
+          model_id: '',
+          internal_identifier: '',
+          reported_issue: '',
+          reception_notes: '',
+          accessories: '',
+          checklist: [],
+          custom_field_values: {},
+          input_weight_grams: undefined,
+          services: compatibleServices.map((s, sIdx) => ({
+            service_id: s.id,
+            selected: sIdx === 0, // default first service selected
+            unit_price: s.default_price || 0,
+            quantity: 1,
+            discount_amount: 0
+          }))
+        }
+      ]);
+    }
   };
 
   useEffect(() => {
@@ -127,7 +155,7 @@ export default function NovaEntradaPage() {
 
   if (!currentUser) return null;
 
-  if (!hasPermission('create_entry')) {
+  if (!hasPermission('create_entry') && !hasPermission('orders_create')) {
     return (
       <div className="max-w-md mx-auto mt-12 p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm text-center space-y-3">
         <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Acesso Restrito ao Balcão</h2>
@@ -144,78 +172,83 @@ export default function NovaEntradaPage() {
   // Add Item Line
   const handleAddItem = () => {
     const nextId = (items.length + 1).toString();
+    const defaultCat = categories[0] || { id: 'cat-default', name: 'Geral', identifier_label: 'Nº de Série' };
+    const compatibleServices = allServices.filter(s => !s.category_ids || s.category_ids.length === 0 || s.category_ids.includes(defaultCat.id));
+
     setItems([
       ...items,
       {
         id: nextId,
+        category_id: defaultCat.id,
         model_id: '',
-        service_requested: 'VERIFICACAO_E_RECARGA',
-        color: '',
-        is_xl: false,
-        final_serie: '',
+        internal_identifier: '',
+        reported_issue: '',
         reception_notes: '',
         accessories: '',
-        checklist: (segmentConfig.defaultChecklistItems || []).map((item: string) => ({ item, checked: false })),
+        checklist: [],
+        custom_field_values: {},
         input_weight_grams: undefined,
-        price: 0,
-        isVerificationWaived: false,
-        priceExplanation: 'Selecione um modelo'
+        services: compatibleServices.map((s, sIdx) => ({
+          service_id: s.id,
+          selected: sIdx === 0,
+          unit_price: s.default_price || 0,
+          quantity: 1,
+          discount_amount: 0
+        }))
       }
     ]);
   };
 
-  // Remove Item Line
   const handleRemoveItem = (id: string) => {
     if (items.length <= 1) return;
     setItems(items.filter(i => i.id !== id));
   };
 
-  // Toggle Checklist
-  const handleToggleChecklist = (itemId: string, checkIndex: number) => {
-    setItems(prev => prev.map(item => {
-      if (item.id !== itemId || !item.checklist) return item;
-      const updatedChecklist = item.checklist.map((c, i) => 
-        i === checkIndex ? { ...c, checked: !c.checked } : c
-      );
-      return { ...item, checklist: updatedChecklist };
+  // Change Item Category
+  const handleChangeCategory = (itemId: string, newCatId: string) => {
+    const compatibleServices = allServices.filter(s => !s.category_ids || s.category_ids.length === 0 || s.category_ids.includes(newCatId));
+    setItems(prev => prev.map(it => {
+      if (it.id !== itemId) return it;
+      return {
+        ...it,
+        category_id: newCatId,
+        model_id: '', // reset model on category change
+        services: compatibleServices.map((s, sIdx) => ({
+          service_id: s.id,
+          selected: sIdx === 0,
+          unit_price: s.default_price || 0,
+          quantity: 1,
+          discount_amount: 0
+        }))
+      };
     }));
   };
 
-  // Update Item Line
-  const handleUpdateItem = (id: string, field: keyof CartridgeItemInput, value: any) => {
-    setItems(prev => prev.map(item => {
-      if (item.id !== id) return item;
-      
-      const updated = { ...item, [field]: value };
-      
-      if (field === 'model_id' || field === 'service_requested') {
-        const targetModelId = field === 'model_id' ? value : item.model_id;
-        const targetService = field === 'service_requested' ? value : item.service_requested;
-
-        if (field === 'model_id') {
-          const foundModel = models.find(m => m.id === value);
-          if (foundModel) {
-            updated.color = foundModel.color;
-            updated.is_xl = foundModel.is_xl;
-          } else {
-            updated.color = '';
-            updated.is_xl = false;
-          }
+  // Toggle Service Selection on Item
+  const handleToggleService = (itemId: string, serviceId: string) => {
+    setItems(prev => prev.map(it => {
+      if (it.id !== itemId) return it;
+      const updatedServices = it.services.map(srv => {
+        if (srv.service_id === serviceId) {
+          return { ...srv, selected: !srv.selected };
         }
+        return srv;
+      });
+      return { ...it, services: updatedServices };
+    }));
+  };
 
-        if (targetModelId) {
-          const calc = AppStore.calculateItemPrice(currentCompany.id, targetModelId, targetService);
-          updated.price = calc.finalPrice;
-          updated.isVerificationWaived = calc.isVerificationWaived;
-          updated.priceExplanation = calc.explanation;
-        } else {
-          updated.price = 0;
-          updated.isVerificationWaived = false;
-          updated.priceExplanation = 'Aguardando seleção do modelo';
+  // Update Service Price / Quantity on Item
+  const handleUpdateServiceField = (itemId: string, serviceId: string, field: keyof ServiceItemServiceInput, value: any) => {
+    setItems(prev => prev.map(it => {
+      if (it.id !== itemId) return it;
+      const updatedServices = it.services.map(srv => {
+        if (srv.service_id === serviceId) {
+          return { ...srv, [field]: value };
         }
-      }
-
-      return updated;
+        return srv;
+      });
+      return { ...it, services: updatedServices };
     }));
   };
 
@@ -242,7 +275,6 @@ export default function NovaEntradaPage() {
       phone_is_whatsapp: newCustPhoneIsWhatsapp,
       secondary_phone: secondaryClean,
       secondary_phone_is_whatsapp: newCustSecondaryPhoneIsWhatsapp,
-      whatsapp: effectiveWhatsapp,
       document: newCustDoc.trim(),
       notes: 'Cadastrado no balcão de entrada'
     }, currentUser?.full_name || 'Atendente');
@@ -253,679 +285,707 @@ export default function NovaEntradaPage() {
     setShowQuickCustomerModal(false);
     setNewCustName('');
     setNewCustPhone('');
-    setNewCustPhoneIsWhatsapp(true);
     setNewCustSecondaryPhone('');
-    setNewCustSecondaryPhoneIsWhatsapp(false);
     setNewCustDoc('');
   };
 
-  // Subtotal & Total Calculation
-  const subtotal = items.reduce((acc, i) => acc + (Number(i.price) || 0), 0);
-  const totalAmount = Math.max(0, subtotal - (Number(generalDiscount) || 0));
-
-  // Submit Entry
-  const handleSubmitEntry = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedCustomerId) {
-      alert('Por favor, pesquise e selecione um cliente antes de gerar a comanda.');
-      return;
-    }
-
-    const missingModel = items.find(i => !i.model_id);
-    if (missingModel) {
-      alert(`Por favor, selecione o modelo/equipamento para todos os ${segmentConfig.itemLabelPlural.toLowerCase()} recebidos.`);
-      return;
-    }
-
-    const isSerialRequired = settings.require_cartridge_serial !== false;
-    if (isSerialRequired) {
-      const invalidItem = items.find(i => !i.final_serie.trim());
-      if (invalidItem) {
-        alert(`Por favor, preencha o campo "${segmentConfig.identifierLabel}" de todos os itens.`);
-        return;
-      }
-    }
-
-    if (settings.input_weight_responsibility === 'ATENDENTE') {
-      const missingWeight = items.find(i => !i.input_weight_grams || Number(i.input_weight_grams) <= 0);
-      if (missingWeight) {
-        alert('A configuração da empresa exige que a pesagem de entrada seja informada pelo Atendente no balcão.');
-        return;
-      }
-    }
-
-    const entry = AppStore.createEntry({
-      tenant_id: currentCompany.id,
-      customer_id: selectedCustomerId,
-      attendant_id: currentUser.id,
-      attendant_name: currentUser.full_name,
-      general_notes: generalNotes,
-      discount_amount: generalDiscount,
-      payment_method: paymentMethod,
-      payment_status: paymentStatus,
-      items: items.map(i => ({
-        model_id: i.model_id,
-        service_requested: i.service_requested,
-        color: i.color,
-        is_xl: i.is_xl,
-        final_serie: (i.final_serie.trim() || 'S/N').toUpperCase(),
-        reception_notes: i.reception_notes,
-        accessories: i.accessories,
-        checklist: i.checklist,
-        input_weight_grams: i.input_weight_grams ? Number(i.input_weight_grams) : undefined,
-        price: Number(i.price) || 0
-      }))
-    });
-
-    setCreatedEntry(entry);
+  // Calculate Subtotals & Grand Total
+  const calculateItemTotal = (item: ServiceOrderItemInput) => {
+    return item.services
+      .filter(s => s.selected)
+      .reduce((sum, s) => sum + ((s.unit_price * (s.quantity || 1)) - (s.discount_amount || 0)), 0);
   };
 
-  // Success Confirmation & Voucher Screen
-  if (createdEntry) {
-    const whatsappPhone = createdEntry.customer?.whatsapp || createdEntry.customer?.phone || '';
-    const cleanPhone = whatsappPhone.replace(/\D/g, '');
-    const trackingUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/acompanhar/${createdEntry.tracking_token}`;
-    const whatsappText = encodeURIComponent(
-      `Olá ${createdEntry.customer?.name}!\nSua ordem de serviço nº *${createdEntry.entry_number}* foi aberta na *${currentCompany.trade_name}* com sucesso.\n\nValor: *${formatCurrency(createdEntry.total_amount)}*\nStatus Pagamento: *${createdEntry.payment_status === 'PAGO' ? 'Pago' : 'Pendente na Retirada'}*\n\nAcompanhe o status em tempo real:\n${trackingUrl}`
-    );
+  const calculateSubtotal = () => {
+    return items.reduce((sum, it) => sum + calculateItemTotal(it), 0);
+  };
 
-    return (
-      <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in zoom-in-95 duration-200">
-        <div className="bg-white dark:bg-[#0e1626] rounded-3xl border border-emerald-500/40 p-8 shadow-2xl text-center space-y-6 relative overflow-hidden">
-          <div className="w-20 h-20 rounded-3xl bg-gradient-to-tr from-emerald-600 to-teal-400 text-white flex items-center justify-center mx-auto shadow-xl shadow-emerald-950/40 animate-bounce">
-            <Check className="w-10 h-10 stroke-[2.5]" />
-          </div>
+  const subtotal = calculateSubtotal();
+  const finalTotal = Math.max(0, subtotal - (generalDiscount || 0));
 
-          <div>
-            <h2 className="text-2xl font-black text-slate-900 dark:text-slate-100">
-              Ordem de Serviço Registrada com Sucesso!
-            </h2>
-            <p className="text-xs text-slate-500 mt-1">Comprovante gerado e itens encaminhados para a bancada técnica</p>
-            
-            <div className="mt-3 inline-block px-5 py-2 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 block">Número da Comanda / OS</span>
-              <span className="font-mono font-black text-2xl text-emerald-700 dark:text-emerald-400">{createdEntry.entry_number}</span>
-            </div>
-          </div>
+  // Submit Order
+  const handleSubmitOrder = (e: React.FormEvent) => {
+    e.preventDefault();
 
-          {/* Receipt Preview Box */}
-          <div className="p-4 bg-slate-50 dark:bg-slate-900/80 rounded-2xl border border-slate-200 dark:border-slate-800 text-left text-xs space-y-2.5 max-w-lg mx-auto">
-            <div className="flex justify-between items-center pb-2 border-b border-slate-200 dark:border-slate-800">
-              <span className="text-slate-500">Cliente:</span>
-              <strong className="text-slate-900 dark:text-slate-100">{createdEntry.customer?.name}</strong>
-            </div>
-            <div className="flex justify-between items-center pb-2 border-b border-slate-200 dark:border-slate-800">
-              <span className="text-slate-500">Telefone:</span>
-              <span className="font-medium text-slate-700 dark:text-slate-300">{createdEntry.customer?.phone}</span>
-            </div>
-            <div className="flex justify-between items-center pb-2 border-b border-slate-200 dark:border-slate-800">
-              <span className="text-slate-500">Pagamento:</span>
-              <Badge className={createdEntry.payment_status === 'PAGO' ? 'bg-emerald-600 text-white font-bold' : 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300 font-bold'}>
-                {createdEntry.payment_status === 'PAGO' ? 'Pago na Entrada' : 'Pendente (Pagar na Retirada)'}
-              </Badge>
-            </div>
+    if (!selectedCustomerId) {
+      alert('Por favor, selecione ou cadastre o cliente antes de prosseguir.');
+      return;
+    }
 
-            <div className="pt-1">
-              <p className="font-bold text-slate-700 dark:text-slate-300 mb-1.5">{segmentConfig.itemLabelPlural} ({createdEntry.cartridges?.length}):</p>
-              <ul className="space-y-1 pl-1">
-                {createdEntry.cartridges?.map(c => (
-                  <li key={c.id} className="text-slate-600 dark:text-slate-300 font-mono text-[11px] flex items-center justify-between">
-                    <span>• {c.serial_number} — {c.model?.model_name} {c.color ? `(${c.color})` : ''}</span>
-                    <span className="font-bold text-emerald-600 dark:text-emerald-400 font-mono">[{c.final_serie}]</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (!item.model_id) {
+        alert(`O Item #${i + 1} está sem modelo selecionado. Por favor, escolha um modelo.`);
+        return;
+      }
+      if (settings.require_item_serial && !item.internal_identifier.trim()) {
+        const cat = categories.find(c => c.id === item.category_id);
+        const label = cat?.identifier_label || 'Nº de Série / Identificador';
+        alert(`O ${label} é obrigatório no Item #${i + 1}.`);
+        return;
+      }
+      const hasAnyService = item.services.some(s => s.selected);
+      if (!hasAnyService) {
+        alert(`Por favor, selecione ao menos 1 serviço a ser executado no Item #${i + 1}.`);
+        return;
+      }
+    }
 
-            <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center text-sm font-bold">
-              <span>Total da Ordem:</span>
-              <span className="text-emerald-600 dark:text-emerald-400 text-lg font-black">{formatCurrency(createdEntry.total_amount)}</span>
-            </div>
-          </div>
+    const orderPayload = {
+      tenant_id: currentCompany.id,
+      customer_id: selectedCustomerId,
+      opened_by: currentUser.id,
+      opened_by_name: currentUser.full_name,
+      notes: generalNotes,
+      discount_amount: generalDiscount,
+      initial_payment: hasInitialPayment && initialPaymentAmount > 0 ? {
+        amount: Math.min(finalTotal, initialPaymentAmount),
+        payment_method: initialPaymentMethod
+      } : undefined,
+      items: items.map(it => ({
+        model_id: it.model_id,
+        variant_id: it.variant_id,
+        internal_identifier: it.internal_identifier || 'S/N',
+        reported_issue: it.reported_issue,
+        reception_notes: it.reception_notes,
+        accessories: it.accessories,
+        checklist: it.checklist,
+        custom_field_values: {
+          ...it.custom_field_values,
+          input_weight_grams: it.input_weight_grams
+        },
+        services: it.services.filter(s => s.selected).map(s => ({
+          service_id: s.service_id,
+          quantity: s.quantity || 1,
+          unit_price: s.unit_price,
+          discount_amount: s.discount_amount || 0,
+          field_data: it.input_weight_grams !== undefined ? { input_weight: it.input_weight_grams } : undefined
+        }))
+      }))
+    };
 
-          {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-            <Button
-              onClick={() => router.push(`/impressao?entry=${createdEntry.entry_number}`)}
-              className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-2 h-11 px-5 rounded-xl shadow-md shadow-emerald-950/30"
-            >
-              <Printer className="w-4 h-4" />
-              <span>Imprimir Comanda Térmica (80mm)</span>
-            </Button>
+    try {
+      const created = AppStore.addServiceOrder(orderPayload, currentUser.full_name);
+      setCreatedOrder(created);
+    } catch (err: any) {
+      alert(err?.message || 'Erro ao gerar ordem de serviço.');
+    }
+  };
 
-            {cleanPhone && (
-              <a
-                href={`https://wa.me/55${cleanPhone}?text=${whatsappText}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-11 px-5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs transition-colors shadow-md shadow-teal-950/30"
-              >
-                <Share2 className="w-4 h-4" />
-                <span>Enviar no WhatsApp</span>
-              </a>
-            )}
-
-            <Button
-              variant="outline"
-              onClick={() => {
-                setCreatedEntry(null);
-                setItems([
-                  {
-                    id: '1',
-                    model_id: '',
-                    service_requested: 'VERIFICACAO_E_RECARGA',
-                    color: '',
-                    is_xl: false,
-                    final_serie: '',
-                    reception_notes: '',
-                    accessories: '',
-                    checklist: (segmentConfig.defaultChecklistItems || []).map((item: string) => ({ item, checked: false })),
-                    input_weight_grams: undefined,
-                    price: 0,
-                    isVerificationWaived: false,
-                    priceExplanation: 'Selecione um modelo'
-                  }
-                ]);
-                setSelectedCustomerId('');
-                setGeneralNotes('');
-                setGeneralDiscount(0);
-              }}
-              className="w-full sm:w-auto h-11 px-5 rounded-xl text-xs font-bold border-slate-300 dark:border-slate-700"
-            >
-              + Nova Recepção
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const getCategoryIcon = (iconName?: string) => {
+    switch (iconName) {
+      case 'Laptop': return <Laptop className="w-4 h-4" />;
+      case 'Smartphone': return <Smartphone className="w-4 h-4" />;
+      case 'Wrench': return <Wrench className="w-4 h-4" />;
+      case 'Printer': return <Printer className="w-4 h-4" />;
+      default: return <Layers className="w-4 h-4" />;
+    }
+  };
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
-      <form onSubmit={handleSubmitEntry} className="space-y-6">
-        {/* Header Title */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div>
-            <div className="flex items-center gap-2.5">
-              <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-slate-100">
-                Balcão de Atendimento — Nova Entrada / OS
-              </h1>
-              <Badge className="bg-emerald-700 text-white text-[10px] font-bold">{segmentConfig.segmentName}</Badge>
-            </div>
-            <p className="text-xs text-slate-500 mt-1">
-              Cadastre o cliente, selecione os {segmentConfig.itemLabelPlural.toLowerCase()} recebidos e feche a comanda
-            </p>
-          </div>
+    <div className="max-w-6xl mx-auto space-y-6 pb-20">
+      {/* Header Breadcrumb */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-4">
+        <div>
+          <h1 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2.5">
+            <span className="p-2 rounded-xl bg-emerald-600 text-white shadow-md shadow-emerald-600/20">
+              <PlusCircle className="w-5 h-5" />
+            </span>
+            Nova Ordem de Serviço / Comanda
+          </h1>
+          <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 mt-1">
+            Recepção ágil no balcão, cálculo dinâmico de serviços e emissão térmica imediata.
+          </p>
         </div>
 
-        {/* Zone 1: Customer Selection */}
-        <div className="bg-white dark:bg-[#0e1626] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5 space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-black text-xs">
-                1
+        <Link href="/entradas">
+          <Button variant="outline" size="sm" className="rounded-xl text-xs">
+            Ver Ordens Abertas
+          </Button>
+        </Link>
+      </div>
+
+      <form onSubmit={handleSubmitOrder} className="space-y-6">
+        {/* Customer Selection Card */}
+        <Card className="rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm bg-white dark:bg-slate-900 overflow-hidden">
+          <CardHeader className="p-4 md:p-5 bg-slate-50/50 dark:bg-slate-950/40 border-b border-slate-100 dark:border-slate-800/80">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 flex items-center justify-center font-bold text-xs">
+                  1
+                </div>
+                <CardTitle className="text-sm md:text-base font-bold text-slate-900 dark:text-white">
+                  Identificação do Cliente
+                </CardTitle>
               </div>
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Identificação do Cliente</h3>
-                <p className="text-[11px] text-slate-500">Pesquise por nome, telefone, WhatsApp ou CPF/CNPJ</p>
-              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setShowQuickCustomerModal(true)}
+                className="h-8 text-xs font-semibold rounded-xl text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/50 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 gap-1.5"
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                <span>+ Novo Cliente Rápido</span>
+              </Button>
             </div>
+          </CardHeader>
 
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setShowQuickCustomerModal(true)}
-              className="text-xs gap-1.5 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/80 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 h-8 rounded-xl font-bold"
-            >
-              <UserPlus className="w-3.5 h-3.5" />
-              <span>+ Novo Cliente Rápido</span>
-            </Button>
-          </div>
-
-          <div>
+          <CardContent className="p-4 md:p-5">
             <CustomerCombobox
               customers={customers}
               selectedCustomerId={selectedCustomerId}
-              onSelect={(id) => setSelectedCustomerId(id)}
+              onSelect={setSelectedCustomerId}
               onQuickRegister={() => setShowQuickCustomerModal(true)}
+              placeholder="Digite o nome, telefone ou CPF do cliente..."
               required
-              placeholder="Buscar cliente por nome, telefone, CPF/CNPJ ou código..."
             />
-          </div>
 
-          {selectedCustomer && (
-            <div className="p-4 bg-emerald-50/70 dark:bg-emerald-950/30 rounded-2xl text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-emerald-200/80 dark:border-emerald-800/60 animate-in fade-in">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-black text-sm shrink-0 shadow-sm">
-                  {selectedCustomer.name.slice(0, 2).toUpperCase()}
+            {selectedCustomer && (
+              <div className="mt-3 p-3 bg-emerald-50/60 dark:bg-emerald-950/30 rounded-xl border border-emerald-200/60 dark:border-emerald-900/40 flex flex-wrap items-center justify-between gap-2 text-xs">
+                <div className="flex items-center gap-2 text-emerald-900 dark:text-emerald-200 font-medium">
+                  <User className="w-4 h-4 text-emerald-600" />
+                  <span>{selectedCustomer.name}</span>
+                  <span className="text-slate-400">|</span>
+                  <Phone className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>{selectedCustomer.phone}</span>
                 </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-slate-900 dark:text-slate-100 text-sm">{selectedCustomer.name}</span>
-                    {selectedCustomer.internal_code && (
-                      <Badge variant="outline" className="font-mono text-[9px] px-1.5 py-0 bg-white dark:bg-slate-900 border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-300 font-bold">
-                        #{selectedCustomer.internal_code}
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3 text-[11px] text-slate-600 dark:text-slate-300 mt-1 flex-wrap">
-                    <span>Principal: <strong className="text-emerald-700 dark:text-emerald-400">{selectedCustomer.phone}</strong></span>
-                    {selectedCustomer.secondary_phone && (
-                      <span>Secundário: <strong>{selectedCustomer.secondary_phone}</strong></span>
-                    )}
-                    {selectedCustomer.document && <span>Doc: <strong>{selectedCustomer.document}</strong></span>}
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 shrink-0">
-                {selectedCustomer.whatsapp && (
-                  <a
-                    href={`https://wa.me/55${selectedCustomer.whatsapp.replace(/\D/g, '')}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="p-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold rounded-xl flex items-center gap-1.5 transition-colors shadow-xs"
-                  >
-                    <MessageSquare className="w-3.5 h-3.5" />
-                    <span>WhatsApp</span>
-                  </a>
+                {selectedCustomer.document && (
+                  <span className="text-slate-500 dark:text-slate-400 text-[11px]">
+                    Doc: {selectedCustomer.document}
+                  </span>
                 )}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setSelectedCustomerId('')}
-                  className="text-xs text-slate-400 hover:text-rose-600 h-8 px-2.5 rounded-lg"
-                  title="Trocar cliente"
-                >
-                  <X className="w-3.5 h-3.5" />
-                  <span>Trocar</span>
-                </Button>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </CardContent>
+        </Card>
 
-        {/* Zone 2: Equipment / Items Received */}
-        <div className="bg-white dark:bg-[#0e1626] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5 space-y-4">
-          <div className="flex flex-row items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 flex items-center justify-center font-black text-xs">
+        {/* Equipment & Service Items Section */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 flex items-center justify-center font-bold text-xs">
                 2
               </div>
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                  {segmentConfig.itemLabelPlural} Recebidos ({items.length})
-                </h3>
-                <p className="text-[11px] text-slate-500">Adicione os itens e defina o serviço solicitado</p>
-              </div>
+              <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                Itens e Serviços a Executar ({items.length})
+              </h2>
             </div>
 
             <Button
               type="button"
               onClick={handleAddItem}
+              variant="outline"
               size="sm"
-              className="gap-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs h-8 px-3 rounded-xl font-bold"
+              className="h-8 text-xs font-bold rounded-xl text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/50 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 gap-1.5"
             >
               <PlusCircle className="w-3.5 h-3.5" />
-              <span>+ Adicionar Item</span>
+              <span>+ Adicionar Outro Item / Aparelho</span>
             </Button>
           </div>
 
-          <div className="space-y-4">
-            {items.map((item, index) => (
-              <div 
-                key={item.id}
-                className="p-4 bg-slate-50/80 dark:bg-slate-900/60 rounded-2xl border border-slate-200/80 dark:border-slate-800 relative space-y-3.5"
-              >
-                <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
+          {items.map((item, idx) => {
+            const currentCat = categories.find(c => c.id === item.category_id);
+            const categoryModels = models.filter(m => m.category_id === item.category_id);
+            const isRefillCategory = item.category_id === 'cat-cartucho-tinta' || item.category_id === 'cat-toner-laser';
+            const itemTotal = calculateItemTotal(item);
+
+            return (
+              <Card key={item.id} className="rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm bg-white dark:bg-slate-900 overflow-hidden">
+                <div className="p-4 bg-slate-50/70 dark:bg-slate-950/50 border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200">
-                      {segmentConfig.itemLabelSingular} #{index + 1}
+                    <Badge className="bg-slate-900 text-white font-mono text-[11px] px-2 py-0.5">
+                      Item #{idx + 1}
+                    </Badge>
+                    <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                      {currentCat?.name || 'Item'}
                     </span>
-                    {item.isVerificationWaived && (
-                      <span className="text-[10px] bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 px-2 py-0.5 rounded-full font-bold border border-emerald-300 dark:border-emerald-800">
-                        ✓ Verificação Isenta
-                      </span>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                      Subtotal: {formatCurrency(itemTotal)}
+                    </span>
+                    {items.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveItem(item.id)}
+                        className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition-colors"
+                        title="Remover Item"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     )}
                   </div>
-                  {items.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveItem(item.id)}
-                      className="text-rose-500 hover:text-rose-700 text-xs font-semibold flex items-center gap-1 p-1 rounded hover:bg-rose-50 dark:hover:bg-rose-950/40"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" /> Remover
-                    </button>
-                  )}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
-                  {/* Model Searchable Combobox */}
-                  <div className="md:col-span-2">
-                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
-                      <span>{segmentConfig.itemLabelSingular} / Modelo *</span>
-                    </label>
-                    <ModelCombobox
-                      models={models}
-                      selectedModelId={item.model_id}
-                      onSelect={(modelId) => handleUpdateItem(item.id, 'model_id', modelId)}
-                      itemLabelSingular={segmentConfig.itemLabelSingular}
-                      required
-                    />
-                  </div>
-
-                  {/* Service Requested */}
-                  <div>
-                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 block">
-                      {segmentConfig.serviceLabel} *
-                    </label>
-                    <Select
-                      value={item.service_requested}
-                      onChange={(e) => handleUpdateItem(item.id, 'service_requested', e.target.value)}
-                      required
-                      className="text-xs font-semibold h-9 rounded-xl"
-                    >
-                      {services.length > 0 ? (
-                        services.map(s => (
-                          <option key={s.id} value={s.service_type || s.id}>
-                            {s.title} — R$ {Number(s.default_price).toFixed(2)}
+                <CardContent className="p-4 md:p-5 space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Category Selector */}
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1.5 flex items-center gap-1">
+                        <Layers className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Categoria do Equipamento</span>
+                      </label>
+                      <Select
+                        value={item.category_id}
+                        onChange={e => handleChangeCategory(item.id, e.target.value)}
+                        className="h-10 text-xs rounded-xl"
+                      >
+                        {categories.map(cat => (
+                          <option key={cat.id} value={cat.id}>
+                            {cat.name}
                           </option>
-                        ))
-                      ) : (
-                        <>
-                          <option value="VERIFICACAO_E_RECARGA">Diagnóstico + Serviço</option>
-                          <option value="RECARGA">Serviço Padrão</option>
-                          <option value="VERIFICACAO">Somente Diagnóstico / Orçamento</option>
-                          <option value="TESTE">Teste & Inspeção</option>
-                        </>
-                      )}
-                    </Select>
+                        ))}
+                      </Select>
+                    </div>
+
+                    {/* Model Combobox */}
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1.5 flex items-center gap-1">
+                        <Tag className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Modelo / Equipamento *</span>
+                      </label>
+                      <ModelCombobox
+                        models={categoryModels.length > 0 ? categoryModels : models}
+                        selectedModelId={item.model_id}
+                        onSelect={modelId => {
+                          setItems(prev => prev.map(it => it.id === item.id ? { ...it, model_id: modelId } : it));
+                        }}
+                        placeholder="Selecione ou busque o modelo..."
+                        required
+                      />
+                    </div>
+
+                    {/* Serial / Identifier */}
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1.5 flex items-center gap-1">
+                        <Sparkles className="w-3.5 h-3.5 text-slate-400" />
+                        <span>{currentCat?.identifier_label || 'Nº de Série / Identificador'}</span>
+                      </label>
+                      <Input
+                        placeholder="Ex: A942, IMEI 849201, SN102"
+                        value={item.internal_identifier}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setItems(prev => prev.map(it => it.id === item.id ? { ...it, internal_identifier: val } : it));
+                        }}
+                        className="h-10 text-xs rounded-xl font-mono uppercase"
+                      />
+                    </div>
                   </div>
 
-                  {/* Identifier Label */}
-                  <div>
-                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 block">
-                      {segmentConfig.identifierLabel} {settings.require_cartridge_serial !== false ? <span className="text-rose-600 font-bold">*</span> : <span className="text-slate-400 font-normal">(Opcional)</span>}
-                    </label>
-                    <Input
-                      placeholder={settings.require_cartridge_serial !== false ? `Ex: 94A1, IMEI...` : "Opcional (S/N)"}
-                      value={item.final_serie}
-                      onChange={(e) => handleUpdateItem(item.id, 'final_serie', e.target.value)}
-                      required={settings.require_cartridge_serial !== false}
-                      className="uppercase font-mono font-bold text-xs h-9 rounded-xl"
-                    />
-                  </div>
-
-                  {/* Weight or Accessories */}
-                  <div>
-                    {segmentConfig.hasWeightInspection ? (
-                      settings.input_weight_responsibility === 'TECNICO' ? (
-                        <div>
-                          <label className="text-xs font-semibold text-slate-500 mb-1 block">
-                            Pesagem de Entrada
-                          </label>
-                          <div 
-                            className="h-9 px-2 bg-amber-50/80 dark:bg-amber-950/30 border border-dashed border-amber-300 dark:border-amber-800/60 rounded-xl flex items-center justify-center text-[10px] font-bold text-amber-800 dark:text-amber-300 text-center leading-tight cursor-not-allowed"
-                            title="Configurado pela empresa: A pesagem de entrada é realizada exclusivamente pelo Técnico na Bancada"
-                          >
-                            ⚖️ Feita na Bancada
-                          </div>
-                        </div>
-                      ) : (
-                        <div>
-                          <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 block">
-                            Peso Entrada (g) {settings.input_weight_responsibility === 'ATENDENTE' ? <span className="text-rose-600 font-bold">*</span> : <span className="text-slate-400 font-normal">(Opcional)</span>}
-                          </label>
-                          <Input
-                            type="number"
-                            step="0.1"
-                            placeholder="Ex: 28.5"
-                            required={settings.input_weight_responsibility === 'ATENDENTE'}
-                            value={item.input_weight_grams || ''}
-                            onChange={(e) => handleUpdateItem(item.id, 'input_weight_grams', e.target.value)}
-                            className="text-xs font-bold border-emerald-300 dark:border-emerald-700 h-9 rounded-xl"
-                          />
-                        </div>
-                      )
-                    ) : (
-                      <div>
-                        <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 block">
-                          Acessórios / Cabos
+                  {/* Refill Balance Weight Input if applicable */}
+                  {isRefillCategory && (
+                    <div className="p-3 bg-amber-50/50 dark:bg-amber-950/30 rounded-xl border border-amber-200/60 dark:border-amber-900/40 flex items-center gap-3">
+                      <Scale className="w-5 h-5 text-amber-600 shrink-0" />
+                      <div className="flex-1">
+                        <label className="text-xs font-bold text-amber-900 dark:text-amber-300 block">
+                          Pesagem de Entrada na Balança (g)
                         </label>
+                        <span className="text-[11px] text-slate-500">Pese o cartucho recebido para comparar com a saída pós-recarga.</span>
+                      </div>
+                      <div className="w-32">
                         <Input
-                          placeholder="Ex: Fonte, Capinha..."
-                          value={item.accessories || ''}
-                          onChange={(e) => handleUpdateItem(item.id, 'accessories', e.target.value)}
-                          className="text-xs h-9 rounded-xl"
+                          type="number"
+                          step="0.1"
+                          placeholder="Ex: 28.5"
+                          value={item.input_weight_grams !== undefined ? item.input_weight_grams : ''}
+                          onChange={e => {
+                            const val = e.target.value ? parseFloat(e.target.value) : undefined;
+                            setItems(prev => prev.map(it => it.id === item.id ? { ...it, input_weight_grams: val } : it));
+                          }}
+                          className="h-9 text-xs rounded-xl bg-white dark:bg-slate-900 text-right font-bold"
                         />
                       </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Price & Reception Notes */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
-                  <div className="md:col-span-2">
-                    <Input
-                      placeholder="Observações da recepção (ex: carcaça com marcas, cliente relata falha de impressão...)"
-                      value={item.reception_notes || ''}
-                      onChange={(e) => handleUpdateItem(item.id, 'reception_notes', e.target.value)}
-                      className="text-xs h-9 rounded-xl"
-                    />
-                  </div>
-
-                  <div>
-                    <div className="flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                      <span>Valor Aplicado (R$)</span>
-                      <span className="text-[10px] text-slate-400 font-normal">Calculado auto</span>
                     </div>
-                    <Input
-                      type="number"
-                      step="0.50"
-                      value={item.price}
-                      onChange={(e) => handleUpdateItem(item.id, 'price', e.target.value)}
-                      className="font-black text-emerald-700 dark:text-emerald-400 text-xs h-9 rounded-xl"
-                    />
+                  )}
+
+                  {/* Accessories & Reported Issue */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                        Defeito Relatado pelo Cliente / Sintoma
+                      </label>
+                      <Input
+                        placeholder="Ex: Tinta preta falhando, tela trincada, não liga..."
+                        value={item.reported_issue}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setItems(prev => prev.map(it => it.id === item.id ? { ...it, reported_issue: val } : it));
+                        }}
+                        className="h-9 text-xs rounded-xl"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                        Acessórios / Observações de Entrada
+                      </label>
+                      <Input
+                        placeholder="Ex: Carregador original, capinha, maleta com brocas..."
+                        value={item.accessories || ''}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setItems(prev => prev.map(it => it.id === item.id ? { ...it, accessories: val } : it));
+                        }}
+                        className="h-9 text-xs rounded-xl"
+                      />
+                    </div>
                   </div>
-                </div>
-              </div>
-            ))}
-          </div>
+
+                  {/* Services Matrix on Item */}
+                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80">
+                    <p className="text-xs font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-1.5">
+                      <Wrench className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Serviços Solicitados para este Item:</span>
+                    </p>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                      {item.services.map(srvInput => {
+                        const srvDef = allServices.find(s => s.id === srvInput.service_id);
+                        if (!srvDef) return null;
+
+                        return (
+                          <div
+                            key={srvInput.service_id}
+                            onClick={() => handleToggleService(item.id, srvInput.service_id)}
+                            className={`p-3 rounded-xl border transition-all cursor-pointer select-none flex items-start gap-2.5 ${
+                              srvInput.selected
+                                ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800/80 shadow-sm'
+                                : 'bg-slate-50/50 dark:bg-slate-950/30 border-slate-200 dark:border-slate-800 opacity-70 hover:opacity-100'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={srvInput.selected}
+                              onChange={() => {}} // handled by div click
+                              className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                            />
+
+                            <div className="flex-1 text-xs">
+                              <div className="flex items-center justify-between">
+                                <span className="font-bold text-slate-900 dark:text-white">
+                                  {srvDef.name}
+                                </span>
+                                <span className="font-black text-emerald-600 dark:text-emerald-400">
+                                  {formatCurrency(srvInput.unit_price)}
+                                </span>
+                              </div>
+                              {srvDef.description && (
+                                <p className="text-[10px] text-slate-500 line-clamp-1 mt-0.5">
+                                  {srvDef.description}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
 
-        {/* Zone 3: Financial Closing & Issuance */}
-        <div className="bg-white dark:bg-[#0e1626] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5 space-y-4">
-          <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100 dark:border-slate-800">
-            <div className="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-black text-xs">
-              3
+        {/* Financial & General Notes Section */}
+        <Card className="rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm bg-white dark:bg-slate-900 overflow-hidden">
+          <CardHeader className="p-4 md:p-5 bg-slate-50/50 dark:bg-slate-950/40 border-b border-slate-100 dark:border-slate-800/80">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 flex items-center justify-center font-bold text-xs">
+                3
+              </div>
+              <CardTitle className="text-sm md:text-base font-bold text-slate-900 dark:text-white">
+                Resumo Financeiro & Conclusão
+              </CardTitle>
             </div>
-            <div>
-              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Fechamento Financeiro & Emissão</h3>
-              <p className="text-[11px] text-slate-500">Defina o pagamento e emita a ordem de serviço</p>
-            </div>
-          </div>
+          </CardHeader>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-3">
+          <CardContent className="p-4 md:p-5 space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 block">
-                  Observações Gerais da Ordem
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  Observações Gerais da Ordem de Serviço
                 </label>
                 <textarea
-                  className="w-full h-20 p-2.5 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:border-emerald-500 font-medium"
-                  placeholder="Ex: Cliente solicita urgência para retirada no mesmo dia..."
+                  rows={3}
+                  placeholder="Ex: Cliente tem urgência; retirar na sexta-feira à tarde..."
                   value={generalNotes}
-                  onChange={(e) => setGeneralNotes(e.target.value)}
+                  onChange={e => setGeneralNotes(e.target.value)}
+                  className="w-full text-xs p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
                 />
               </div>
 
-              {/* Payment Method Selector */}
-              <div className="p-3 bg-slate-50 dark:bg-slate-900/80 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2">
-                <p className="text-xs font-bold text-slate-900 dark:text-slate-100">Condição de Pagamento</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-[11px] text-slate-500 mb-0.5 block font-medium">Forma de Pagamento:</label>
-                    <Select
-                      value={paymentMethod}
-                      onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-                      className="text-xs h-9 rounded-xl font-bold"
-                    >
-                      <option value="PIX">⚡ PIX</option>
-                      <option value="DINHEIRO">💵 Dinheiro</option>
-                      <option value="CARTAO_DEBITO">💳 Cartão de Débito</option>
-                      <option value="CARTAO_CREDITO">💳 Cartão de Crédito</option>
-                      <option value="A_PRAZO">📋 A Prazo / Faturado</option>
-                    </Select>
-                  </div>
+              {/* Totals & Down Payment Box */}
+              <div className="p-4 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200/80 dark:border-slate-800/80 space-y-3">
+                <div className="flex justify-between text-xs text-slate-600 dark:text-slate-400">
+                  <span>Subtotal Bruto ({items.length} item(ns)):</span>
+                  <span className="font-semibold text-slate-900 dark:text-white">{formatCurrency(subtotal)}</span>
+                </div>
 
-                  <div>
-                    <label className="text-[11px] text-slate-500 mb-0.5 block font-medium">Momento da Cobrança:</label>
-                    <Select
-                      value={paymentStatus}
-                      onChange={(e) => setPaymentStatus(e.target.value as PaymentStatus)}
-                      className="text-xs h-9 rounded-xl font-bold"
-                    >
-                      <option value="PENDENTE">⏳ Pagar na Retirada</option>
-                      <option value="PAGO">✅ Pago Antecipadamente</option>
-                    </Select>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-600 dark:text-slate-400">Desconto Comercial:</span>
+                  <div className="w-28">
+                    <Input
+                      type="number"
+                      min="0"
+                      step="1"
+                      placeholder="R$ 0,00"
+                      value={generalDiscount || ''}
+                      onChange={e => setGeneralDiscount(parseFloat(e.target.value) || 0)}
+                      className="h-8 text-xs rounded-lg text-right font-bold"
+                    />
                   </div>
+                </div>
+
+                <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center">
+                  <span className="text-sm font-black text-slate-900 dark:text-white">Valor Total da OS:</span>
+                  <span className="text-xl font-black text-emerald-600 dark:text-emerald-400">{formatCurrency(finalTotal)}</span>
+                </div>
+
+                {/* Optional Down-payment toggle */}
+                <div className="pt-2 border-t border-slate-200/80 dark:border-slate-800/80">
+                  <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-800 dark:text-slate-200">
+                    <input
+                      type="checkbox"
+                      checked={hasInitialPayment}
+                      onChange={e => {
+                        setHasInitialPayment(e.target.checked);
+                        if (e.target.checked && initialPaymentAmount === 0) {
+                          setInitialPaymentAmount(finalTotal);
+                        }
+                      }}
+                      className="rounded text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <span>Registrar pagamento / sinal adiantado no balcão</span>
+                  </label>
+
+                  {hasInitialPayment && (
+                    <div className="grid grid-cols-2 gap-2 mt-2 pt-2 animate-in fade-in-0 duration-150">
+                      <div>
+                        <span className="text-[11px] text-slate-500 block mb-1">Forma de Pagamento:</span>
+                        <Select
+                          value={initialPaymentMethod}
+                          onChange={e => setInitialPaymentMethod(e.target.value as PaymentMethod)}
+                          className="h-8 text-xs rounded-lg"
+                        >
+                          <option value="PIX">PIX</option>
+                          <option value="DINHEIRO">Dinheiro</option>
+                          <option value="CARTAO_DEBITO">Cartão de Débito</option>
+                          <option value="CARTAO_CREDITO">Cartão de Crédito</option>
+                        </Select>
+                      </div>
+
+                      <div>
+                        <span className="text-[11px] text-slate-500 block mb-1">Valor Pago (R$):</span>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          max={finalTotal}
+                          value={initialPaymentAmount || ''}
+                          onChange={e => setInitialPaymentAmount(parseFloat(e.target.value) || 0)}
+                          className="h-8 text-xs rounded-lg font-bold text-right"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
 
-            {/* Total Box */}
-            <div className="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col justify-between space-y-3">
-              <div className="space-y-2.5">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-600 dark:text-slate-400">Subtotal dos Itens ({items.length}):</span>
-                  <span className="font-bold text-slate-900 dark:text-slate-100">{formatCurrency(subtotal)}</span>
-                </div>
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800/80">
+              <Link href="/entradas">
+                <Button type="button" variant="outline" className="rounded-xl text-xs h-10">
+                  Cancelar
+                </Button>
+              </Link>
 
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-600 dark:text-slate-400">Desconto Concedido (R$):</span>
-                  <input
-                    type="number"
-                    step="1.00"
-                    className="w-24 px-2.5 py-1 text-right text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg font-black text-rose-600"
-                    value={generalDiscount}
-                    onChange={(e) => setGeneralDiscount(Number(e.target.value))}
-                  />
-                </div>
-
-                <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
-                  <span className="font-bold text-slate-900 dark:text-slate-100 text-sm">Valor Total:</span>
-                  <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
-                    {formatCurrency(totalAmount)}
-                  </span>
-                </div>
-              </div>
-
-              <Button 
-                type="submit" 
-                className="w-full bg-emerald-600 hover:bg-emerald-700 font-black py-3.5 text-sm rounded-xl shadow-lg shadow-emerald-950/40 text-white transition-transform hover:scale-[1.02]"
+              <Button
+                type="submit"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl px-6 h-10 text-xs md:text-sm shadow-lg shadow-emerald-600/20 gap-2"
               >
-                Gerar Entrada & Emitir Comanda
+                <Check className="w-4 h-4" />
+                <span>Emitir Ordem de Serviço & Imprimir</span>
               </Button>
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </form>
 
       {/* Quick Customer Modal */}
       {showQuickCustomerModal && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 w-full max-w-md shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
-            <div>
-              <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">Cadastro Rápido de Cliente</h3>
-              <p className="text-xs text-slate-500">Cadastre diretamente no balcão sem sair da tela</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in-0 duration-150">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl max-w-md w-full p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <h3 className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                <UserPlus className="w-4 h-4 text-emerald-600" />
+                Cadastro Rápido de Cliente
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowQuickCustomerModal(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
 
             <form onSubmit={handleCreateCustomerInline} className="space-y-3">
               <div>
-                <label className="text-xs font-semibold mb-1 block">Nome Completo *</label>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  Nome Completo / Razão Social *
+                </label>
                 <Input
                   required
-                  placeholder="Nome do cliente"
+                  placeholder="Ex: João da Silva / Empresa LTDA"
                   value={newCustName}
-                  onChange={(e) => setNewCustName(e.target.value)}
-                  className="text-xs h-9 rounded-xl"
+                  onChange={e => setNewCustName(e.target.value)}
+                  className="h-9 text-xs rounded-xl"
+                  autoFocus
                 />
-              </div>
-
-              {/* Telefone Principal & Telefone Secundário com Checkboxes de WhatsApp */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                      Telefone Principal *
-                    </label>
-                    <label className="flex items-center gap-1 cursor-pointer text-[10px] font-bold text-emerald-600 dark:text-emerald-400 select-none hover:text-emerald-700">
-                      <input
-                        type="checkbox"
-                        checked={newCustPhoneIsWhatsapp}
-                        onChange={(e) => setNewCustPhoneIsWhatsapp(e.target.checked)}
-                        className="w-3.5 h-3.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 accent-emerald-600 cursor-pointer"
-                      />
-                      <span>É WhatsApp</span>
-                    </label>
-                  </div>
-                  <Input
-                    required
-                    placeholder="(11) 99999-9999"
-                    value={newCustPhone}
-                    onChange={(e) => setNewCustPhone(e.target.value)}
-                    className="text-xs h-9 rounded-xl"
-                  />
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                      Telefone Secundário
-                    </label>
-                    <label className="flex items-center gap-1 cursor-pointer text-[10px] font-bold text-emerald-600 dark:text-emerald-400 select-none hover:text-emerald-700">
-                      <input
-                        type="checkbox"
-                        checked={newCustSecondaryPhoneIsWhatsapp}
-                        onChange={(e) => setNewCustSecondaryPhoneIsWhatsapp(e.target.checked)}
-                        className="w-3.5 h-3.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 accent-emerald-600 cursor-pointer"
-                      />
-                      <span>É WhatsApp</span>
-                    </label>
-                  </div>
-                  <Input
-                    placeholder="(11) 98888-8888 (Opcional)"
-                    value={newCustSecondaryPhone}
-                    onChange={(e) => setNewCustSecondaryPhone(e.target.value)}
-                    className="text-xs h-9 rounded-xl"
-                  />
-                </div>
               </div>
 
               <div>
-                <label className="text-xs font-semibold mb-1 block">
-                  CPF / CNPJ {settings.require_customer_document ? <span className="text-rose-600 font-bold">* (Obrigatório)</span> : <span className="text-slate-400 font-normal">(Opcional)</span>}
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Telefone Principal *
+                  </label>
+                  <label className="flex items-center gap-1 cursor-pointer text-[11px] text-emerald-600 font-semibold">
+                    <input
+                      type="checkbox"
+                      checked={newCustPhoneIsWhatsapp}
+                      onChange={e => setNewCustPhoneIsWhatsapp(e.target.checked)}
+                      className="rounded text-emerald-600"
+                    />
+                    <span>É WhatsApp</span>
+                  </label>
+                </div>
                 <Input
-                  required={settings.require_customer_document}
-                  placeholder={settings.require_customer_document ? "000.000.000-00 (Obrigatório)" : "000.000.000-00 (Opcional)"}
-                  value={newCustDoc}
-                  onChange={(e) => setNewCustDoc(e.target.value)}
-                  className="text-xs h-9 rounded-xl"
+                  required
+                  placeholder="(11) 98765-4321"
+                  value={newCustPhone}
+                  onChange={e => setNewCustPhone(e.target.value)}
+                  className="h-9 text-xs rounded-xl"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <Button type="button" variant="outline" size="sm" onClick={() => setShowQuickCustomerModal(false)} className="rounded-xl text-xs">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                    Telefone Secundário (Opcional)
+                  </label>
+                  <label className="flex items-center gap-1 cursor-pointer text-[11px] text-emerald-600 font-semibold">
+                    <input
+                      type="checkbox"
+                      checked={newCustSecondaryPhoneIsWhatsapp}
+                      onChange={e => setNewCustSecondaryPhoneIsWhatsapp(e.target.checked)}
+                      className="rounded text-emerald-600"
+                    />
+                    <span>É WhatsApp</span>
+                  </label>
+                </div>
+                <Input
+                  placeholder="(11) 3344-5566"
+                  value={newCustSecondaryPhone}
+                  onChange={e => setNewCustSecondaryPhone(e.target.value)}
+                  className="h-9 text-xs rounded-xl"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1">
+                  CPF ou CNPJ {settings.require_customer_document ? '*' : '(Opcional)'}
+                </label>
+                <Input
+                  placeholder="000.000.000-00"
+                  value={newCustDoc}
+                  onChange={e => setNewCustDoc(e.target.value)}
+                  className="h-9 text-xs rounded-xl"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowQuickCustomerModal(false)}
+                  className="rounded-xl text-xs"
+                >
                   Cancelar
                 </Button>
-                <Button type="submit" size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs">
-                  Salvar Cliente
+                <Button
+                  type="submit"
+                  size="sm"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs"
+                >
+                  Cadastrar e Selecionar
                 </Button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Success Modal & Thermal Printing Trigger */}
+      {createdOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in-0 duration-150">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-lg w-full p-6 text-center space-y-4">
+            <div className="w-14 h-14 rounded-2xl bg-emerald-100 dark:bg-emerald-950 text-emerald-600 flex items-center justify-center mx-auto shadow-inner">
+              <Check className="w-8 h-8 stroke-[3]" />
+            </div>
+
+            <div>
+              <h3 className="text-xl font-black text-slate-900 dark:text-white">
+                Ordem de Serviço Emitida com Sucesso!
+              </h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                Número Gerado: <span className="font-bold text-slate-900 dark:text-white font-mono">{createdOrder.order_number}</span>
+              </p>
+            </div>
+
+            <div className="p-3 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 text-xs text-left space-y-1">
+              <div className="flex justify-between">
+                <span className="text-slate-500">Cliente:</span>
+                <span className="font-bold text-slate-900 dark:text-white">{createdOrder.customer?.name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Itens / Aparelhos:</span>
+                <span className="font-semibold text-slate-900 dark:text-white">{createdOrder.items?.length} item(ns)</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Valor Total:</span>
+                <span className="font-black text-emerald-600 dark:text-emerald-400">{formatCurrency(createdOrder.total_amount)}</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5 pt-2">
+              <Link href={`/impressao?orderId=${createdOrder.id}`}>
+                <Button className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs h-10 gap-2">
+                  <Printer className="w-4 h-4" />
+                  <span>Imprimir Térmica</span>
+                </Button>
+              </Link>
+
+              <Link href={`/acompanhar/${createdOrder.tracking_token}`} target="_blank">
+                <Button variant="outline" className="w-full font-bold rounded-xl text-xs h-10 gap-2">
+                  <QrCode className="w-4 h-4 text-purple-600" />
+                  <span>Ver Rastreio Online</span>
+                </Button>
+              </Link>
+            </div>
+
+            <div className="pt-2">
+              <Button
+                variant="ghost"
+                onClick={() => router.push('/entradas')}
+                className="text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+              >
+                Ir para Lista de Ordens & Histórico
+              </Button>
+            </div>
           </div>
         </div>
       )}
