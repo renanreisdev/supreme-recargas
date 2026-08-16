@@ -181,9 +181,7 @@ export default function CatalogAndModelsPage() {
 
   // Selected category info for dynamic form helper in Model Modal
   const activeSelectedCategory = categories.find(c => c.id === modelCategoryId);
-  const isScaleCategory = activeSelectedCategory?.inspection_type === 'SCALE' || 
-    activeSelectedCategory?.slug?.includes('cartucho') || 
-    activeSelectedCategory?.slug?.includes('toner');
+  const isScaleCategory = activeSelectedCategory?.inspection_type === 'SCALE';
 
   // ==========================================
   // MODEL HANDLERS

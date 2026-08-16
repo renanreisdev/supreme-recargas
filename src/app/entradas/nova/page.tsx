@@ -504,7 +504,7 @@ export default function NovaEntradaPage() {
           {items.map((item, idx) => {
             const currentCat = categories.find(c => c.id === item.category_id);
             const categoryModels = models.filter(m => m.category_id === item.category_id);
-            const isRefillCategory = item.category_id === 'cat-cartucho-tinta' || item.category_id === 'cat-toner-laser';
+            const isScaleInspection = currentCat?.inspection_type === 'SCALE';
             const itemTotal = calculateItemTotal(item);
 
             return (
@@ -606,7 +606,7 @@ export default function NovaEntradaPage() {
                   </div>
 
                   {/* Refill Balance Weight Input if applicable */}
-                  {isRefillCategory && (
+                  {isScaleInspection && (
                     <div className="p-3 bg-amber-50/50 dark:bg-amber-950/30 rounded-xl border border-amber-200/60 dark:border-amber-900/40 flex items-center gap-3">
                       <Scale className="w-5 h-5 text-amber-600 shrink-0" />
                       <div className="flex-1">

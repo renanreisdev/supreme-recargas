@@ -170,10 +170,10 @@ export default function TechnicianWorkbenchPage() {
       : '';
 
     const cat = categories.find(c => c.id === item.category_id || c.id === item.model?.category_id);
-    const isCart = cat?.slug?.includes('cartucho') || cat?.slug?.includes('toner') || cat?.inspection_type === 'SCALE';
+    const isScaleInspection = cat?.inspection_type === 'SCALE';
     const verdicts = (cat?.technical_verdicts && cat.technical_verdicts.length > 0)
       ? cat.technical_verdicts
-      : isCart
+      : isScaleInspection
         ? ['100% OK / Concluído', 'CID / Circuito Queimado', 'Queimado / Sem Reparo', 'Entupido Irrecuperável', 'Recusado / Devolvido']
         : ['100% OK / Concluído', 'Reparo Concluído com Sucesso', 'Reparado com Ressalvas', 'Sem Reparo / Placa Inviável', 'Aguardando Peça do Cliente', 'Orçamento Reprovado / Devolvido'];
 
@@ -218,10 +218,10 @@ export default function TechnicianWorkbenchPage() {
     if (!selectedItem || !canEditTech) return;
     const outNum = outputWeight ? parseFloat(outputWeight) : undefined;
     const cat = categories.find(c => c.id === selectedItem.category_id || c.id === selectedItem.model?.category_id);
-    const isCart = cat?.slug?.includes('cartucho') || cat?.slug?.includes('toner') || cat?.inspection_type === 'SCALE';
+    const isScaleInspection = cat?.inspection_type === 'SCALE';
     const verdicts = (cat?.technical_verdicts && cat.technical_verdicts.length > 0)
       ? cat.technical_verdicts
-      : isCart
+      : isScaleInspection
         ? ['100% OK / Concluído', 'CID / Circuito Queimado', 'Queimado / Sem Reparo', 'Entupido Irrecuperável', 'Recusado / Devolvido']
         : ['100% OK / Concluído', 'Reparo Concluído com Sucesso', 'Reparado com Ressalvas', 'Sem Reparo / Placa Inviável', 'Aguardando Peça do Cliente', 'Orçamento Reprovado / Devolvido'];
 
@@ -481,10 +481,10 @@ export default function TechnicianWorkbenchPage() {
       {/* ========================================================================= */}
       {selectedItem && (() => {
         const itemCat = categories.find(c => c.id === selectedItem.category_id || c.id === selectedItem.model?.category_id);
-        const isCartridgeCategory = itemCat?.slug?.includes('cartucho') || itemCat?.slug?.includes('toner') || itemCat?.inspection_type === 'SCALE';
+        const isScaleInspection = itemCat?.inspection_type === 'SCALE';
         const availableVerdicts: string[] = (itemCat?.technical_verdicts && itemCat.technical_verdicts.length > 0)
           ? itemCat.technical_verdicts
-          : isCartridgeCategory
+          : isScaleInspection
             ? [
                 '100% OK / Concluído',
                 'CID / Circuito Queimado',
@@ -535,8 +535,8 @@ export default function TechnicianWorkbenchPage() {
                   </Select>
                 </div>
 
-                {/* Weight Scale Inputs ONLY FOR CARTRIDGES / SCALE CATEGORIES */}
-                {isCartridgeCategory && (
+                {/* Weight Scale Inputs ONLY IF INSPECTION TYPE IS SCALE */}
+                {isScaleInspection && (
                   <div className="grid grid-cols-2 gap-3 bg-amber-50/50 dark:bg-amber-950/20 p-3 rounded-xl border border-amber-200/60 dark:border-amber-900/40">
                     <div>
                       <label className="text-[11px] font-bold text-amber-900 dark:text-amber-300 block mb-1">
