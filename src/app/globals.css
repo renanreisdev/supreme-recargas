@@ -7,17 +7,70 @@
   }
 }
 
-/* Custom Print Styles for Thermal Receipts & Labels (58mm & 80mm) */
+/* ==========================================================================
+   PRINT STYLES (REPORTS, DOCUMENTS & THERMAL RECEIPTS)
+   ========================================================================== */
 @media print {
-  body * {
+  /* 1. Base Document Print Setup */
+  html, body {
+    height: auto !important;
+    min-height: 100% !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Expand all containers for proper multi-page pagination */
+  div, main, section, table, tbody {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+  }
+
+  /* Always hide screen-only navigation and interactive elements */
+  aside,
+  header,
+  nav,
+  .print-hidden,
+  .print\:hidden,
+  .no-print {
+    display: none !important;
+  }
+
+  /* Prevent awkward page breaks inside cards, tables, and rows */
+  .break-inside-avoid,
+  .print-avoid-break,
+  tr,
+  .card-print {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Default A4 Page Margins for Standard Reports */
+  @page {
+    margin: 8mm 8mm 10mm 8mm;
+    size: auto;
+  }
+
+  /* 2. Isolated Thermal Receipt & Mini Label Mode (58mm / 80mm POS Printers) */
+  body:has(#printable-receipt) {
+    background: #ffffff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  body:has(#printable-receipt) * {
     visibility: hidden;
   }
-  
-  #printable-receipt, #printable-receipt * {
+
+  body:has(#printable-receipt) #printable-receipt,
+  body:has(#printable-receipt) #printable-receipt * {
     visibility: visible;
   }
 
-  #printable-receipt {
+  body:has(#printable-receipt) #printable-receipt {
     position: absolute;
     left: 0;
     top: 0;
@@ -25,12 +78,7 @@
     margin: 0 !important;
     padding: 0 !important;
     font-family: 'Courier New', Courier, monospace !important;
-    color: #000 !important;
-    background: #fff !important;
-  }
-
-  @page {
-    margin: 0;
-    size: auto;
+    color: #000000 !important;
+    background: #ffffff !important;
   }
 }

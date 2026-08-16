@@ -27,7 +27,7 @@ export function BottomNav({ onToggleMenu }: BottomNavProps) {
   const isEntries = pathname === '/entradas' || (pathname.startsWith('/entradas/') && pathname !== '/entradas/nova');
 
   return (
-    <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 shadow-xl px-2 py-1 flex items-center justify-around select-none">
+    <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 shadow-xl px-2 py-1 flex items-center justify-around select-none print:hidden">
       {/* Dashboard */}
       <Link
         href="/dashboard"

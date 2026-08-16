@@ -323,13 +323,13 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   return (
     <>
       {/* Desktop Sticky Sidebar */}
-      <aside className="hidden lg:flex flex-col w-64 h-screen sticky top-0 border-r border-slate-800 shadow-xl z-30 shrink-0">
+      <aside className="hidden lg:flex flex-col w-64 h-screen sticky top-0 border-r border-slate-800 shadow-xl z-30 shrink-0 print:hidden">
         {renderSidebarContent(false)}
       </aside>
 
       {/* Mobile Slide-Over Drawer with Backdrop */}
       {mobileOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden flex">
+        <div className="fixed inset-0 z-50 lg:hidden flex print:hidden">
           {/* Backdrop */}
           <div 
             className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200"

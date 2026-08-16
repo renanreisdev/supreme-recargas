@@ -36,7 +36,7 @@ import { Badge } from '@/components/ui/badge';
 type DatePreset = 'TODOS' | 'HOJE' | 'ONTEM' | '7_DIAS' | '30_DIAS' | 'ESTE_MES' | 'MES_ANTERIOR' | 'CUSTOM';
 
 export default function ReportsPage() {
-  const { currentCompany } = useAuth();
+  const { currentCompany, currentUser } = useAuth();
   const [entries, setEntries] = useState<CartridgeEntry[]>([]);
   const [cartridges, setCartridges] = useState<Cartridge[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -225,8 +225,10 @@ export default function ReportsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
+    <div className="space-y-6 print:space-y-4 print:p-0 print:m-0">
+      {/* =========================================================
+          SCREEN-ONLY HEADER & ACTION TOOLBAR
+          ========================================================= */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm print:hidden">
         <div>
           <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
@@ -238,20 +240,92 @@ export default function ReportsPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Button onClick={handleExportFinancialCSV} variant="outline" size="sm" className="gap-1.5 text-xs font-semibold h-9">
             <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
             <span>Exportar CSV</span>
           </Button>
 
-          <Button onClick={handlePrintPDF} size="sm" className="bg-slate-900 hover:bg-slate-800 text-white gap-1.5 text-xs font-semibold h-9">
-            <Printer className="w-4 h-4" />
-            <span>Imprimir Relatório</span>
+          <Button 
+            onClick={handlePrintPDF} 
+            size="sm" 
+            className="bg-slate-900 hover:bg-slate-800 text-white gap-1.5 text-xs font-bold h-9 shadow-md transition-all active:scale-95"
+            title="Abrir pré-visualização e imprimir relatório em PDF/Papel A4"
+          >
+            <Printer className="w-4 h-4 text-emerald-400" />
+            <span>Imprimir Relatório (Ctrl+P)</span>
           </Button>
         </div>
       </div>
 
-      {/* Date & Period Filter Card */}
+      {/* =========================================================
+          PRINT-ONLY PROFESSIONAL CORPORATE HEADER
+          ========================================================= */}
+      <div className="hidden print:block mb-4 pb-3 border-b-2 border-slate-900 text-slate-900">
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-xl font-black uppercase tracking-tight text-slate-950">
+              {currentCompany.trade_name}
+            </h1>
+            <p className="text-xs font-semibold text-slate-700">{currentCompany.corporate_name}</p>
+            <p className="text-[11px] text-slate-600">
+              CNPJ: {currentCompany.cnpj || 'Não informado'} | Tel: {currentCompany.phone} {currentCompany.whatsapp ? `| WhatsApp: ${currentCompany.whatsapp}` : ''}
+            </p>
+            {currentCompany.address && (
+              <p className="text-[11px] text-slate-600">
+                {currentCompany.address} {currentCompany.city ? `- ${currentCompany.city}` : ''} {currentCompany.state ? `/${currentCompany.state}` : ''}
+              </p>
+            )}
+          </div>
+          <div className="text-right">
+            <span className="inline-block px-3 py-1 bg-slate-900 text-white text-xs font-black uppercase rounded tracking-wider">
+              {activeTab === 'FINANCIAL' ? 'DEMONSTRATIVO FINANCEIRO' : 'AUDITORIA TÉCNICA DE BANCADA'}
+            </span>
+            <p className="text-[10px] text-slate-600 mt-1 font-mono">
+              Emissão: {new Date().toLocaleString('pt-BR')}
+            </p>
+            <p className="text-[10px] text-slate-600 font-mono">
+              Operador: {currentUser?.full_name || 'Usuário do Sistema'}
+            </p>
+          </div>
+        </div>
+
+        {/* Filter Summary Legend in Print */}
+        <div className="mt-3 p-2 bg-slate-100 rounded border border-slate-300 text-[11px] flex justify-between items-center flex-wrap gap-2 text-slate-800">
+          <div>
+            <span className="font-bold">Período de Referência: </span>
+            <span>
+              {startDate && endDate 
+                ? `${formatDate(startDate)} até ${formatDate(endDate)}` 
+                : startDate 
+                ? `A partir de ${formatDate(startDate)}` 
+                : endDate 
+                ? `Até ${formatDate(endDate)}` 
+                : 'Todo o Histórico'}
+            </span>
+          </div>
+          {selectedPaymentMethod && (
+            <div>
+              <span className="font-bold">Forma Pagto: </span>
+              <span>{getPaymentMethodLabel(selectedPaymentMethod as PaymentMethod)}</span>
+            </div>
+          )}
+          {selectedPaymentStatus && (
+            <div>
+              <span className="font-bold">Status: </span>
+              <span>{selectedPaymentStatus === 'PAGO' ? 'Pago (Liquidado)' : 'Pendente'}</span>
+            </div>
+          )}
+          <div>
+            <span className="font-bold">Total Registros: </span>
+            <span className="font-bold">
+              {activeTab === 'FINANCIAL' ? `${filteredEntries.length} comandas` : `${filteredCartridges.length} cartuchos`}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Date & Period Filter Card (Screen Only) */}
       <Card className="shadow-sm border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60 print:hidden">
         <CardContent className="py-3.5 space-y-3">
           {/* Quick Date Presets */}
@@ -362,97 +436,101 @@ export default function ReportsPage() {
         </CardContent>
       </Card>
 
-      {/* Financial Top Summary Cards (Recalculated dynamically) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <Card className="bg-slate-900 text-white p-4 border-slate-800">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-400 font-semibold uppercase">Total Liquidado (Caixa)</span>
-            <CheckCircle className="w-4 h-4 text-emerald-400" />
-          </div>
-          <p className="text-2xl font-extrabold text-emerald-400 mt-1">{formatCurrency(totalReceived)}</p>
-          <p className="text-[11px] text-slate-400 mt-0.5">{paidEntries.length} comandas liquidadas no período</p>
-        </Card>
+      {/* Financial Top Summary Cards (Dynamic on Screen and High-Contrast in Print) */}
+      {activeTab === 'FINANCIAL' && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 print:grid-cols-4 print:gap-2 print:mb-3">
+          <Card className="bg-slate-900 text-white p-4 border-slate-800 print:bg-white print:text-black print:border-2 print:border-slate-800 print:p-2.5 print:rounded-lg print:shadow-none print-avoid-break">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-400 print:text-slate-700 font-semibold uppercase">Total Liquidado (Caixa)</span>
+              <CheckCircle className="w-4 h-4 text-emerald-400 print:hidden" />
+            </div>
+            <p className="text-2xl print:text-lg font-extrabold text-emerald-400 print:text-emerald-800 mt-1">{formatCurrency(totalReceived)}</p>
+            <p className="text-[11px] text-slate-400 print:text-slate-600 mt-0.5">{paidEntries.length} comandas liquidadas</p>
+          </Card>
 
-        <Card className="bg-slate-900 text-white p-4 border-slate-800">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-400 font-semibold uppercase">A Receber (A Prazo)</span>
-            <Clock className="w-4 h-4 text-amber-400" />
-          </div>
-          <p className="text-2xl font-bold text-amber-400 mt-1">{formatCurrency(totalPending)}</p>
-          <p className="text-[11px] text-slate-400 mt-0.5">{pendingEntries.length} comandas pendentes</p>
-        </Card>
+          <Card className="bg-slate-900 text-white p-4 border-slate-800 print:bg-white print:text-black print:border-2 print:border-slate-800 print:p-2.5 print:rounded-lg print:shadow-none print-avoid-break">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-400 print:text-slate-700 font-semibold uppercase">A Receber (A Prazo)</span>
+              <Clock className="w-4 h-4 text-amber-400 print:hidden" />
+            </div>
+            <p className="text-2xl print:text-lg font-bold text-amber-400 print:text-amber-800 mt-1">{formatCurrency(totalPending)}</p>
+            <p className="text-[11px] text-slate-400 print:text-slate-600 mt-0.5">{pendingEntries.length} comandas pendentes</p>
+          </Card>
 
-        <Card className="bg-slate-900 text-white p-4 border-slate-800">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-400 font-semibold uppercase">Faturamento Total Gerado</span>
-            <TrendingUp className="w-4 h-4 text-teal-400" />
-          </div>
-          <p className="text-2xl font-extrabold text-teal-300 mt-1">{formatCurrency(totalNetRevenue)}</p>
-          <p className="text-[11px] text-slate-400 mt-0.5">{filteredEntries.length} atendimentos filtrados</p>
-        </Card>
+          <Card className="bg-slate-900 text-white p-4 border-slate-800 print:bg-white print:text-black print:border-2 print:border-slate-800 print:p-2.5 print:rounded-lg print:shadow-none print-avoid-break">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-400 print:text-slate-700 font-semibold uppercase">Faturamento Gerado</span>
+              <TrendingUp className="w-4 h-4 text-teal-400 print:hidden" />
+            </div>
+            <p className="text-2xl print:text-lg font-extrabold text-teal-300 print:text-teal-800 mt-1">{formatCurrency(totalNetRevenue)}</p>
+            <p className="text-[11px] text-slate-400 print:text-slate-600 mt-0.5">{filteredEntries.length} atendimentos</p>
+          </Card>
 
-        <Card className="bg-slate-900 text-white p-4 border-slate-800">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-400 font-semibold uppercase">Descontos Concedidos</span>
-            <DollarSign className="w-4 h-4 text-rose-400" />
-          </div>
-          <p className="text-2xl font-bold text-rose-400 mt-1">{formatCurrency(totalDiscounts)}</p>
-          <p className="text-[11px] text-slate-400 mt-0.5">Subtotal bruto: {formatCurrency(totalGrossRevenue)}</p>
-        </Card>
-      </div>
+          <Card className="bg-slate-900 text-white p-4 border-slate-800 print:bg-white print:text-black print:border-2 print:border-slate-800 print:p-2.5 print:rounded-lg print:shadow-none print-avoid-break">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-400 print:text-slate-700 font-semibold uppercase">Descontos Concedidos</span>
+              <DollarSign className="w-4 h-4 text-rose-400 print:hidden" />
+            </div>
+            <p className="text-2xl print:text-lg font-bold text-rose-400 print:text-rose-800 mt-1">{formatCurrency(totalDiscounts)}</p>
+            <p className="text-[11px] text-slate-400 print:text-slate-600 mt-0.5">Bruto: {formatCurrency(totalGrossRevenue)}</p>
+          </Card>
+        </div>
+      )}
 
       {/* Cash Breakdown by Payment Method */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        {/* PIX */}
-        <Card className="p-3.5 bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/60 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
-              <Zap className="w-4 h-4 text-emerald-600" />
-              <span>PIX Instantâneo</span>
-            </span>
-            <Badge className="bg-emerald-700 text-white text-[10px]">{countPix} recebimentos</Badge>
-          </div>
-          <p className="text-xl font-extrabold text-emerald-700 dark:text-emerald-400 mt-2">{formatCurrency(totalPix)}</p>
-        </Card>
+      {activeTab === 'FINANCIAL' && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 print:grid-cols-4 print:gap-2 print:mb-3">
+          {/* PIX */}
+          <Card className="p-3.5 bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/60 shadow-sm print:bg-white print:border print:border-slate-400 print:p-2 print:rounded print:shadow-none print-avoid-break">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 print:text-black flex items-center gap-1.5">
+                <Zap className="w-4 h-4 text-emerald-600 print:hidden" />
+                <span>PIX Instantâneo</span>
+              </span>
+              <Badge className="bg-emerald-700 text-white text-[10px] print:bg-slate-100 print:text-black print:border print:border-slate-400">{countPix} rec.</Badge>
+            </div>
+            <p className="text-xl print:text-sm font-extrabold text-emerald-700 dark:text-emerald-400 print:text-slate-900 mt-2 print:mt-1">{formatCurrency(totalPix)}</p>
+          </Card>
 
-        {/* Dinheiro */}
-        <Card className="p-3.5 bg-amber-50/70 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/60 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
-              <Banknote className="w-4 h-4 text-amber-600" />
-              <span>Dinheiro em Espécie</span>
-            </span>
-            <Badge className="bg-amber-700 text-white text-[10px]">{countCash} recebimentos</Badge>
-          </div>
-          <p className="text-xl font-extrabold text-amber-800 dark:text-amber-300 mt-2">{formatCurrency(totalCash)}</p>
-        </Card>
+          {/* Dinheiro */}
+          <Card className="p-3.5 bg-amber-50/70 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/60 shadow-sm print:bg-white print:border print:border-slate-400 print:p-2 print:rounded print:shadow-none print-avoid-break">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-amber-800 dark:text-amber-300 print:text-black flex items-center gap-1.5">
+                <Banknote className="w-4 h-4 text-amber-600 print:hidden" />
+                <span>Dinheiro em Espécie</span>
+              </span>
+              <Badge className="bg-amber-700 text-white text-[10px] print:bg-slate-100 print:text-black print:border print:border-slate-400">{countCash} rec.</Badge>
+            </div>
+            <p className="text-xl print:text-sm font-extrabold text-amber-800 dark:text-amber-300 print:text-slate-900 mt-2 print:mt-1">{formatCurrency(totalCash)}</p>
+          </Card>
 
-        {/* Cartões Débito / Crédito */}
-        <Card className="p-3.5 bg-blue-50/70 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800/60 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-blue-800 dark:text-blue-300 flex items-center gap-1.5">
-              <CreditCard className="w-4 h-4 text-blue-600" />
-              <span>Cartões (Débito/Crédito)</span>
-            </span>
-            <Badge className="bg-blue-700 text-white text-[10px]">{countCards} recebimentos</Badge>
-          </div>
-          <p className="text-xl font-extrabold text-blue-800 dark:text-blue-300 mt-2">{formatCurrency(totalCards)}</p>
-        </Card>
+          {/* Cartões Débito / Crédito */}
+          <Card className="p-3.5 bg-blue-50/70 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800/60 shadow-sm print:bg-white print:border print:border-slate-400 print:p-2 print:rounded print:shadow-none print-avoid-break">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-blue-800 dark:text-blue-300 print:text-black flex items-center gap-1.5">
+                <CreditCard className="w-4 h-4 text-blue-600 print:hidden" />
+                <span>Cartões (Débito/Crédito)</span>
+              </span>
+              <Badge className="bg-blue-700 text-white text-[10px] print:bg-slate-100 print:text-black print:border print:border-slate-400">{countCards} rec.</Badge>
+            </div>
+            <p className="text-xl print:text-sm font-extrabold text-blue-800 dark:text-blue-300 print:text-slate-900 mt-2 print:mt-1">{formatCurrency(totalCards)}</p>
+          </Card>
 
-        {/* A Prazo / Faturado */}
-        <Card className="p-3.5 bg-purple-50/70 dark:bg-purple-950/20 border-purple-200 dark:border-purple-800/60 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-purple-800 dark:text-purple-300 flex items-center gap-1.5">
-              <Clock className="w-4 h-4 text-purple-600" />
-              <span>A Prazo / A Faturar</span>
-            </span>
-            <Badge className="bg-purple-700 text-white text-[10px]">{countAPrazo} pendentes</Badge>
-          </div>
-          <p className="text-xl font-extrabold text-purple-800 dark:text-purple-300 mt-2">{formatCurrency(totalAPrazo)}</p>
-        </Card>
-      </div>
+          {/* A Prazo / Faturado */}
+          <Card className="p-3.5 bg-purple-50/70 dark:bg-purple-950/20 border-purple-200 dark:border-purple-800/60 shadow-sm print:bg-white print:border print:border-slate-400 print:p-2 print:rounded print:shadow-none print-avoid-break">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-purple-800 dark:text-purple-300 print:text-black flex items-center gap-1.5">
+                <Clock className="w-4 h-4 text-purple-600 print:hidden" />
+                <span>A Prazo / A Faturar</span>
+              </span>
+              <Badge className="bg-purple-700 text-white text-[10px] print:bg-slate-100 print:text-black print:border print:border-slate-400">{countAPrazo} pend.</Badge>
+            </div>
+            <p className="text-xl print:text-sm font-extrabold text-purple-800 dark:text-purple-300 print:text-slate-900 mt-2 print:mt-1">{formatCurrency(totalAPrazo)}</p>
+          </Card>
+        </div>
+      )}
 
-      {/* Tab Navigation */}
+      {/* Tab Navigation (Screen Only) */}
       <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 print:hidden">
         <button
           onClick={() => setActiveTab('FINANCIAL')}
@@ -470,35 +548,35 @@ export default function ReportsPage() {
 
       {/* Extrato Financeiro Table */}
       {activeTab === 'FINANCIAL' && (
-        <Card className="shadow-sm border-slate-200 dark:border-slate-800">
-          <CardHeader className="pb-3 border-b border-slate-200 dark:border-slate-800">
+        <Card className="shadow-sm border-slate-200 dark:border-slate-800 print:border print:border-slate-400 print:shadow-none">
+          <CardHeader className="pb-3 border-b border-slate-200 dark:border-slate-800 print:py-2 print:border-slate-400">
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                <CardTitle className="text-sm font-bold text-slate-900 dark:text-slate-100 print:text-slate-950">
                   Extrato Detalhado de Baixas, Pagamentos e Entregas
                 </CardTitle>
-                <CardDescription className="text-xs">
+                <CardDescription className="text-xs print:text-slate-600">
                   Relatório auditável de comandas, meios de pagamento e identificação de quem retirou
                 </CardDescription>
               </div>
             </div>
           </CardHeader>
-          <CardContent className="pt-3">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold uppercase tracking-wider">
+          <CardContent className="pt-3 print:p-0">
+            <div className="overflow-x-auto print:overflow-visible">
+              <table className="w-full text-left text-xs print:text-[11px]">
+                <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 print:bg-slate-200 print:text-black font-semibold uppercase tracking-wider print:border-b-2 print:border-slate-400">
                   <tr>
-                    <th className="p-2.5 rounded-l-lg">N° Comanda</th>
-                    <th className="p-2.5">Data / Hora</th>
-                    <th className="p-2.5">Cliente</th>
-                    <th className="p-2.5">Forma Pagamento</th>
-                    <th className="p-2.5">Status</th>
-                    <th className="p-2.5">Valor Pago</th>
-                    <th className="p-2.5">Quem Retirou</th>
-                    <th className="p-2.5 rounded-r-lg text-right">Atendente</th>
+                    <th className="p-2.5 rounded-l-lg print:rounded-none print:p-2">N° Comanda</th>
+                    <th className="p-2.5 print:p-2">Data / Hora</th>
+                    <th className="p-2.5 print:p-2">Cliente</th>
+                    <th className="p-2.5 print:p-2">Forma Pagamento</th>
+                    <th className="p-2.5 print:p-2">Status</th>
+                    <th className="p-2.5 print:p-2">Valor Pago</th>
+                    <th className="p-2.5 print:p-2">Quem Retirou</th>
+                    <th className="p-2.5 rounded-r-lg print:rounded-none text-right print:p-2">Atendente</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 print:divide-slate-300">
                   {filteredEntries.map((e) => {
                     const paymentBadge = getPaymentStatusBadge(e.payment_status || 'PENDENTE');
                     const paymentSummary = e.payments && e.payments.length > 1
@@ -506,45 +584,45 @@ export default function ReportsPage() {
                       : getPaymentMethodLabel(e.payment_method);
 
                     return (
-                      <tr key={e.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                        <td className="p-2.5 font-mono font-bold text-slate-900 dark:text-slate-100">
+                      <tr key={e.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors print:hover:bg-transparent print-avoid-break">
+                        <td className="p-2.5 print:p-2 font-mono font-bold text-slate-900 dark:text-slate-100 print:text-black">
                           {e.entry_number}
                         </td>
-                        <td className="p-2.5 text-slate-500 font-mono text-[11px]">
+                        <td className="p-2.5 print:p-2 text-slate-500 print:text-slate-800 font-mono text-[11px] print:text-[10px]">
                           {e.paid_at ? formatDateTime(e.paid_at) : formatDateTime(e.entry_date)}
                         </td>
-                        <td className="p-2.5">
-                          <div className="font-semibold text-slate-800 dark:text-slate-200">{e.customer?.name}</div>
-                          <div className="text-[10px] text-slate-400">{e.customer?.phone}</div>
+                        <td className="p-2.5 print:p-2">
+                          <div className="font-semibold text-slate-800 dark:text-slate-200 print:text-black">{e.customer?.name}</div>
+                          <div className="text-[10px] text-slate-400 print:text-slate-600">{e.customer?.phone}</div>
                         </td>
-                        <td className="p-2.5">
-                          <span className="font-semibold text-slate-700 dark:text-slate-300 text-[11px]">
+                        <td className="p-2.5 print:p-2">
+                          <span className="font-semibold text-slate-700 dark:text-slate-300 print:text-black text-[11px] print:text-[10px]">
                             {paymentSummary}
                           </span>
                         </td>
-                        <td className="p-2.5">
-                          <span className={`inline-block px-2 py-0.5 rounded text-[10px] ${paymentBadge.className}`}>
+                        <td className="p-2.5 print:p-2">
+                          <span className={`inline-block px-2 py-0.5 rounded text-[10px] ${paymentBadge.className} print:bg-slate-100 print:text-black print:border print:border-slate-400`}>
                             {e.payment_status === 'PAGO' ? '✓ Liquidado' : 'Pendente'}
                           </span>
                         </td>
-                        <td className="p-2.5 font-bold text-emerald-700 dark:text-emerald-400">
+                        <td className="p-2.5 print:p-2 font-bold text-emerald-700 dark:text-emerald-400 print:text-black">
                           {formatCurrency(e.total_amount)}
                         </td>
-                        <td className="p-2.5">
+                        <td className="p-2.5 print:p-2">
                           {e.delivery_info ? (
                             <div>
-                              <span className="font-bold text-slate-800 dark:text-slate-200 text-[11px]">
+                              <span className="font-bold text-slate-800 dark:text-slate-200 print:text-black text-[11px] print:text-[10px]">
                                 {e.delivery_info.receiver_name}
                               </span>
-                              <span className="text-[10px] text-slate-400 block">
+                              <span className="text-[10px] text-slate-400 print:text-slate-600 block">
                                 ({e.delivery_info.receiver_relation || 'Cliente'})
                               </span>
                             </div>
                           ) : (
-                            <span className="text-slate-400 text-[11px]">Aguardando Retirada</span>
+                            <span className="text-slate-400 print:text-slate-600 text-[11px] print:text-[10px]">Aguardando Retirada</span>
                           )}
                         </td>
-                        <td className="p-2.5 text-right font-mono text-[11px] text-slate-600 dark:text-slate-300">
+                        <td className="p-2.5 print:p-2 text-right font-mono text-[11px] print:text-[10px] text-slate-600 dark:text-slate-300 print:text-black">
                           {e.delivery_info?.attendant_name || e.attendant?.full_name || 'Balcão'}
                         </td>
                       </tr>
@@ -553,7 +631,7 @@ export default function ReportsPage() {
 
                   {filteredEntries.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="text-center py-10 text-slate-400 text-xs">
+                      <td colSpan={8} className="text-center py-10 text-slate-400 print:text-black text-xs">
                         Nenhuma movimentação financeira encontrada para os filtros selecionados.
                       </td>
                     </tr>
@@ -567,59 +645,59 @@ export default function ReportsPage() {
 
       {/* Auditoria Técnica Table */}
       {activeTab === 'TECHNICAL' && (
-        <Card className="shadow-sm border-slate-200 dark:border-slate-800">
-          <CardHeader className="pb-3 border-b border-slate-200 dark:border-slate-800">
-            <CardTitle className="text-sm font-bold text-slate-900 dark:text-slate-100">
+        <Card className="shadow-sm border-slate-200 dark:border-slate-800 print:border print:border-slate-400 print:shadow-none">
+          <CardHeader className="pb-3 border-b border-slate-200 dark:border-slate-800 print:py-2 print:border-slate-400">
+            <CardTitle className="text-sm font-bold text-slate-900 dark:text-slate-100 print:text-slate-950">
               Auditoria de Pesagens e Diagnósticos Técnicos da Bancada
             </CardTitle>
-            <CardDescription className="text-xs">
+            <CardDescription className="text-xs print:text-slate-600">
               Rastreamento de gramas de tinta injetadas, peso de entrada/saída e classificação elétrica
             </CardDescription>
           </CardHeader>
-          <CardContent className="pt-3">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold uppercase tracking-wider">
+          <CardContent className="pt-3 print:p-0">
+            <div className="overflow-x-auto print:overflow-visible">
+              <table className="w-full text-left text-xs print:text-[11px]">
+                <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 print:bg-slate-200 print:text-black font-semibold uppercase tracking-wider print:border-b-2 print:border-slate-400">
                   <tr>
-                    <th className="p-2.5 rounded-l-lg">Serial</th>
-                    <th className="p-2.5">Modelo</th>
-                    <th className="p-2.5">Série Final</th>
-                    <th className="p-2.5">Peso Entrada</th>
-                    <th className="p-2.5">Peso Saída</th>
-                    <th className="p-2.5">Delta Tinta</th>
-                    <th className="p-2.5">Diagnóstico</th>
-                    <th className="p-2.5 rounded-r-lg text-right">Técnico</th>
+                    <th className="p-2.5 rounded-l-lg print:rounded-none print:p-2">Serial</th>
+                    <th className="p-2.5 print:p-2">Modelo</th>
+                    <th className="p-2.5 print:p-2">Série Final</th>
+                    <th className="p-2.5 print:p-2">Peso Entrada</th>
+                    <th className="p-2.5 print:p-2">Peso Saída</th>
+                    <th className="p-2.5 print:p-2">Delta Tinta</th>
+                    <th className="p-2.5 print:p-2">Diagnóstico</th>
+                    <th className="p-2.5 rounded-r-lg print:rounded-none text-right print:p-2">Técnico</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 print:divide-slate-300">
                   {filteredCartridges.map((c) => {
                     const resultBadge = getResultBadgeConfig(c.result_classification);
                     return (
-                      <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                        <td className="p-2.5 font-mono font-bold text-slate-900 dark:text-slate-100">
+                      <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors print:hover:bg-transparent print-avoid-break">
+                        <td className="p-2.5 print:p-2 font-mono font-bold text-slate-900 dark:text-slate-100 print:text-black">
                           {c.serial_number}
                         </td>
-                        <td className="p-2.5 font-semibold text-slate-800 dark:text-slate-200">
+                        <td className="p-2.5 print:p-2 font-semibold text-slate-800 dark:text-slate-200 print:text-black">
                           {c.model?.brand_name} {c.model?.model_name} ({c.color})
                         </td>
-                        <td className="p-2.5 font-mono font-bold text-amber-800 dark:text-amber-300">
+                        <td className="p-2.5 print:p-2 font-mono font-bold text-amber-800 dark:text-amber-300 print:text-black">
                           {c.final_serie}
                         </td>
-                        <td className="p-2.5 text-slate-600 dark:text-slate-300 font-mono">
+                        <td className="p-2.5 print:p-2 text-slate-600 dark:text-slate-300 print:text-black font-mono">
                           {c.input_weight_grams ? `${c.input_weight_grams}g` : '-'}
                         </td>
-                        <td className="p-2.5 text-slate-600 dark:text-slate-300 font-mono">
+                        <td className="p-2.5 print:p-2 text-slate-600 dark:text-slate-300 print:text-black font-mono">
                           {c.output_weight_grams ? `${c.output_weight_grams}g` : '-'}
                         </td>
-                        <td className="p-2.5 font-mono font-bold text-emerald-700 dark:text-emerald-400">
+                        <td className="p-2.5 print:p-2 font-mono font-bold text-emerald-700 dark:text-emerald-400 print:text-black">
                           {c.weight_diff_grams ? `+${c.weight_diff_grams}g` : '-'}
                         </td>
-                        <td className="p-2.5">
-                          <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${resultBadge.className}`}>
+                        <td className="p-2.5 print:p-2">
+                          <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${resultBadge.className} print:bg-slate-100 print:text-black print:border print:border-slate-400`}>
                             {resultBadge.label}
                           </span>
                         </td>
-                        <td className="p-2.5 text-right font-mono text-[11px] text-slate-600 dark:text-slate-300">
+                        <td className="p-2.5 print:p-2 text-right font-mono text-[11px] print:text-[10px] text-slate-600 dark:text-slate-300 print:text-black">
                           {c.technician?.full_name || 'Marcos Técnico'}
                         </td>
                       </tr>
@@ -628,7 +706,7 @@ export default function ReportsPage() {
 
                   {filteredCartridges.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="text-center py-10 text-slate-400 text-xs">
+                      <td colSpan={8} className="text-center py-10 text-slate-400 print:text-black text-xs">
                         Nenhum registro técnico encontrado para o período selecionado.
                       </td>
                     </tr>
@@ -639,6 +717,29 @@ export default function ReportsPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* =========================================================
+          PRINTABLE SIGNATURES & AUDIT TRAIL FOOTER
+          ========================================================= */}
+      <div className="hidden print:block mt-8 pt-6 border-t-2 border-slate-900 text-black print-avoid-break">
+        <div className="grid grid-cols-2 gap-12 text-center text-xs">
+          <div>
+            <div className="border-t border-black pt-1 font-bold">
+              {currentUser?.full_name || 'Operador Responsável'}
+            </div>
+            <p className="text-[10px] text-slate-600">Conferência de Caixa / Atendente Responsável</p>
+          </div>
+          <div>
+            <div className="border-t border-black pt-1 font-bold">
+              Gerência / Responsável Financeiro
+            </div>
+            <p className="text-[10px] text-slate-600">Visto de Conferência e Fechamento Administrativo</p>
+          </div>
+        </div>
+        <p className="text-[9px] text-slate-500 text-center mt-6 font-mono">
+          Supreme Recargas • Documento gerado automaticamente pelo sistema em {new Date().toLocaleString('pt-BR')}.
+        </p>
+      </div>
     </div>
   );
 }

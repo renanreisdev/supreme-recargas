@@ -58,21 +58,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-950">
+    <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-950 print:h-auto print:min-h-0 print:overflow-visible print:bg-white print:block">
       {/* Sidebar (Desktop Sticky + Mobile Slide-Over Drawer) */}
       <Sidebar 
         mobileOpen={mobileMenuOpen} 
         onMobileClose={() => setMobileMenuOpen(false)} 
       />
 
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden print:h-auto print:min-h-0 print:overflow-visible print:block">
         {/* Header with Mobile Hamburger Trigger */}
         <Header 
           onToggleMobileMenu={() => setMobileMenuOpen(!mobileMenuOpen)} 
         />
 
         {/* Scrollable Main Content with responsive padding (bottom padding on mobile for BottomNav) */}
-        <main className="flex-1 overflow-y-auto p-3 sm:p-5 lg:p-6 pb-20 lg:pb-6">
+        <main className="flex-1 overflow-y-auto p-3 sm:p-5 lg:p-6 pb-20 lg:pb-6 print:p-0 print:m-0 print:overflow-visible print:h-auto print:block">
           {children}
         </main>
 
