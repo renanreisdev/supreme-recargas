@@ -12,7 +12,7 @@ interface AuthContextType {
   currentCompany: Company;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => { success: boolean; error?: string };
+  login: (email: string, password: string) => { success: boolean; user?: Profile; error?: string };
   logout: () => void;
   changePassword: (newPassword: string) => { success: boolean; error?: string };
   setCurrentUser: (user: Profile | null) => void;
@@ -42,8 +42,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const stored = localStorage.getItem(AUTH_STORAGE_KEY);
         if (stored) {
           const parsed: Profile = JSON.parse(stored);
-          const users = AppStore.getUsers(parsed.tenant_id || '');
-          const fresh = users.find(u => u.id === parsed.id) || parsed;
+          const all = AppStore.getAllProfiles();
+          const fresh = all.find(u => u.id === parsed.id || u.email.toLowerCase() === parsed.email?.toLowerCase()) || parsed;
           if (fresh && fresh.is_active !== false) {
             setCurrentUserState(fresh);
             if (fresh.tenant_id) {
@@ -75,11 +75,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const login = (email: string, password: string): { success: boolean; error?: string } => {
+  const login = (email: string, password: string): { success: boolean; user?: Profile; error?: string } => {
     try {
       const user = AppStore.authenticate(email, password);
       setCurrentUser(user);
-      return { success: true };
+      return { success: true, user };
     } catch (err: any) {
       return { success: false, error: err?.message || 'Falha ao autenticar.' };
     }
@@ -107,8 +107,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refreshUser = () => {
     if (!currentUser) return;
     try {
-      const users = AppStore.getUsers(currentCompany.id);
-      const found = users.find(p => p.id === currentUser.id);
+      const all = AppStore.getAllProfiles();
+      const found = all.find(p => p.id === currentUser.id);
       if (found) {
         setCurrentUser(found);
       }

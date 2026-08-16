@@ -21,7 +21,7 @@ import { Card, CardContent } from '@/components/ui/card';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, isAuthenticated, isLoading } = useAuth();
+  const { login, isAuthenticated, isLoading, currentUser } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -30,12 +30,16 @@ export default function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
-  // If already authenticated, redirect to dashboard
+  // If already authenticated, redirect to proper route
   useEffect(() => {
-    if (!isLoading && isAuthenticated) {
-      router.replace('/dashboard');
+    if (!isLoading && isAuthenticated && currentUser) {
+      if (currentUser.role === 'SUPER_ADMIN') {
+        router.replace('/super-admin');
+      } else {
+        router.replace('/dashboard');
+      }
     }
-  }, [isAuthenticated, isLoading, router]);
+  }, [isAuthenticated, isLoading, currentUser, router]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,7 +49,11 @@ export default function LoginPage() {
     setTimeout(() => {
       const res = login(email, password);
       if (res.success) {
-        router.replace('/dashboard');
+        if (res.user?.role === 'SUPER_ADMIN') {
+          router.replace('/super-admin');
+        } else {
+          router.replace('/dashboard');
+        }
       } else {
         setErrorMsg(res.error || 'Credenciais inválidas.');
         setIsSubmitting(false);

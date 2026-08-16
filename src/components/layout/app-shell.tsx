@@ -15,7 +15,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading, currentCompany } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const isPublicPage = pathname?.startsWith('/acompanhar') || pathname === '/login';
+  const isPublicPage = pathname?.startsWith('/acompanhar') || 
+                       pathname === '/login' || 
+                       pathname === '/demo' || 
+                       pathname === '/demonstracao';
 
   // Automatically close mobile menu when navigating to a new route
   useEffect(() => {
