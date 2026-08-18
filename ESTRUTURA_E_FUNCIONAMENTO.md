@@ -369,7 +369,6 @@ sequenceDiagram
 | `/empresa` | Gestão da Empresa | Administradores | Equipe, grupos de permissões, políticas de validação e segmento |
 | `/super-admin` | Central do SaaS | Super Admin | Gestão de clientes SaaS, planos, faturamento MRR e simulador comercial |
 | `/acompanhar/[token]` | Rastreio Público | Público / Clientes | Visualização limpa e responsiva do status da comanda sem necessidade de login |
-| `/demo` | Ambiente de Demonstração | Público / Visitantes | Acesso sandbox para testes de visitantes com credenciais rotativas |
 | `/impressao` | Visualizador de Impressão | Atendentes / Admins | Renderização para impressoras térmicas (58mm/80mm) e etiquetas de bancada |
 
 ---
@@ -380,7 +379,7 @@ O projeto utiliza um padrão de persistência robusto estruturado na classe `App
 
 1. **Memória & LocalStorage:**
    - Permite resposta instantânea da interface (zero delay visual) e funcionamento imediato mesmo em conexões instáveis.
-   - Chave central: `supreme_recargas_v2_store`.
+   - Chave central: `supreme_recargas_v3_store`.
 2. **Disparo de Eventos Reativos:**
    - Sempre que uma mutação ocorre (`addUser`, `addEntry`, `updateCartridgeStatus`, etc.), o `AppStore` dispara o evento global `window.dispatchEvent(new CustomEvent('supreme_store_updated'))`.
    - Todas as telas e componentes escutam esse evento e atualizam seu estado em tempo real sem necessidade de recarregar a página.

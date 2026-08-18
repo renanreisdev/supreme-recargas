@@ -109,12 +109,6 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
           href: '/auditoria',
           icon: ShieldCheck,
           show: true
-        },
-        {
-          title: 'Ambiente Demo Sandbox',
-          href: '/demo',
-          icon: Sparkles,
-          show: true
         }
       ]
     }

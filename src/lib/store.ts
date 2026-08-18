@@ -41,17 +41,8 @@ import {
 } from '@/types';
 import { supabase } from './supabase';
 
-const LOCAL_STORAGE_KEY = 'supreme_recargas_v2_store';
+const LOCAL_STORAGE_KEY = 'supreme_recargas_v3_store';
 
-export interface DemoSandboxConfig {
-  passwords: {
-    admin: string;
-    attendant: string;
-    technician: string;
-  };
-  autoResetDays: number;
-  lastResetAt: string;
-}
 
 function generateUUID(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -568,9 +559,9 @@ export const MOCK_PROFILES: Profile[] = [
   {
     id: '00000000-0000-0000-0000-000000000099',
     tenant_id: MOCK_COMPANY_SUPREME.id,
-    full_name: 'Antigravity Super Admin',
+    full_name: 'Super Administrador',
     email: 'super@supreme.com.br',
-    password: 'superadminmaster',
+    password: 'super123',
     phone: '(11) 99999-0000',
     role: 'SUPER_ADMIN',
     max_discount_percent: 100,
@@ -580,9 +571,9 @@ export const MOCK_PROFILES: Profile[] = [
   {
     id: '00000000-0000-0000-0000-000000000010',
     tenant_id: MOCK_COMPANY_SUPREME.id,
-    full_name: 'Carlos Oliveira',
+    full_name: 'Carlos Oliveira (Admin)',
     email: 'admin@supreme.com.br',
-    password: 'demo-adm-842',
+    password: 'admin123',
     phone: '(11) 98765-1001',
     role: 'ADMINISTRADOR',
     group_id: 'default-admin-group',
@@ -594,10 +585,24 @@ export const MOCK_PROFILES: Profile[] = [
   {
     id: '00000000-0000-0000-0000-000000000020',
     tenant_id: MOCK_COMPANY_SUPREME.id,
-    full_name: 'Mariana Santos',
-    email: 'mariana.atendente@supreme.com.br',
-    password: 'demo-atd-193',
+    full_name: 'Mariana Santos (Atendente 1)',
+    email: 'atendente1@supreme.com.br',
+    password: 'atendente123',
     phone: '(11) 98765-2001',
+    role: 'ATENDENTE',
+    group_id: 'default-attendant-group',
+    group_name: 'Atendente (Balcão de Atendimento)',
+    max_discount_percent: 10,
+    is_active: true,
+    created_at: new Date('2026-01-01').toISOString()
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000021',
+    tenant_id: MOCK_COMPANY_SUPREME.id,
+    full_name: 'Lucas Lima (Atendente 2)',
+    email: 'atendente2@supreme.com.br',
+    password: 'atendente123',
+    phone: '(11) 98765-2002',
     role: 'ATENDENTE',
     group_id: 'default-attendant-group',
     group_name: 'Atendente (Balcão de Atendimento)',
@@ -608,10 +613,24 @@ export const MOCK_PROFILES: Profile[] = [
   {
     id: '00000000-0000-0000-0000-000000000030',
     tenant_id: MOCK_COMPANY_SUPREME.id,
-    full_name: 'Rafael Souza',
-    email: 'rafael.tecnico@supreme.com.br',
-    password: 'demo-tec-557',
+    full_name: 'Rafael Souza (Técnico 1)',
+    email: 'tecnico1@supreme.com.br',
+    password: 'tecnico123',
     phone: '(11) 98765-3001',
+    role: 'TECNICO',
+    group_id: 'default-tech-group',
+    group_name: 'Técnico (Bancada & Oficina)',
+    max_discount_percent: 0,
+    is_active: true,
+    created_at: new Date('2026-01-01').toISOString()
+  },
+  {
+    id: '00000000-0000-0000-0000-000000000031',
+    tenant_id: MOCK_COMPANY_SUPREME.id,
+    full_name: 'Marcos Rocha (Técnico 2)',
+    email: 'tecnico2@supreme.com.br',
+    password: 'tecnico123',
+    phone: '(11) 98765-3002',
     role: 'TECNICO',
     group_id: 'default-tech-group',
     group_name: 'Técnico (Bancada & Oficina)',
@@ -2257,64 +2276,6 @@ export class AppStore {
     };
   }
 
-  // --------------------------------------------------------------------------
-  // DEMO SANDBOX & ROTATING PASSWORDS
-  // --------------------------------------------------------------------------
-  static getDemoSandboxConfig(): DemoSandboxConfig {
-    const data = this.getStoreData();
-    if (!data.demoSandbox) {
-      data.demoSandbox = {
-        passwords: {
-          admin: 'demo-adm-842',
-          attendant: 'demo-atd-193',
-          technician: 'demo-tec-557'
-        },
-        autoResetDays: 7,
-        lastResetAt: new Date().toISOString()
-      };
-      this.saveStoreData(data, false);
-    }
-    return data.demoSandbox;
-  }
-
-  static regenerateDemoPasswords(performedByName?: string): DemoSandboxConfig {
-    const data = this.getStoreData();
-    const rand = (prefix: string) => `${prefix}-${Math.floor(100 + Math.random() * 900)}`;
-    const newCfg: DemoSandboxConfig = {
-      passwords: {
-        admin: rand('demo-adm'),
-        attendant: rand('demo-atd'),
-        technician: rand('demo-tec')
-      },
-      autoResetDays: 7,
-      lastResetAt: new Date().toISOString()
-    };
-    data.demoSandbox = newCfg;
-
-    // Update profiles with new demo passwords
-    (data.profiles || []).forEach((p: Profile) => {
-      if (p.email === 'admin@supreme.com.br') p.password = newCfg.passwords.admin;
-      if (p.email === 'mariana.atendente@supreme.com.br') p.password = newCfg.passwords.attendant;
-      if (p.email === 'rafael.tecnico@supreme.com.br') p.password = newCfg.passwords.technician;
-    });
-
-    this.saveStoreData(data);
-    return newCfg;
-  }
-
-  static resetDemoSandboxData(performedByName?: string): boolean {
-    const data = this.getStoreData();
-    data.customers = [...MOCK_CUSTOMERS];
-    data.categories = [...INITIAL_CATEGORIES];
-    data.brands = [...INITIAL_BRANDS];
-    data.models = [...INITIAL_MODELS];
-    data.services = [...INITIAL_SERVICES];
-    data.serviceOrders = [...INITIAL_SERVICE_ORDERS];
-    data.payments = [...INITIAL_PAYMENTS];
-    data.auditLogs = [...INITIAL_AUDIT_LOGS];
-    this.saveStoreData(data);
-    return true;
-  }
 
   // --------------------------------------------------------------------------
   // AUTHENTICATION & REALTIME HELPERS
@@ -2325,7 +2286,7 @@ export class AppStore {
     const user = profiles.find(p => p.email.toLowerCase().trim() === email.toLowerCase().trim());
     if (!user) throw new Error('Usuário não encontrado.');
     if (user.is_active === false) throw new Error('Este usuário está desativado.');
-    if (user.password && user.password !== pass && pass !== 'demo123') {
+    if (user.password && user.password !== pass) {
       throw new Error('Senha incorreta.');
     }
     this.logAudit({
@@ -2373,9 +2334,7 @@ export class AppStore {
     });
   }
 
-  static resetDemoSandbox(performedByName?: string) {
-    return this.resetDemoSandboxData(performedByName);
-  }
+
 
   static toggleCompanyStatus(companyId: string, performedByName?: string) {
     const data = this.getStoreData();

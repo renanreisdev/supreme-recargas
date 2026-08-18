@@ -177,28 +177,6 @@ export default function LoginPage() {
           </CardContent>
         </Card>
 
-        {/* Link to Live Demo Sandbox for Prospective Clients */}
-        <div className="p-3.5 bg-gradient-to-r from-emerald-950/50 via-slate-900 to-slate-900 border border-emerald-800/40 rounded-xl flex items-center justify-between gap-3 shadow-lg">
-          <div className="flex items-center gap-2.5 text-xs">
-            <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0">
-              <Sparkles className="w-4 h-4" />
-            </div>
-            <div>
-              <p className="text-white font-semibold">Novo por aqui?</p>
-              <p className="text-[11px] text-slate-400">Acesse o ambiente de demonstração</p>
-            </div>
-          </div>
-          <Link href="/demo">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 px-3 text-xs font-bold border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 hover:text-emerald-200 gap-1.5 shrink-0"
-            >
-              <span>Testar Demo</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Button>
-          </Link>
-        </div>
 
         {/* Footer Security Notice */}
         <p className="text-center text-[11px] text-slate-400 flex items-center justify-center gap-1.5">
