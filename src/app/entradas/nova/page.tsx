@@ -51,6 +51,7 @@ import { Badge } from '@/components/ui/badge';
 import { DialogModal, DialogModalProps } from '@/components/ui/dialog-modal';
 import { CustomerCombobox } from '@/components/CustomerCombobox';
 import { ModelCombobox } from '@/components/ModelCombobox';
+import { CategoryCombobox } from '@/components/CategoryCombobox';
 
 interface ServiceItemServiceInput {
   service_id: string;
@@ -126,7 +127,7 @@ export default function NovaEntradaPage() {
     setModels(mods);
     setAllServices(srvs);
     setSettings(stts);
-    setTechnicians(usrs.filter(u => u.is_active));
+    setTechnicians(AppStore.getEligibleTechnicians(currentCompany.id));
 
     if (items.length === 0 && cats.length > 0) {
       const defaultCat = cats[0];
@@ -504,7 +505,7 @@ export default function NovaEntradaPage() {
 
       <form onSubmit={handleSubmitOrder} className="space-y-6">
         {/* Customer Selection Card */}
-        <Card className="rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm bg-white dark:bg-slate-900 overflow-hidden">
+        <Card className="rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm bg-white dark:bg-slate-900 relative z-30">
           <CardHeader className="p-4 md:p-5 bg-slate-50/50 dark:bg-slate-950/40 border-b border-slate-100 dark:border-slate-800/80">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -562,7 +563,7 @@ export default function NovaEntradaPage() {
                   <option value="">{settings.require_technician_on_entry ? '-- Selecione o Técnico * --' : 'Nenhum / Atribuir na Oficina'}</option>
                   {technicians.map(tech => (
                     <option key={tech.id} value={tech.id}>
-                      {tech.full_name} ({tech.role === 'TECNICO' ? 'Técnico' : tech.role === 'ADMINISTRADOR' ? 'Admin' : 'Equipe'})
+                      {tech.full_name} ({tech.group_name || (tech.role === 'TECNICO' ? 'Técnico' : tech.role === 'ADMINISTRADOR' ? 'Admin' : 'Equipe')})
                     </option>
                   ))}
                 </Select>
@@ -619,7 +620,7 @@ export default function NovaEntradaPage() {
             const itemTotal = calculateItemTotal(item);
 
             return (
-              <Card key={item.id} className="rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm bg-white dark:bg-slate-900 overflow-hidden">
+              <Card key={item.id} className="rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm bg-white dark:bg-slate-900 relative z-20">
                 <div className="p-4 bg-slate-50/70 dark:bg-slate-950/50 border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Badge className="bg-slate-900 text-white font-mono text-[11px] px-2 py-0.5">
@@ -649,23 +650,19 @@ export default function NovaEntradaPage() {
 
                 <CardContent className="p-4 md:p-5 space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {/* Category Selector */}
+                    {/* Category Combobox */}
                     <div>
                       <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1.5 flex items-center gap-1">
                         <Layers className="w-3.5 h-3.5 text-slate-400" />
-                        <span>Categoria do Equipamento</span>
+                        <span>Categoria do Equipamento *</span>
                       </label>
-                      <Select
-                        value={item.category_id}
-                        onChange={e => handleChangeCategory(item.id, e.target.value)}
-                        className="h-10 text-xs rounded-xl"
-                      >
-                        {categories.map(cat => (
-                          <option key={cat.id} value={cat.id}>
-                            {cat.name}
-                          </option>
-                        ))}
-                      </Select>
+                      <CategoryCombobox
+                        categories={categories}
+                        selectedCategoryId={item.category_id}
+                        onSelect={catId => handleChangeCategory(item.id, catId)}
+                        placeholder="Selecione ou busque a categoria..."
+                        required
+                      />
                     </div>
 
                     {/* Model Combobox */}
@@ -791,24 +788,27 @@ export default function NovaEntradaPage() {
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
                         {item.checklist.map((chk, cIdx) => (
-                          <label
+                          <button
                             key={cIdx}
+                            type="button"
                             onClick={() => handleToggleItemChecklist(item.id, cIdx)}
                             className={cn(
-                              "flex items-center gap-2 p-2 rounded-lg border text-xs cursor-pointer transition-all",
+                              "flex items-center gap-2 p-2 rounded-lg border text-xs text-left cursor-pointer transition-all w-full select-none",
                               chk.checked
                                 ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-500/40 text-emerald-900 dark:text-emerald-200 font-bold"
-                                : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400"
+                                : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-700"
                             )}
                           >
-                            <input
-                              type="checkbox"
-                              checked={chk.checked}
-                              onChange={() => {}}
-                              className="w-3.5 h-3.5 text-emerald-600 rounded pointer-events-none"
-                            />
+                            <div className={cn(
+                              "w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors",
+                              chk.checked 
+                                ? "bg-emerald-600 border-emerald-600 text-white" 
+                                : "border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800"
+                            )}>
+                              {chk.checked && <Check className="w-3 h-3 text-white stroke-[3]" />}
+                            </div>
                             <span className="truncate">{chk.item}</span>
-                          </label>
+                          </button>
                         ))}
                       </div>
                     </div>

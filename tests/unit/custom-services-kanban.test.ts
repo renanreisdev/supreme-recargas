@@ -621,5 +621,44 @@ describe('Custom Services, Kanban & Financial Report Suite', () => {
       expect(reassigned.assigned_technician_name).toBe('Lucas Lima');
     });
   });
+
+  describe('20. Configurable Technician Groups Selection', () => {
+    it('filters eligible technicians according to technician_group_ids setting', () => {
+      // 1. Initial eligible technicians (default includes default-tech-group or role TECNICO)
+      const initialTechs = AppStore.getEligibleTechnicians(tenantId);
+      expect(initialTechs.length).toBeGreaterThan(0);
+      expect(initialTechs.some(u => u.role === 'TECNICO')).toBe(true);
+
+      // 2. Update settings to allow both Tech and Admin groups
+      const updatedSettings = AppStore.updateSettings(tenantId, {
+        technician_group_ids: ['default-tech-group', 'default-admin-group']
+      }, 'Admin Demo');
+      expect(updatedSettings.technician_group_ids).toEqual(['default-tech-group', 'default-admin-group']);
+
+      const multiGroupTechs = AppStore.getEligibleTechnicians(tenantId);
+      expect(multiGroupTechs.some(u => u.group_id === 'default-tech-group' || u.role === 'TECNICO')).toBe(true);
+      expect(multiGroupTechs.some(u => u.group_id === 'default-admin-group' || u.role === 'ADMINISTRADOR')).toBe(true);
+
+      // 3. Restore to default tech group
+      AppStore.updateSettings(tenantId, {
+        technician_group_ids: ['default-tech-group']
+      }, 'Admin Demo');
+      const restoredTechs = AppStore.getEligibleTechnicians(tenantId);
+      expect(restoredTechs.every(u => u.group_id === 'default-tech-group' || u.role === 'TECNICO')).toBe(true);
+    });
+  });
+
+  describe('21. Technician Permissions for Transferring and Changing Technician', () => {
+    it('has transfer_assigned_tech_order and change_assigned_technician properly registered in default groups', () => {
+      const groups = AppStore.getPermissionGroups(tenantId);
+      const adminGroup = groups.find(g => g.id === 'default-admin-group');
+      expect(adminGroup?.permissions.transfer_assigned_tech_order).toBe(true);
+      expect(adminGroup?.permissions.change_assigned_technician).toBe(true);
+
+      const techGroup = groups.find(g => g.id === 'default-tech-group');
+      expect(techGroup?.permissions.technical_workbench).toBe(true);
+      expect(techGroup?.permissions.technical_update).toBe(true);
+    });
+  });
 });
 

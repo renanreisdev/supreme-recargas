@@ -511,6 +511,7 @@ export const DEFAULT_PERMISSION_GROUPS: PermissionGroup[] = [
       reopen_entry: true,
       delete_entry: true,
       change_assigned_technician: true,
+      transfer_assigned_tech_order: true,
       manage_models: true,
       manage_services: true,
       view_financial_reports: true,
@@ -926,7 +927,8 @@ export const MOCK_COMPANY_SETTINGS: CompanySettings = {
   require_customer_document: false,
   require_item_serial: true,
   require_technician_on_entry: false,
-  item_description_display_mode: 'BASIC'
+  item_description_display_mode: 'BASIC',
+  technician_group_ids: ['default-tech-group']
 };
 
 // ============================================================================
@@ -1267,6 +1269,28 @@ export class AppStore {
   static getUsers(tenantId: string): Profile[] {
     const data = this.getStoreData();
     return (data.profiles || MOCK_PROFILES).filter((p: Profile) => p.tenant_id === tenantId);
+  }
+
+  static getEligibleTechnicians(tenantId: string): Profile[] {
+    const users = this.getUsers(tenantId).filter(u => u.is_active !== false);
+    const settings = this.getSettings(tenantId);
+    const allowedGroupIds = settings.technician_group_ids;
+
+    if (Array.isArray(allowedGroupIds) && allowedGroupIds.length > 0) {
+      return users.filter(u => {
+        if (u.group_id && allowedGroupIds.includes(u.group_id)) return true;
+        if (!u.group_id && u.role === 'TECNICO') return true;
+        return false;
+      });
+    }
+
+    // Default: only users in default-tech-group or with role TECNICO
+    return users.filter(u => {
+      if (u.group_id === 'default-tech-group') return true;
+      if (u.role === 'TECNICO') return true;
+      if (u.group_name && (u.group_name.toLowerCase().includes('técnico') || u.group_name.toLowerCase().includes('tecnico'))) return true;
+      return false;
+    });
   }
 
   static getPermissionGroups(tenantId?: string): PermissionGroup[] {

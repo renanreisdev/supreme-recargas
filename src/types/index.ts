@@ -665,6 +665,9 @@ export interface CompanySettings {
 
   // Item Description Display Mode across views:
   item_description_display_mode?: 'BASIC' | 'FULL'; // 'BASIC' = nome do modelo; 'FULL' = descrição completa com opcionais
+
+  // Grupos de Usuários autorizados a aparecer como Técnicos Responsáveis
+  technician_group_ids?: string[]; // IDs dos PermissionGroups elegíveis como técnicos
 }
 
 // ============================================================================

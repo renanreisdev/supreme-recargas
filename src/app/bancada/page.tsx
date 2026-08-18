@@ -136,6 +136,7 @@ export default function TechnicianWorkbenchPage() {
   const canEditTech = hasPermission('update_tech_status') || hasPermission('technical_update') || currentUser?.role === 'ADMINISTRADOR';
   const canManageKanban = hasPermission('customize_kanban') || currentUser?.role === 'ADMINISTRADOR';
   const canChangeTechnician = hasPermission('change_assigned_technician') || currentUser?.role === 'ADMINISTRADOR';
+  const canTransferAssignedItem = hasPermission('transfer_assigned_tech_order') || currentUser?.role === 'ADMINISTRADOR';
 
   const loadData = () => {
     const allItems = AppStore.getCartridges(currentCompany.id);
@@ -148,7 +149,7 @@ export default function TechnicianWorkbenchPage() {
     setWorkflowStates(states);
     setCategories(cats);
     setSettings(stt);
-    setTechnicians(usrs.filter(u => u.is_active));
+    setTechnicians(AppStore.getEligibleTechnicians(currentCompany.id));
   };
 
   useEffect(() => {
@@ -211,13 +212,13 @@ export default function TechnicianWorkbenchPage() {
 
     // Se já tem técnico atribuído e não é o usuário logado
     if (item.assigned_technician_id && item.assigned_technician_id !== currentUser.id) {
-      if (!canChangeTechnician) {
+      if (!canTransferAssignedItem) {
         setDialogModal({
           isOpen: true,
           type: 'warning',
-          title: 'Item Já Atribuído',
+          title: 'Permissão Insuficiente',
           subtitle: `Responsável: ${item.assigned_technician_name || 'Outro Técnico'}`,
-          message: `Este item já está sob responsabilidade de "${item.assigned_technician_name || 'outro técnico'}". Você não possui a permissão "Alterar Técnico Responsável da Comanda" para reatribuí-lo.`,
+          message: `Este item já está sob responsabilidade de "${item.assigned_technician_name || 'outro técnico'}". Seu perfil não possui a permissão "Transferir OS de Outro Técnico (Puxar para Si)".`,
           isAlertOnly: true,
           confirmLabel: 'Entendido',
           onConfirm: () => setDialogModal(null)
@@ -252,24 +253,39 @@ export default function TechnicianWorkbenchPage() {
     e.preventDefault();
     if (!selectedItem || !canEditTech) return;
 
-    // Verificar se o técnico foi alterado e se tem permissão
-    if (
-      selectedItem.assigned_technician_id &&
-      modalAssignedTechId &&
-      modalAssignedTechId !== selectedItem.assigned_technician_id &&
-      !canChangeTechnician
-    ) {
-      setDialogModal({
-        isOpen: true,
-        type: 'warning',
-        title: 'Permissão Insuficiente',
-        subtitle: 'Alteração de técnico não autorizada',
-        message: 'Seu perfil de usuário não possui a permissão "Alterar Técnico Responsável da Comanda" para transferir este item.',
-        isAlertOnly: true,
-        confirmLabel: 'Entendido',
-        onConfirm: () => setDialogModal(null)
-      });
-      return;
+    // Verificar se o técnico foi alterado e validar permissão específica
+    if (modalAssignedTechId && modalAssignedTechId !== (selectedItem.assigned_technician_id || '')) {
+      if (modalAssignedTechId === currentUser.id) {
+        // Puxando item já atribuído a outro técnico para si
+        if (selectedItem.assigned_technician_id && selectedItem.assigned_technician_id !== currentUser.id && !canTransferAssignedItem) {
+          setDialogModal({
+            isOpen: true,
+            type: 'warning',
+            title: 'Permissão Insuficiente',
+            subtitle: 'Transferência de item não autorizada',
+            message: 'Seu perfil de usuário não possui a permissão "Transferir OS de Outro Técnico (Puxar para Si)".',
+            isAlertOnly: true,
+            confirmLabel: 'Entendido',
+            onConfirm: () => setDialogModal(null)
+          });
+          return;
+        }
+      } else {
+        // Reatribuindo para outro técnico (não para si)
+        if (!canChangeTechnician) {
+          setDialogModal({
+            isOpen: true,
+            type: 'warning',
+            title: 'Permissão Insuficiente',
+            subtitle: 'Alteração de técnico não autorizada',
+            message: 'Seu perfil de usuário não possui a permissão "Alterar Técnico da OS para Outro Técnico".',
+            isAlertOnly: true,
+            confirmLabel: 'Entendido',
+            onConfirm: () => setDialogModal(null)
+          });
+          return;
+        }
+      }
     }
 
     const inNum = inputWeight ? parseFloat(inputWeight) : undefined;
@@ -561,7 +577,7 @@ export default function TechnicianWorkbenchPage() {
               <option value="MINE">⭐ Meus Itens ({currentUser.full_name})</option>
               {technicians.map(tech => (
                 <option key={tech.id} value={tech.id}>
-                  👤 {tech.full_name} ({tech.role === 'TECNICO' ? 'Técnico' : tech.role === 'ADMINISTRADOR' ? 'Admin' : 'Equipe'})
+                  👤 {tech.full_name} ({tech.group_name || (tech.role === 'TECNICO' ? 'Técnico' : tech.role === 'ADMINISTRADOR' ? 'Admin' : 'Equipe')})
                 </option>
               ))}
             </Select>
@@ -822,7 +838,7 @@ export default function TechnicianWorkbenchPage() {
                       <option value="">-- Sem Técnico Atribuído --</option>
                       {technicians.map(t => (
                         <option key={t.id} value={t.id}>
-                          {t.full_name} ({t.role === 'TECNICO' ? 'Técnico' : t.role === 'ADMINISTRADOR' ? 'Admin' : 'Equipe'})
+                          {t.full_name} ({t.group_name || (t.role === 'TECNICO' ? 'Técnico' : t.role === 'ADMINISTRADOR' ? 'Admin' : 'Equipe')})
                         </option>
                       ))}
                     </Select>

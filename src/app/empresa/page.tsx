@@ -17,7 +17,8 @@ import {
   FileText,
   Lock,
   Edit,
-  Tag
+  Tag,
+  Wrench
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { AppStore } from '@/lib/store';
@@ -50,10 +51,11 @@ const AVAILABLE_PERMISSIONS: PermissionOption[] = [
   { key: 'edit_customer', label: 'Editar Clientes Existentes', description: 'Permite alterar nome, telefone, documento e dados cadastrais de clientes', category: 'Balcão' },
   { key: 'technical_workbench', label: 'Bancada Técnica (Oficina)', description: 'Permite acessar a fila de itens e realizar diagnósticos', category: 'Oficina' },
   { key: 'update_tech_status', label: 'Salvar Testes Técnicos & Pesagem', description: 'Permite registrar peso injetado e aprovar/condenar itens', category: 'Oficina' },
+  { key: 'transfer_assigned_tech_order', label: 'Transferir OS de Outro Técnico (Puxar para Si)', description: 'Permite ao técnico assumir ou transferir para si uma ordem de serviço que já está sob responsabilidade de outro técnico', category: 'Oficina' },
   { key: 'customize_kanban', label: 'Personalizar Colunas do Kanban', description: 'Permite editar nomes, cores e etapas das colunas da bancada', category: 'Oficina' },
   { key: 'reopen_entry', label: 'Reabrir Comandas Finalizadas/Entregues', description: 'Permite reverter o status de comandas entregues ou pagas para novo processamento', category: 'Gestão' },
   { key: 'delete_entry', label: 'Excluir Comandas', description: 'Permite excluir permanentemente comandas e seus itens do sistema', category: 'Gestão' },
-  { key: 'change_assigned_technician', label: 'Alterar Técnico Responsável da Comanda', description: 'Permite reatribuir ou alterar o técnico responsável de uma comanda já vinculada a outro profissional', category: 'Gestão' },
+  { key: 'change_assigned_technician', label: 'Alterar Técnico da OS para Outro Técnico', description: 'Permite reatribuir ou alterar o técnico responsável de uma comanda para outro profissional (não é puxar para si, mas definir outro técnico)', category: 'Gestão' },
   { key: 'manage_models', label: 'Gerenciar Catálogo & Preços', description: 'Permite cadastrar modelos e alterar preços padrão', category: 'Gestão' },
   { key: 'manage_services', label: 'Gerenciar Serviços & Procedimentos', description: 'Permite criar, editar e precificar serviços solicitados da oficina', category: 'Gestão' },
   { key: 'view_financial_reports', label: 'Relatórios Financeiros', description: 'Permite visualizar faturamento e formas de pagamento', category: 'Gestão' },
@@ -125,6 +127,9 @@ export default function CompanySettingsPage() {
   // Item Description Display Mode State
   const [itemDescriptionDisplayMode, setItemDescriptionDisplayMode] = useState<'BASIC' | 'FULL'>(settings.item_description_display_mode || 'BASIC');
 
+  // Grupos de Usuários elegíveis como Técnicos Responsáveis
+  const [technicianGroupIds, setTechnicianGroupIds] = useState<string[]>(settings.technician_group_ids || ['default-tech-group']);
+
   const [policySaveSuccess, setPolicySaveSuccess] = useState(false);
 
   // Reset Password Modal State
@@ -158,6 +163,7 @@ export default function CompanySettingsPage() {
     setSkuStartNumber(String(sets.sku_start_number || 1));
     setSkuDigits(String(sets.sku_digits || 4));
     setItemDescriptionDisplayMode(sets.item_description_display_mode || 'BASIC');
+    setTechnicianGroupIds(sets.technician_group_ids || ['default-tech-group']);
 
     setTradeName(comp.trade_name || '');
     setCorporateName(comp.corporate_name || '');
@@ -192,11 +198,22 @@ export default function CompanySettingsPage() {
       sku_prefix: skuPrefix.trim(),
       sku_start_number: parseInt(skuStartNumber, 10) || 1,
       sku_digits: parseInt(skuDigits, 10) || 4,
-      item_description_display_mode: itemDescriptionDisplayMode
+      item_description_display_mode: itemDescriptionDisplayMode,
+      technician_group_ids: technicianGroupIds
     }, currentUser?.full_name || 'Administrador');
     setSettings(updated);
     setPolicySaveSuccess(true);
     setTimeout(() => setPolicySaveSuccess(false), 3500);
+  };
+
+  const toggleTechnicianGroup = (groupId: string) => {
+    setTechnicianGroupIds(prev => {
+      if (prev.includes(groupId)) {
+        return prev.filter(id => id !== groupId);
+      } else {
+        return [...prev, groupId];
+      }
+    });
   };
 
   const handleSaveCompanyData = (e: React.FormEvent) => {
@@ -1025,6 +1042,101 @@ export default function CompanySettingsPage() {
                         : 'A comanda pode ser aberta sem técnico. Os técnicos da bancada poderão selecionar para si as comandas disponíveis no Kanban.'}
                     </p>
                   </label>
+                </div>
+              </div>
+            </div>
+
+            {/* Grupos de Usuários que aparecem como Técnicos Responsáveis */}
+            <div className="p-4 bg-slate-50 dark:bg-slate-900/60 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                    <Wrench className="w-4 h-4 text-emerald-600" />
+                    <span>Grupos de Usuários para a Lista de "Técnicos Responsáveis"</span>
+                  </h4>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Escolha quais grupos de usuários aparecerão disponíveis no campo de seleção de técnico responsável na recepção e bancada.
+                  </p>
+                </div>
+                <Badge className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-[10px] font-bold w-fit">
+                  {technicianGroupIds.length} grupo(s) selecionado(s)
+                </Badge>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                {permissionGroups.map(group => {
+                  const isSelected = technicianGroupIds.includes(group.id);
+                  const membersInGroup = users.filter(u => u.group_id === group.id && u.is_active);
+
+                  return (
+                    <div
+                      key={group.id}
+                      onClick={() => toggleTechnicianGroup(group.id)}
+                      className={`p-3 rounded-xl border cursor-pointer transition-all flex flex-col justify-between gap-2.5 ${
+                        isSelected
+                          ? 'bg-emerald-50/70 dark:bg-emerald-950/40 border-emerald-400 dark:border-emerald-700 ring-2 ring-emerald-500/20'
+                          : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-start gap-2.5">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => {}} // handled by parent div click
+                          className="mt-0.5 w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 cursor-pointer"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <span className="font-bold text-xs text-slate-900 dark:text-slate-100 block truncate">
+                            {group.name}
+                          </span>
+                          <span className="text-[10px] text-slate-500 line-clamp-1 mt-0.5">
+                            {group.description || `Função padrão: ${group.default_role}`}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-200/50 dark:border-slate-800/60 text-[10px]">
+                        <span className="text-slate-500 font-medium">
+                          {membersInGroup.length} usuário(s) ativo(s)
+                        </span>
+                        <Badge className={isSelected ? 'bg-emerald-600 text-white text-[9px]' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[9px]'}>
+                          {isSelected ? 'Elegível' : 'Não Listado'}
+                        </Badge>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Dynamic Preview of Eligible Technicians */}
+              <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800 text-xs space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Usuários que aparecerão como Técnicos Responsáveis:</span>
+                  </span>
+                  <span className="text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                    {users.filter(u => u.is_active && u.group_id && technicianGroupIds.includes(u.group_id)).length} profissional(is)
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5 pt-0.5">
+                  {users
+                    .filter(u => u.is_active && u.group_id && technicianGroupIds.includes(u.group_id))
+                    .map(u => (
+                      <span
+                        key={u.id}
+                        className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-800 dark:text-emerald-300 text-[11px] font-semibold"
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
+                        {u.full_name}
+                        <span className="text-[9px] text-emerald-600/80 dark:text-emerald-400/80 font-normal">({getGroupNameForUser(u)})</span>
+                      </span>
+                    ))}
+                  {users.filter(u => u.is_active && u.group_id && technicianGroupIds.includes(u.group_id)).length === 0 && (
+                    <span className="text-[11px] text-amber-600 dark:text-amber-400 italic">
+                      Nenhum usuário ativo pertence aos grupos marcados. Se nenhum grupo for selecionado, o sistema utilizará os técnicos padrão.
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
