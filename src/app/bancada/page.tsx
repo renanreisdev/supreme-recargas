@@ -22,7 +22,8 @@ import {
   ArrowUp,
   ArrowDown,
   Kanban,
-  GripVertical
+  GripVertical,
+  Eye
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { AppStore } from '@/lib/store';
@@ -137,6 +138,7 @@ export default function TechnicianWorkbenchPage() {
   const canManageKanban = hasPermission('customize_kanban') || currentUser?.role === 'ADMINISTRADOR';
   const canChangeTechnician = hasPermission('change_assigned_technician') || currentUser?.role === 'ADMINISTRADOR';
   const canTransferAssignedItem = hasPermission('transfer_assigned_tech_order') || currentUser?.role === 'ADMINISTRADOR';
+  const canEditOtherTechOrder = hasPermission('edit_other_technician_orders') || currentUser?.role === 'ADMINISTRADOR';
 
   const loadData = () => {
     const allItems = AppStore.getCartridges(currentCompany.id);
@@ -204,6 +206,9 @@ export default function TechnicianWorkbenchPage() {
   };
 
   const handleToggleChecklist = (idx: number) => {
+    if (!selectedItem) return;
+    const isOtherTech = Boolean(selectedItem.assigned_technician_id && selectedItem.assigned_technician_id !== currentUser.id);
+    if (isOtherTech && !canEditOtherTechOrder) return;
     setChecklistState(prev => prev.map((c, i) => i === idx ? { ...c, checked: !c.checked } : c));
   };
 
@@ -252,6 +257,22 @@ export default function TechnicianWorkbenchPage() {
   const handleSaveTechUpdate = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedItem || !canEditTech) return;
+
+    // Verificar se o item é de outro técnico e se o usuário tem permissão para editar
+    const isOtherTech = Boolean(selectedItem.assigned_technician_id && selectedItem.assigned_technician_id !== currentUser.id);
+    if (isOtherTech && !canEditOtherTechOrder) {
+      setDialogModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Permissão Insuficiente',
+        subtitle: 'Apenas visualização autorizada',
+        message: `Esta OS está sob responsabilidade do técnico "${selectedItem.assigned_technician_name || 'outro profissional'}". Seu usuário não possui a permissão "Alterar / Editar OS de Outro Técnico".`,
+        isAlertOnly: true,
+        confirmLabel: 'Entendido',
+        onConfirm: () => setDialogModal(null)
+      });
+      return;
+    }
 
     // Verificar se o técnico foi alterado e validar permissão específica
     if (modalAssignedTechId && modalAssignedTechId !== (selectedItem.assigned_technician_id || '')) {
@@ -312,6 +333,23 @@ export default function TechnicianWorkbenchPage() {
 
   const handleQuickApprove = () => {
     if (!selectedItem || !canEditTech) return;
+
+    // Verificar se o item é de outro técnico e se o usuário tem permissão para editar
+    const isOtherTech = Boolean(selectedItem.assigned_technician_id && selectedItem.assigned_technician_id !== currentUser.id);
+    if (isOtherTech && !canEditOtherTechOrder) {
+      setDialogModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Permissão Insuficiente',
+        subtitle: 'Apenas visualização autorizada',
+        message: `Esta OS está sob responsabilidade do técnico "${selectedItem.assigned_technician_name || 'outro profissional'}". Seu usuário não possui permissão para aprovar ou alterar itens de outros técnicos.`,
+        isAlertOnly: true,
+        confirmLabel: 'Entendido',
+        onConfirm: () => setDialogModal(null)
+      });
+      return;
+    }
+
     const outNum = outputWeight ? parseFloat(outputWeight) : undefined;
     const cat = categories.find(c => c.id === selectedItem.category_id || c.id === selectedItem.model?.category_id);
     const isScaleInspection = cat?.inspection_type === 'SCALE';
@@ -344,6 +382,21 @@ export default function TechnicianWorkbenchPage() {
   // ==========================================
   const handleDragStart = (e: React.DragEvent, itemId: string) => {
     if (!canEditTech) return;
+    const item = items.find(it => it.id === itemId);
+    if (item && item.assigned_technician_id && item.assigned_technician_id !== currentUser.id && !canEditOtherTechOrder) {
+      e.preventDefault();
+      setDialogModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Ação Não Permitida',
+        subtitle: `Responsável: ${item.assigned_technician_name || 'Outro Técnico'}`,
+        message: 'Você pode visualizar este item, mas não possui permissão para alterar ou movimentar a etapa de uma OS atribuída a outro técnico.',
+        isAlertOnly: true,
+        confirmLabel: 'Entendido',
+        onConfirm: () => setDialogModal(null)
+      });
+      return;
+    }
     e.dataTransfer.setData('text/plain', itemId);
     e.dataTransfer.effectAllowed = 'move';
     setDraggedItemId(itemId);
@@ -379,6 +432,20 @@ export default function TechnicianWorkbenchPage() {
 
     const item = items.find(it => it.id === itemId);
     if (!item) return;
+
+    if (item.assigned_technician_id && item.assigned_technician_id !== currentUser.id && !canEditOtherTechOrder) {
+      setDialogModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Ação Não Permitida',
+        subtitle: `Responsável: ${item.assigned_technician_name || 'Outro Técnico'}`,
+        message: 'Você não possui permissão para alterar a etapa ou dados de uma OS atribuída a outro técnico.',
+        isAlertOnly: true,
+        confirmLabel: 'Entendido',
+        onConfirm: () => setDialogModal(null)
+      });
+      return;
+    }
 
     // Don't update if already in target column
     if (item.status === targetStateCode) return;
@@ -726,6 +793,12 @@ export default function TechnicianWorkbenchPage() {
                                 {item.assigned_technician_name.charAt(0).toUpperCase()}
                               </span>
                               <span className="truncate">{item.assigned_technician_name}</span>
+                              {item.assigned_technician_id !== currentUser.id && !canEditOtherTechOrder && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 font-normal shrink-0 flex items-center gap-0.5" title="Apenas visualização autorizada">
+                                  <Eye className="w-2.5 h-2.5" />
+                                  Leitura
+                                </span>
+                              )}
                             </div>
                           ) : (
                             <div className="text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1">
@@ -764,6 +837,8 @@ export default function TechnicianWorkbenchPage() {
         const modalModelName = settings.item_description_display_mode === 'FULL'
           ? (selectedItem.model?.description || selectedItem.model?.name || 'Equipamento')
           : (selectedItem.model?.name || 'Equipamento');
+        const isOtherTech = Boolean(selectedItem.assigned_technician_id && selectedItem.assigned_technician_id !== currentUser.id);
+        const isReadOnlyMode = isOtherTech && !canEditOtherTechOrder;
         const availableVerdicts: string[] = (itemCat?.technical_verdicts && itemCat.technical_verdicts.length > 0)
           ? itemCat.technical_verdicts
           : isScaleInspection
@@ -788,7 +863,15 @@ export default function TechnicianWorkbenchPage() {
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-xl overflow-hidden shadow-2xl animate-in zoom-in-95 my-8">
               <div className="p-4 md:p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/40">
                 <div>
-                  <span className="text-[10px] font-mono font-bold text-slate-400">OS #{selectedItem.order_number}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono font-bold text-slate-400">OS #{selectedItem.order_number}</span>
+                    {isReadOnlyMode && (
+                      <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 text-[9px] gap-1">
+                        <Eye className="w-3 h-3" />
+                        Modo Visualização
+                      </Badge>
+                    )}
+                  </div>
                   <h3 className="font-black text-slate-900 dark:text-slate-100 text-base" title={modalModelName}>
                     {modalModelName}
                   </h3>
@@ -799,6 +882,16 @@ export default function TechnicianWorkbenchPage() {
               </div>
 
               <form onSubmit={handleSaveTechUpdate} className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
+                {/* Read-Only Notice if assigned to another technician */}
+                {isReadOnlyMode && (
+                  <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl text-xs text-amber-800 dark:text-amber-300 flex items-center gap-2.5">
+                    <Eye className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                    <div>
+                      <span className="font-bold">Modo de Visualização:</span> Este item está atribuído ao técnico <strong>{selectedItem.assigned_technician_name || 'outro profissional'}</strong>. Você pode consultar os detalhes, mas não possui permissão para editar informações.
+                    </div>
+                  </div>
+                )}
+
                 {/* Target Status & Responsible Technician Selects */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
@@ -808,6 +901,7 @@ export default function TechnicianWorkbenchPage() {
                     <Select
                       value={targetStatus}
                       onChange={e => setTargetStatus(e.target.value)}
+                      disabled={isReadOnlyMode}
                       className="text-xs font-bold"
                     >
                       {workflowStates.map(st => (
@@ -832,7 +926,7 @@ export default function TechnicianWorkbenchPage() {
                     <Select
                       value={modalAssignedTechId}
                       onChange={e => setModalAssignedTechId(e.target.value)}
-                      disabled={!canChangeTechnician && Boolean(selectedItem.assigned_technician_id)}
+                      disabled={isReadOnlyMode || (!canChangeTechnician && Boolean(selectedItem.assigned_technician_id))}
                       className="text-xs font-bold"
                     >
                       <option value="">-- Sem Técnico Atribuído --</option>
@@ -857,6 +951,7 @@ export default function TechnicianWorkbenchPage() {
                         step="0.1"
                         value={inputWeight}
                         onChange={e => setInputWeight(e.target.value)}
+                        disabled={isReadOnlyMode}
                         placeholder="Ex: 28.5"
                         className="text-xs font-bold bg-white dark:bg-slate-900"
                       />
@@ -871,6 +966,7 @@ export default function TechnicianWorkbenchPage() {
                         step="0.1"
                         value={outputWeight}
                         onChange={e => setOutputWeight(e.target.value)}
+                        disabled={isReadOnlyMode}
                         placeholder="Ex: 38.0"
                         className="text-xs font-bold bg-white dark:bg-slate-900"
                       />
@@ -886,12 +982,13 @@ export default function TechnicianWorkbenchPage() {
                     </label>
                     <div className="space-y-1.5 bg-slate-50 dark:bg-slate-800/40 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
                       {checklistState.map((chk, cIdx) => (
-                        <label key={cIdx} className="flex items-center gap-2 text-xs cursor-pointer text-slate-700 dark:text-slate-300">
+                        <label key={cIdx} className={cn("flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300", isReadOnlyMode ? "cursor-not-allowed opacity-80" : "cursor-pointer")}>
                           <input
                             type="checkbox"
                             checked={chk.checked}
+                            disabled={isReadOnlyMode}
                             onChange={() => handleToggleChecklist(cIdx)}
-                            className="w-3.5 h-3.5 text-emerald-600 rounded"
+                            className="w-3.5 h-3.5 text-emerald-600 rounded disabled:opacity-50"
                           />
                           <span>{chk.item}</span>
                         </label>
@@ -910,6 +1007,7 @@ export default function TechnicianWorkbenchPage() {
                       <Select
                         value={resultCode}
                         onChange={e => setResultCode(e.target.value)}
+                        disabled={isReadOnlyMode}
                         className="text-xs"
                       >
                         {availableVerdicts.map((verdict, vIdx) => (
@@ -927,6 +1025,7 @@ export default function TechnicianWorkbenchPage() {
                       <Input
                         value={resultDesc}
                         onChange={e => setResultDesc(e.target.value)}
+                        disabled={isReadOnlyMode}
                         placeholder="Ex: Teste padrão perfeito"
                         className="text-xs"
                       />
@@ -940,6 +1039,7 @@ export default function TechnicianWorkbenchPage() {
                     <Input
                       value={techNotes}
                       onChange={e => setTechNotes(e.target.value)}
+                      disabled={isReadOnlyMode}
                       placeholder="Anotações para controle interno..."
                       className="text-xs"
                     />
@@ -948,22 +1048,31 @@ export default function TechnicianWorkbenchPage() {
 
                 {/* Actions */}
                 <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800">
-                  <Button
-                    type="button"
-                    onClick={handleQuickApprove}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5"
-                  >
-                    <CheckCircle2 className="w-4 h-4" />
-                    Aprovação Rápida (100% OK)
-                  </Button>
+                  {!isReadOnlyMode ? (
+                    <Button
+                      type="button"
+                      onClick={handleQuickApprove}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      Aprovação Rápida (100% OK)
+                    </Button>
+                  ) : (
+                    <span className="text-xs text-slate-400 flex items-center gap-1.5 font-medium">
+                      <Eye className="w-3.5 h-3.5" />
+                      Visualização de OS de outro técnico
+                    </span>
+                  )}
 
                   <div className="flex gap-2">
                     <Button type="button" variant="outline" onClick={() => setSelectedItem(null)} className="text-xs">
                       Fechar
                     </Button>
-                    <Button type="submit" className="bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-bold text-xs">
-                      Salvar Alterações
-                    </Button>
+                    {!isReadOnlyMode && (
+                      <Button type="submit" className="bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-bold text-xs">
+                        Salvar Alterações
+                      </Button>
+                    )}
                   </div>
                 </div>
               </form>

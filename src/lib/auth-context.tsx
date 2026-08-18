@@ -157,6 +157,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       case 'apply_discount_on_delivery':
       case 'change_assigned_technician':
       case 'transfer_assigned_tech_order':
+      case 'edit_other_technician_orders':
         return currentUser.role === 'ADMINISTRADOR';
 
       // Attendant & Admin permissions (Balcão de Atendimento)

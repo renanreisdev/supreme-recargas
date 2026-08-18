@@ -503,6 +503,7 @@ export const DEFAULT_PERMISSION_GROUPS: PermissionGroup[] = [
       delete_entry: true,
       change_assigned_technician: true,
       transfer_assigned_tech_order: true,
+      edit_other_technician_orders: true,
       manage_models: true,
       manage_services: true,
       view_financial_reports: true,
@@ -549,6 +550,8 @@ export const DEFAULT_PERMISSION_GROUPS: PermissionGroup[] = [
       technical_update: true,
       // Backward-compat keys
       update_tech_status: true,
+      transfer_assigned_tech_order: false,
+      edit_other_technician_orders: false,
       apply_discount_on_delivery: false,
       allow_zero_value_delivery: false
     }

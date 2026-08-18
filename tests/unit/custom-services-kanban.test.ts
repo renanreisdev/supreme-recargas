@@ -660,5 +660,17 @@ describe('Custom Services, Kanban & Financial Report Suite', () => {
       expect(techGroup?.permissions.technical_update).toBe(true);
     });
   });
+
+  describe('22. Permission to Edit Other Technician Orders (edit_other_technician_orders)', () => {
+    it('has edit_other_technician_orders configured correctly in default permission groups', () => {
+      const groups = AppStore.getPermissionGroups(tenantId);
+      const adminGroup = groups.find(g => g.id === 'default-admin-group');
+      expect(adminGroup?.permissions.edit_other_technician_orders).toBe(true);
+
+      const techGroup = groups.find(g => g.id === 'default-tech-group');
+      // Technicians cannot edit other technicians' orders by default
+      expect(techGroup?.permissions.edit_other_technician_orders).toBe(false);
+    });
+  });
 });
 

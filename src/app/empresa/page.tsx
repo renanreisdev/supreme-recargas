@@ -52,6 +52,7 @@ const AVAILABLE_PERMISSIONS: PermissionOption[] = [
   { key: 'technical_workbench', label: 'Bancada Técnica (Oficina)', description: 'Permite acessar a fila de itens e realizar diagnósticos', category: 'Oficina' },
   { key: 'update_tech_status', label: 'Salvar Testes Técnicos & Pesagem', description: 'Permite registrar peso injetado e aprovar/condenar itens', category: 'Oficina' },
   { key: 'transfer_assigned_tech_order', label: 'Transferir OS de Outro Técnico (Puxar para Si)', description: 'Permite ao técnico assumir ou transferir para si uma ordem de serviço que já está sob responsabilidade de outro técnico', category: 'Oficina' },
+  { key: 'edit_other_technician_orders', label: 'Alterar / Editar OS de Outro Técnico', description: 'Permite visualizar e alterar informações, diagnósticos, laudos, checklists, pesos e serviços em ordens de serviço atribuídas a outro técnico', category: 'Oficina' },
   { key: 'customize_kanban', label: 'Personalizar Colunas do Kanban', description: 'Permite editar nomes, cores e etapas das colunas da bancada', category: 'Oficina' },
   { key: 'reopen_entry', label: 'Reabrir Comandas Finalizadas/Entregues', description: 'Permite reverter o status de comandas entregues ou pagas para novo processamento', category: 'Gestão' },
   { key: 'delete_entry', label: 'Excluir Comandas', description: 'Permite excluir permanentemente comandas e seus itens do sistema', category: 'Gestão' },
