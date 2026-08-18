@@ -636,13 +636,6 @@ export interface CompanySettings {
   id: string;
   tenant_id: string;
   active_templates?: BusinessTemplateKey[];
-  show_prices_on_receipt: boolean;
-  receipt_header_note?: string;
-  receipt_footer_note?: string;
-  receipt_header?: string;
-  receipt_footer?: string;
-  printer_paper_width?: '58mm' | '80mm';
-  thermal_paper_width_mm: number;
   require_customer_document: boolean;
   require_item_serial: boolean;
   require_cartridge_serial?: boolean;
@@ -668,6 +661,42 @@ export interface CompanySettings {
 
   // Grupos de Usuários autorizados a aparecer como Técnicos Responsáveis
   technician_group_ids?: string[]; // IDs dos PermissionGroups elegíveis como técnicos
+
+  // ==========================================================================
+  // CONFIGURAÇÕES AVANÇADAS DE IMPRESSÃO & COMANDAS TÉRMICAS
+  // ==========================================================================
+  printer_paper_width?: '58mm' | '80mm';
+  thermal_paper_width_mm: number;
+  printer_font_size?: 'compact' | 'normal' | 'large'; // 'compact' (9px), 'normal' (11px), 'large' (13px)
+  printer_density?: 'compact' | 'normal'; // Espaçamento entre seções do cupom
+
+  // Quantidade de vias (cópias) na entrada e na saída:
+  print_entry_copies?: 1 | 2; // 1 via (Única) ou 2 vias (1ª Via Loja/Bancada + 2ª Via Cliente)
+  print_delivery_copies?: 0 | 1 | 2; // 0 = Não imprime, 1 = 1 via (Recibo Cliente), 2 = 2 vias (Loja + Cliente)
+
+  // Automações de Disparo de Impressão:
+  auto_print_on_entry?: boolean; // Disparar diálogo de impressão automaticamente ao abrir OS
+  auto_print_on_delivery?: boolean; // Disparar diálogo de impressão automaticamente na entrega/baixa
+
+  // Elementos e Seções Visíveis no Cupom:
+  show_prices_on_receipt: boolean; // Exibir valores dos serviços e total
+  show_qr_code_on_receipt?: boolean; // Exibir QR Code de rastreio online
+  show_checklist_on_receipt?: boolean; // Exibir itens do checklist de conferência
+  show_accessories_on_receipt?: boolean; // Exibir acessórios informados
+  show_reported_issue_on_receipt?: boolean; // Exibir defeito/reclamação relatada
+  show_technician_on_receipt?: boolean; // Exibir técnico responsável
+  show_customer_signature_line?: boolean; // Exibir linha para assinatura do cliente
+  show_attendant_signature_line?: boolean; // Exibir linha para assinatura do atendente/oficina
+  show_company_cnpj?: boolean; // Exibir CNPJ no cabeçalho
+  show_company_contact?: boolean; // Exibir telefone/whatsapp no cabeçalho
+  show_company_address?: boolean; // Exibir endereço no cabeçalho
+
+  // Textos Personalizados de Cabeçalho e Rodapé:
+  receipt_header?: string; // Slogan ou mensagem institucional no topo
+  receipt_header_note?: string;
+  receipt_footer?: string; // Termos de garantia, prazos e condições legais (entrada)
+  receipt_footer_note?: string;
+  receipt_delivery_footer?: string; // Termos de quitação e retirada do equipamento (baixa)
 }
 
 // ============================================================================

@@ -1145,10 +1145,10 @@ export default function NovaEntradaPage() {
             </div>
 
             <div className="grid grid-cols-2 gap-2.5 pt-2">
-              <Link href={`/impressao?orderId=${createdOrder.id}`}>
-                <Button className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs h-10 gap-2">
+              <Link href={`/impressao?orderId=${createdOrder.id}&type=entry&copies=${settings.print_entry_copies || 2}`}>
+                <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs h-10 gap-2 shadow-md shadow-emerald-600/20">
                   <Printer className="w-4 h-4" />
-                  <span>Imprimir Térmica</span>
+                  <span>Imprimir Comanda ({settings.print_entry_copies || 2} Vias)</span>
                 </Button>
               </Link>
 

@@ -197,7 +197,10 @@ function EntriesListContent() {
     if (!selectedOrderForDelivery) return;
 
     try {
-      AppStore.deliverServiceOrder(selectedOrderForDelivery.id, {
+      const deliveredId = selectedOrderForDelivery.id;
+      const orderNum = selectedOrderForDelivery.order_number;
+
+      AppStore.deliverServiceOrder(deliveredId, {
         receiver_name: receiverName.trim(),
         receiver_document: receiverDoc.trim(),
         receiver_relation: receiverRelation,
@@ -208,11 +211,14 @@ function EntriesListContent() {
       }, currentUser?.full_name || 'Atendente');
 
       loadData();
-      const orderNum = selectedOrderForDelivery.order_number;
       setSelectedOrderForDelivery(null);
       setShowZeroValueModal(false);
       setZeroValueReason('');
       toast.success(`Baixa e entrega da OS #${orderNum} concluída com sucesso!`);
+
+      if (settings.auto_print_on_delivery && settings.print_delivery_copies !== 0) {
+        window.open(`/impressao?orderId=${deliveredId}&type=delivery&copies=${settings.print_delivery_copies || 1}`, '_blank');
+      }
     } catch (err: any) {
       toast.error(err?.message || 'Ocorreu um erro inesperado ao salvar a entrega.');
     }
@@ -605,12 +611,12 @@ function EntriesListContent() {
                           </Button>
                         )}
 
-                        <Link href={`/impressao?orderId=${order.id}`}>
+                        <Link href={`/impressao?orderId=${order.id}&type=${order.status === 'ENTREGUE' ? 'delivery' : 'entry'}&copies=${order.status === 'ENTREGUE' ? (settings.print_delivery_copies || 1) : (settings.print_entry_copies || 2)}`}>
                           <Button
                             size="sm"
                             variant="outline"
-                            className="text-xs h-8 rounded-xl px-2 text-slate-600 dark:text-slate-300"
-                            title="Imprimir Térmica"
+                            className="text-xs h-8 rounded-xl px-2 text-slate-600 dark:text-slate-300 hover:text-emerald-600"
+                            title={order.status === 'ENTREGUE' ? 'Imprimir Comprovante de Entrega' : 'Imprimir Comanda'}
                           >
                             <Printer className="w-3.5 h-3.5" />
                           </Button>

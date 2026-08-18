@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { 
   Building2, 
   Users, 
@@ -18,11 +19,23 @@ import {
   Lock,
   Edit,
   Tag,
-  Wrench
+  Wrench,
+  QrCode,
+  Scissors,
+  Copy,
+  ExternalLink,
+  Sparkles,
+  FileCheck,
+  CheckSquare,
+  Eye,
+  Layers,
+  Scale
 } from 'lucide-react';
+import QRCode from 'qrcode';
+import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { AppStore } from '@/lib/store';
-import { formatCurrency, getRoleBadgeConfig, cn } from '@/lib/utils';
+import { formatCurrency, getRoleBadgeConfig, cn, formatDateTime } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -65,11 +78,16 @@ const AVAILABLE_PERMISSIONS: PermissionOption[] = [
   { key: 'manage_company', label: 'Gerenciar Empresa & Permissões', description: 'Permite alterar dados da empresa e permissões dos usuários', category: 'Gestão' },
 ];
 
-export default function CompanySettingsPage() {
+function CompanySettingsContent() {
+  const searchParams = useSearchParams();
+  const initialTab = (searchParams.get('tab') as any) || 'equipe';
+
   const { currentCompany, currentUser, hasPermission, refreshUser } = useAuth();
   
-  // Navigation Tabs
-  const [activeTab, setActiveTab] = useState<'equipe' | 'grupos' | 'empresa' | 'regras'>('equipe');
+  // Navigation Tabs (Separated: regras vs impressao)
+  const [activeTab, setActiveTab] = useState<'equipe' | 'grupos' | 'empresa' | 'regras' | 'impressao'>(
+    ['equipe', 'grupos', 'empresa', 'regras', 'impressao'].includes(initialTab) ? initialTab : 'equipe'
+  );
 
   const [users, setUsers] = useState<Profile[]>([]);
   const [permissionGroups, setPermissionGroups] = useState<PermissionGroup[]>([]);
@@ -111,28 +129,44 @@ export default function CompanySettingsPage() {
   const [companyResponsible, setCompanyResponsible] = useState(currentCompany.responsible_name || '');
   const [companySaveSuccess, setCompanySaveSuccess] = useState(false);
 
-  // Settings & Printing State
+  // Operational Rules State (Tab 4)
   const [settings, setSettings] = useState<CompanySettings>(AppStore.getSettings(currentCompany.id));
   const [requireCustomerDocument, setRequireCustomerDocument] = useState<boolean>(settings.require_customer_document ?? false);
   const [requireCartridgeSerial, setRequireCartridgeSerial] = useState<boolean>(settings.require_cartridge_serial ?? true);
   const [requireTechnicianOnEntry, setRequireTechnicianOnEntry] = useState<boolean>(settings.require_technician_on_entry ?? false);
-  const [printerPaperWidth, setPrinterPaperWidth] = useState<'58mm' | '80mm'>(settings.printer_paper_width || '80mm');
-  const [receiptHeader, setReceiptHeader] = useState(settings.receipt_header || '');
-  const [receiptFooter, setReceiptFooter] = useState(settings.receipt_footer || '');
-  
-  // SKU Configuration State
   const [skuMode, setSkuMode] = useState<'MANUAL' | 'AUTO_INCREMENT'>(settings.sku_mode || 'MANUAL');
   const [skuPrefix, setSkuPrefix] = useState(settings.sku_prefix !== undefined ? settings.sku_prefix : 'MOD-');
   const [skuStartNumber, setSkuStartNumber] = useState<string>(String(settings.sku_start_number || 1));
   const [skuDigits, setSkuDigits] = useState<string>(String(settings.sku_digits || 4));
-
-  // Item Description Display Mode State
   const [itemDescriptionDisplayMode, setItemDescriptionDisplayMode] = useState<'BASIC' | 'FULL'>(settings.item_description_display_mode || 'BASIC');
-
-  // Grupos de Usuários elegíveis como Técnicos Responsáveis
   const [technicianGroupIds, setTechnicianGroupIds] = useState<string[]>(settings.technician_group_ids || ['default-tech-group']);
-
   const [policySaveSuccess, setPolicySaveSuccess] = useState(false);
+
+  // Dedicated Thermal Printing State (Tab 5)
+  const [printerPaperWidth, setPrinterPaperWidth] = useState<'58mm' | '80mm'>(settings.printer_paper_width || '80mm');
+  const [printerFontSize, setPrinterFontSize] = useState<'compact' | 'normal' | 'large'>(settings.printer_font_size || 'normal');
+  const [printerDensity, setPrinterDensity] = useState<'compact' | 'normal'>(settings.printer_density || 'normal');
+  const [printEntryCopies, setPrintEntryCopies] = useState<1 | 2>(settings.print_entry_copies ?? 2);
+  const [printDeliveryCopies, setPrintDeliveryCopies] = useState<0 | 1 | 2>(settings.print_delivery_copies ?? 1);
+  const [autoPrintOnEntry, setAutoPrintOnEntry] = useState<boolean>(settings.auto_print_on_entry ?? true);
+  const [autoPrintOnDelivery, setAutoPrintOnDelivery] = useState<boolean>(settings.auto_print_on_delivery ?? true);
+  const [showPricesOnReceipt, setShowPricesOnReceipt] = useState<boolean>(settings.show_prices_on_receipt ?? true);
+  const [showQrCodeOnReceipt, setShowQrCodeOnReceipt] = useState<boolean>(settings.show_qr_code_on_receipt ?? true);
+  const [showChecklistOnReceipt, setShowChecklistOnReceipt] = useState<boolean>(settings.show_checklist_on_receipt ?? true);
+  const [showAccessoriesOnReceipt, setShowAccessoriesOnReceipt] = useState<boolean>(settings.show_accessories_on_receipt ?? true);
+  const [showReportedIssueOnReceipt, setShowReportedIssueOnReceipt] = useState<boolean>(settings.show_reported_issue_on_receipt ?? true);
+  const [showTechnicianOnReceipt, setShowTechnicianOnReceipt] = useState<boolean>(settings.show_technician_on_receipt ?? true);
+  const [showCustomerSignatureLine, setShowCustomerSignatureLine] = useState<boolean>(settings.show_customer_signature_line ?? true);
+  const [showAttendantSignatureLine, setShowAttendantSignatureLine] = useState<boolean>(settings.show_attendant_signature_line ?? false);
+  const [showCompanyCnpj, setShowCompanyCnpj] = useState<boolean>(settings.show_company_cnpj ?? true);
+  const [showCompanyContact, setShowCompanyContact] = useState<boolean>(settings.show_company_contact ?? true);
+  const [showCompanyAddress, setShowCompanyAddress] = useState<boolean>(settings.show_company_address ?? true);
+  const [receiptHeader, setReceiptHeader] = useState(settings.receipt_header || '');
+  const [receiptFooter, setReceiptFooter] = useState(settings.receipt_footer || '');
+  const [receiptDeliveryFooter, setReceiptDeliveryFooter] = useState(settings.receipt_delivery_footer || '');
+  const [printSaveSuccess, setPrintSaveSuccess] = useState(false);
+  const [previewTab, setPreviewTab] = useState<'entrada' | 'entrega'>('entrada');
+  const [previewQrUrl, setPreviewQrUrl] = useState<string>('');
 
   // Reset Password Modal State
   const [userToResetPass, setUserToResetPass] = useState<Profile | null>(null);
@@ -154,12 +188,11 @@ export default function CompanySettingsPage() {
     setUsers(dataUsers);
     setPermissionGroups(dataGroups);
     setSettings(sets);
+    
+    // Operational Rules
     setRequireCustomerDocument(sets.require_customer_document ?? false);
     setRequireCartridgeSerial(sets.require_cartridge_serial ?? true);
     setRequireTechnicianOnEntry(sets.require_technician_on_entry ?? false);
-    setPrinterPaperWidth(sets.printer_paper_width || '80mm');
-    setReceiptHeader(sets.receipt_header || '');
-    setReceiptFooter(sets.receipt_footer || '');
     setSkuMode(sets.sku_mode || 'MANUAL');
     setSkuPrefix(sets.sku_prefix !== undefined ? sets.sku_prefix : 'MOD-');
     setSkuStartNumber(String(sets.sku_start_number || 1));
@@ -167,6 +200,30 @@ export default function CompanySettingsPage() {
     setItemDescriptionDisplayMode(sets.item_description_display_mode || 'BASIC');
     setTechnicianGroupIds(sets.technician_group_ids || ['default-tech-group']);
 
+    // Printing Settings
+    setPrinterPaperWidth(sets.printer_paper_width || '80mm');
+    setPrinterFontSize(sets.printer_font_size || 'normal');
+    setPrinterDensity(sets.printer_density || 'normal');
+    setPrintEntryCopies(sets.print_entry_copies ?? 2);
+    setPrintDeliveryCopies(sets.print_delivery_copies ?? 1);
+    setAutoPrintOnEntry(sets.auto_print_on_entry ?? true);
+    setAutoPrintOnDelivery(sets.auto_print_on_delivery ?? true);
+    setShowPricesOnReceipt(sets.show_prices_on_receipt ?? true);
+    setShowQrCodeOnReceipt(sets.show_qr_code_on_receipt ?? true);
+    setShowChecklistOnReceipt(sets.show_checklist_on_receipt ?? true);
+    setShowAccessoriesOnReceipt(sets.show_accessories_on_receipt ?? true);
+    setShowReportedIssueOnReceipt(sets.show_reported_issue_on_receipt ?? true);
+    setShowTechnicianOnReceipt(sets.show_technician_on_receipt ?? true);
+    setShowCustomerSignatureLine(sets.show_customer_signature_line ?? true);
+    setShowAttendantSignatureLine(sets.show_attendant_signature_line ?? false);
+    setShowCompanyCnpj(sets.show_company_cnpj ?? true);
+    setShowCompanyContact(sets.show_company_contact ?? true);
+    setShowCompanyAddress(sets.show_company_address ?? true);
+    setReceiptHeader(sets.receipt_header || '');
+    setReceiptFooter(sets.receipt_footer || '');
+    setReceiptDeliveryFooter(sets.receipt_delivery_footer || '');
+
+    // Company Data
     setTradeName(comp.trade_name || '');
     setCorporateName(comp.corporate_name || '');
     setCnpj(comp.cnpj || '');
@@ -187,15 +244,23 @@ export default function CompanySettingsPage() {
     return () => window.removeEventListener('supreme_store_updated', handleUpdate);
   }, [currentCompany.id]);
 
+  useEffect(() => {
+    QRCode.toDataURL('https://supreme.com.br/acompanhar/DEMO-2026-0001', {
+      width: 140,
+      margin: 1,
+      color: { dark: '#000000', light: '#ffffff' }
+    })
+      .then(url => setPreviewQrUrl(url))
+      .catch(() => {});
+  }, []);
+
+  // Save Operational Rules (Tab 4)
   const handleSavePolicies = (e: React.FormEvent) => {
     e.preventDefault();
     const updated = AppStore.updateSettings(currentCompany.id, {
       require_customer_document: requireCustomerDocument,
       require_cartridge_serial: requireCartridgeSerial,
       require_technician_on_entry: requireTechnicianOnEntry,
-      printer_paper_width: printerPaperWidth,
-      receipt_header: receiptHeader,
-      receipt_footer: receiptFooter,
       sku_mode: skuMode,
       sku_prefix: skuPrefix.trim(),
       sku_start_number: parseInt(skuStartNumber, 10) || 1,
@@ -205,8 +270,41 @@ export default function CompanySettingsPage() {
     }, currentUser?.full_name || 'Administrador');
     setSettings(updated);
     setPolicySaveSuccess(true);
-    toast.success('Configurações operacionais salvas com sucesso!');
+    toast.success('Regras operacionais salvas com sucesso!');
     setTimeout(() => setPolicySaveSuccess(false), 3500);
+  };
+
+  // Save Printing Settings (Tab 5)
+  const handleSavePrinting = (e: React.FormEvent) => {
+    e.preventDefault();
+    const updated = AppStore.updateSettings(currentCompany.id, {
+      printer_paper_width: printerPaperWidth,
+      thermal_paper_width_mm: printerPaperWidth === '58mm' ? 58 : 80,
+      printer_font_size: printerFontSize,
+      printer_density: printerDensity,
+      print_entry_copies: printEntryCopies,
+      print_delivery_copies: printDeliveryCopies,
+      auto_print_on_entry: autoPrintOnEntry,
+      auto_print_on_delivery: autoPrintOnDelivery,
+      show_prices_on_receipt: showPricesOnReceipt,
+      show_qr_code_on_receipt: showQrCodeOnReceipt,
+      show_checklist_on_receipt: showChecklistOnReceipt,
+      show_accessories_on_receipt: showAccessoriesOnReceipt,
+      show_reported_issue_on_receipt: showReportedIssueOnReceipt,
+      show_technician_on_receipt: showTechnicianOnReceipt,
+      show_customer_signature_line: showCustomerSignatureLine,
+      show_attendant_signature_line: showAttendantSignatureLine,
+      show_company_cnpj: showCompanyCnpj,
+      show_company_contact: showCompanyContact,
+      show_company_address: showCompanyAddress,
+      receipt_header: receiptHeader.trim(),
+      receipt_footer: receiptFooter.trim(),
+      receipt_delivery_footer: receiptDeliveryFooter.trim()
+    }, currentUser?.full_name || 'Administrador');
+    setSettings(updated);
+    setPrintSaveSuccess(true);
+    toast.success('Configurações de impressão salvas com sucesso!');
+    setTimeout(() => setPrintSaveSuccess(false), 3500);
   };
 
   const toggleTechnicianGroup = (groupId: string) => {
@@ -296,7 +394,6 @@ export default function CompanySettingsPage() {
     setGroupDefaultRole('ATENDENTE');
     setGroupMaxDiscount(10);
     
-    // Default checked permissions for attendant
     const initialPerms: Record<string, boolean> = {
       create_entry: true,
       view_entries: true,
@@ -419,7 +516,6 @@ export default function CompanySettingsPage() {
   const handleOpenPermissions = (u: Profile) => {
     setEditingUser(u);
     
-    // Find associated group permissions
     const userGroup = permissionGroups.find(g => g.id === u.group_id);
     const groupPerms = userGroup?.permissions || {};
 
@@ -484,7 +580,7 @@ export default function CompanySettingsPage() {
   };
 
   return (
-    <div className="space-y-6 pb-20">
+    <div className="space-y-6 pb-20 max-w-7xl mx-auto">
       {/* Global Dialog Modal */}
       {dialogModal && <DialogModal {...dialogModal} />}
 
@@ -493,10 +589,10 @@ export default function CompanySettingsPage() {
         <div>
           <h1 className="text-xl md:text-2xl font-black text-slate-900 dark:text-slate-100 flex items-center gap-2.5">
             <Building2 className="w-6 h-6 text-emerald-600" />
-            <span>Configurações da Empresa & Equipe</span>
+            <span>Configurações da Empresa & Gestão</span>
           </h1>
           <p className="text-xs md:text-sm text-slate-500 mt-1">
-            Empresa: <strong className="text-slate-800 dark:text-slate-200">{currentCompany.trade_name}</strong> • Controle unificado de usuários, grupos e permissões
+            Empresa: <strong className="text-slate-800 dark:text-slate-200">{currentCompany.trade_name}</strong> • Gestão de equipe, permissões, regras operacionais e impressão térmica
           </p>
         </div>
 
@@ -545,19 +641,14 @@ export default function CompanySettingsPage() {
             style={{ width: `${Math.min(100, (limits.usedUsers / limits.maxUsers) * 100)}%` }} 
           />
         </div>
-
-        <div className="flex flex-wrap items-center justify-between text-[11px] text-slate-400 pt-1">
-          <span>Usuário adicional padrão: <strong>{formatCurrency(limits.extraUserPrice || 15)}/mês</strong></span>
-          <span>Admins: <strong>{limits.usedAdmins}</strong> • Atendentes: <strong>{limits.usedAttendants}</strong> • Técnicos: <strong>{limits.usedTechs}</strong></span>
-        </div>
       </div>
 
-      {/* Modern Navigation Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-1 overflow-x-auto">
+      {/* Navigation Tabs (5 Distinct Tabs: Equipe, Grupos, Empresa, Regras Operacionais, Impressão & Comandas) */}
+      <div className="flex items-center gap-1.5 border-b border-slate-200 dark:border-slate-800 pb-2 overflow-x-auto">
         <button
           type="button"
           onClick={() => setActiveTab('equipe')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shrink-0 ${
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shrink-0 ${
             activeTab === 'equipe'
               ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-xs'
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -570,7 +661,7 @@ export default function CompanySettingsPage() {
         <button
           type="button"
           onClick={() => setActiveTab('grupos')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shrink-0 ${
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shrink-0 ${
             activeTab === 'grupos'
               ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-xs'
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -585,7 +676,7 @@ export default function CompanySettingsPage() {
             <button
               type="button"
               onClick={() => setActiveTab('empresa')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shrink-0 ${
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shrink-0 ${
                 activeTab === 'empresa'
                   ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -598,14 +689,27 @@ export default function CompanySettingsPage() {
             <button
               type="button"
               onClick={() => setActiveTab('regras')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shrink-0 ${
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shrink-0 ${
                 activeTab === 'regras'
                   ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
               }`}
             >
               <Sliders className="w-4 h-4" />
-              <span>Configurações & Impressão</span>
+              <span>Regras Operacionais & SKU</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('impressao')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shrink-0 ${
+                activeTab === 'impressao'
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              <Printer className="w-4 h-4" />
+              <span>Impressão & Comandas</span>
             </button>
           </>
         )}
@@ -640,9 +744,9 @@ export default function CompanySettingsPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="bg-slate-50 dark:bg-slate-900/60 border-b border-slate-100 dark:border-slate-800 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
-                  <th className="p-3.5">Nome / Colaborador</th>
-                  <th className="p-3.5">E-mail</th>
+                <tr className="bg-slate-50 dark:bg-slate-900/60 border-b border-slate-100 dark:border-slate-800 text-slate-500 uppercase tracking-wider text-[10px] font-bold">
+                  <th className="p-3.5">Nome & Telefone</th>
+                  <th className="p-3.5">E-mail de Acesso</th>
                   <th className="p-3.5">Função Base</th>
                   <th className="p-3.5">Grupo de Permissões</th>
                   <th className="p-3.5">Status</th>
@@ -738,7 +842,7 @@ export default function CompanySettingsPage() {
         </div>
       )}
 
-      {/* TAB 2: GRUPOS DE PERMISSÕES PRÉ-DEFINIDOS E CUSTOMIZADOS */}
+      {/* TAB 2: GRUPOS DE PERMISSÕES */}
       {activeTab === 'grupos' && (
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-white dark:bg-[#0e1626] rounded-2xl border border-slate-200 dark:border-slate-800 p-4 sm:p-5 shadow-sm gap-3">
@@ -858,80 +962,81 @@ export default function CompanySettingsPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Nome Fantasia *</label>
-                <Input value={tradeName} onChange={e => setTradeName(e.target.value)} required className="text-xs rounded-xl" />
+                <Input required value={tradeName} onChange={e => setTradeName(e.target.value)} placeholder="Ex: Supreme Recargas" className="text-xs rounded-xl" />
               </div>
 
               <div>
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Razão Social</label>
-                <Input value={corporateName} onChange={e => setCorporateName(e.target.value)} className="text-xs rounded-xl" />
+                <Input value={corporateName} onChange={e => setCorporateName(e.target.value)} placeholder="Ex: Supreme Comércio e Serviços LTDA" className="text-xs rounded-xl" />
               </div>
 
               <div>
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">CNPJ / CPF</label>
-                <Input value={cnpj} onChange={e => setCnpj(e.target.value)} className="text-xs rounded-xl font-mono" />
+                <Input value={cnpj} onChange={e => setCnpj(e.target.value)} placeholder="00.000.000/0000-00" className="text-xs rounded-xl font-mono" />
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Responsável Legal</label>
-                <Input value={companyResponsible} onChange={e => setCompanyResponsible(e.target.value)} className="text-xs rounded-xl" />
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Telefone Principal</label>
+                <Input value={companyPhone} onChange={e => setCompanyPhone(e.target.value)} placeholder="(11) 3333-4444" className="text-xs rounded-xl" />
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Telefone Fixo</label>
-                <Input value={companyPhone} onChange={e => setCompanyPhone(e.target.value)} className="text-xs rounded-xl" />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">WhatsApp</label>
-                <Input value={companyWhatsapp} onChange={e => setCompanyWhatsapp(e.target.value)} className="text-xs rounded-xl" />
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">WhatsApp Corporativo</label>
+                <Input value={companyWhatsapp} onChange={e => setCompanyWhatsapp(e.target.value)} placeholder="(11) 98888-7777" className="text-xs rounded-xl" />
               </div>
 
               <div>
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">E-mail Principal</label>
-                <Input type="email" value={companyEmail} onChange={e => setCompanyEmail(e.target.value)} className="text-xs rounded-xl" />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">CEP</label>
-                <Input value={companyZipCode} onChange={e => setCompanyZipCode(e.target.value)} className="text-xs rounded-xl font-mono" />
+                <Input type="email" value={companyEmail} onChange={e => setCompanyEmail(e.target.value)} placeholder="contato@empresa.com.br" className="text-xs rounded-xl" />
               </div>
 
               <div className="sm:col-span-2">
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Endereço Completo</label>
-                <Input value={companyAddress} onChange={e => setCompanyAddress(e.target.value)} className="text-xs rounded-xl" />
+                <Input value={companyAddress} onChange={e => setCompanyAddress(e.target.value)} placeholder="Rua das Flores, 123 - Centro" className="text-xs rounded-xl" />
               </div>
 
               <div>
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Cidade</label>
-                <Input value={companyCity} onChange={e => setCompanyCity(e.target.value)} className="text-xs rounded-xl" />
+                <Input value={companyCity} onChange={e => setCompanyCity(e.target.value)} placeholder="São Paulo" className="text-xs rounded-xl" />
               </div>
 
-              <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Estado (UF)</label>
-                <Input value={companyState} onChange={e => setCompanyState(e.target.value)} maxLength={2} className="text-xs rounded-xl uppercase font-mono" />
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Estado (UF)</label>
+                  <Input value={companyState} onChange={e => setCompanyState(e.target.value.toUpperCase())} placeholder="SP" maxLength={2} className="text-xs rounded-xl uppercase font-mono" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">CEP</label>
+                  <Input value={companyZipCode} onChange={e => setCompanyZipCode(e.target.value)} placeholder="01000-000" className="text-xs rounded-xl font-mono" />
+                </div>
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Responsável / Proprietário</label>
+                <Input value={companyResponsible} onChange={e => setCompanyResponsible(e.target.value)} placeholder="Nome do proprietário ou gerente" className="text-xs rounded-xl" />
               </div>
             </div>
 
             <div className="flex justify-end pt-2">
               <Button type="submit" size="sm" className="bg-emerald-600 hover:bg-emerald-700 font-bold text-xs text-white gap-1.5 rounded-xl h-9 shadow-xs">
                 <Check className="w-4 h-4" />
-                <span>Salvar Dados da Empresa</span>
+                <span>Salvar Dados Cadastrais</span>
               </Button>
             </div>
           </form>
         </div>
       )}
 
-      {/* TAB 4: REGRAS, VALIDAÇÕES & IMPRESSÃO */}
+      {/* TAB 4: REGRAS OPERACIONAIS & SKU */}
       {activeTab === 'regras' && hasPermission('manage_company') && (
         <div className="bg-white dark:bg-[#0e1626] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-6 space-y-6">
           <div className="pb-3 border-b border-slate-100 dark:border-slate-800">
             <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
               <Sliders className="w-4 h-4 text-emerald-600" />
-              <span>Configurações & Impressão Térmica</span>
+              <span>Regras Operacionais, Validações & SKU</span>
             </h3>
             <p className="text-xs text-slate-500">
-              Personalize políticas de preenchimento e layout dos comprovantes térmicos de 58mm/80mm.
+              Personalize políticas de preenchimento, validações de balcão e padronização de códigos internos.
             </p>
           </div>
 
@@ -939,12 +1044,12 @@ export default function CompanySettingsPage() {
             {policySaveSuccess && (
               <div className="p-3 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 rounded-xl flex items-center gap-2 text-emerald-800 dark:text-emerald-200 text-xs font-semibold">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>Configurações atualizadas com sucesso!</span>
+                <span>Regras operacionais atualizadas com sucesso!</span>
               </div>
             )}
 
             {/* Validation Policies */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* CPF / CNPJ Policy */}
               <div className={`p-4 rounded-2xl border transition-all ${
                 requireCustomerDocument 
@@ -962,16 +1067,16 @@ export default function CompanySettingsPage() {
                   <label htmlFor="require_doc_toggle" className="cursor-pointer space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-xs text-slate-900 dark:text-slate-100">
-                        Exigir CPF / CNPJ no Cadastro de Clientes
+                        Exigir CPF / CNPJ
                       </span>
-                      <Badge className={requireCustomerDocument ? 'bg-emerald-600 text-white text-[10px]' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px]'}>
+                      <Badge className={requireCustomerDocument ? 'bg-emerald-600 text-white text-[9px]' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[9px]'}>
                         {requireCustomerDocument ? 'Obrigatório' : 'Opcional'}
                       </Badge>
                     </div>
                     <p className="text-[11px] text-slate-500 leading-relaxed">
                       {requireCustomerDocument 
-                        ? 'Os atendentes serão obrigados a preencher o CPF ou CNPJ para cadastrar qualquer cliente.' 
-                        : 'O CPF ou CNPJ é opcional. Os atendentes podem cadastrar clientes com apenas Nome e Telefone.'}
+                        ? 'Atendentes devem preencher CPF/CNPJ para salvar clientes.' 
+                        : 'CPF/CNPJ opcional no balcão de atendimento.'}
                     </p>
                   </label>
                 </div>
@@ -994,16 +1099,16 @@ export default function CompanySettingsPage() {
                   <label htmlFor="require_serial_toggle" className="cursor-pointer space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-xs text-slate-900 dark:text-slate-100">
-                        Exigir Identificador / Nº de Série do Item
+                        Exigir Nº de Série / Serial
                       </span>
-                      <Badge className={requireCartridgeSerial ? 'bg-emerald-600 text-white text-[10px]' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px]'}>
+                      <Badge className={requireCartridgeSerial ? 'bg-emerald-600 text-white text-[9px]' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[9px]'}>
                         {requireCartridgeSerial ? 'Obrigatório' : 'Opcional (S/N)'}
                       </Badge>
                     </div>
                     <p className="text-[11px] text-slate-500 leading-relaxed">
                       {requireCartridgeSerial 
-                        ? 'Cada item recebido na comanda exige o preenchimento do código de série para identificação física.' 
-                        : 'O serial é opcional no balcão. Se deixado em branco, o sistema atribui "S/N" automaticamente.'}
+                        ? 'Exige preenchimento de serial ou identificador no recebimento.' 
+                        : 'Serial opcional (atribui S/N se deixado em branco).'}
                     </p>
                   </label>
                 </div>
@@ -1026,16 +1131,16 @@ export default function CompanySettingsPage() {
                   <label htmlFor="require_technician_toggle" className="cursor-pointer space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-xs text-slate-900 dark:text-slate-100">
-                        Exigir Técnico Responsável na Abertura da Comanda
+                        Exigir Técnico na Entrada
                       </span>
-                      <Badge className={requireTechnicianOnEntry ? 'bg-emerald-600 text-white text-[10px]' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px]'}>
-                        {requireTechnicianOnEntry ? 'Obrigatório' : 'Opcional (Atribuir Depois)'}
+                      <Badge className={requireTechnicianOnEntry ? 'bg-emerald-600 text-white text-[9px]' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[9px]'}>
+                        {requireTechnicianOnEntry ? 'Obrigatório' : 'Opcional'}
                       </Badge>
                     </div>
                     <p className="text-[11px] text-slate-500 leading-relaxed">
                       {requireTechnicianOnEntry 
-                        ? 'O atendente deve obrigatoriamente selecionar o técnico responsável no momento da entrada.' 
-                        : 'A comanda pode ser aberta sem técnico. Os técnicos da bancada poderão selecionar para si as comandas disponíveis no Kanban.'}
+                        ? 'Obriga seleção do técnico no momento de abrir a OS.' 
+                        : 'Permite abrir sem técnico para assumir na bancada.'}
                     </p>
                   </label>
                 </div>
@@ -1048,10 +1153,10 @@ export default function CompanySettingsPage() {
                 <div>
                   <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
                     <Wrench className="w-4 h-4 text-emerald-600" />
-                    <span>Grupos de Usuários para a Lista de "Técnicos Responsáveis"</span>
+                    <span>Grupos de Usuários Elegíveis como "Técnicos Responsáveis"</span>
                   </h4>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    Escolha quais grupos de usuários aparecerão disponíveis no campo de seleção de técnico responsável na recepção e bancada.
+                    Defina quais grupos de usuários aparecerão na seleção de técnico da comanda e da bancada técnica.
                   </p>
                 </div>
                 <Badge className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-[10px] font-bold w-fit">
@@ -1078,7 +1183,7 @@ export default function CompanySettingsPage() {
                         <input
                           type="checkbox"
                           checked={isSelected}
-                          onChange={() => {}} // handled by parent div click
+                          onChange={() => {}} 
                           className="mt-0.5 w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 cursor-pointer"
                         />
                         <div className="min-w-0 flex-1">
@@ -1130,53 +1235,9 @@ export default function CompanySettingsPage() {
                     ))}
                   {users.filter(u => u.is_active && u.group_id && technicianGroupIds.includes(u.group_id)).length === 0 && (
                     <span className="text-[11px] text-amber-600 dark:text-amber-400 italic">
-                      Nenhum usuário ativo pertence aos grupos marcados. Se nenhum grupo for selecionado, o sistema utilizará os técnicos padrão.
+                      Nenhum usuário ativo pertence aos grupos marcados.
                     </span>
                   )}
-                </div>
-              </div>
-            </div>
-
-            {/* Printing Format */}
-            <div className="p-4 bg-slate-50 dark:bg-slate-900/60 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-4">
-              <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
-                <Printer className="w-4 h-4 text-emerald-600" />
-                <span>Impressão de Comprovantes Térmicos</span>
-              </h4>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                    Largura da Bobina Térmica
-                  </label>
-                  <Select value={printerPaperWidth} onChange={e => setPrinterPaperWidth(e.target.value as any)} className="text-xs rounded-xl">
-                    <option value="80mm">Bobina Padrão 80mm (Recomendado)</option>
-                    <option value="58mm">Bobina Estreita 58mm</option>
-                  </Select>
-                </div>
-
-                <div className="sm:col-span-2">
-                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                    Mensagem de Cabeçalho do Recibo
-                  </label>
-                  <Input
-                    value={receiptHeader}
-                    onChange={e => setReceiptHeader(e.target.value)}
-                    placeholder="Ex: SUPREME RECARGAS & ASSISTÊNCIA TÉCNICA"
-                    className="text-xs rounded-xl"
-                  />
-                </div>
-
-                <div className="sm:col-span-3">
-                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                    Mensagem de Rodapé (Garantia / Retirada)
-                  </label>
-                  <Input
-                    value={receiptFooter}
-                    onChange={e => setReceiptFooter(e.target.value)}
-                    placeholder="Ex: Garantia legal de 90 dias. Itens não retirados em 90 dias serão descartados."
-                    className="text-xs rounded-xl"
-                  />
                 </div>
               </div>
             </div>
@@ -1292,7 +1353,7 @@ export default function CompanySettingsPage() {
                     <span>Exibição dos Itens / Produtos nas Telas do Sistema</span>
                   </h4>
                   <p className="text-[11px] text-slate-500">
-                    Escolha se as listagens de recepção, bancada Kanban e comandas devem mostrar a descrição básica (nome do modelo) ou completa (com opcionais técnicos).
+                    Escolha se as listagens de recepção, bancada Kanban e comandas devem mostrar a descrição básica ou completa.
                   </p>
                 </div>
 
@@ -1359,10 +1420,641 @@ export default function CompanySettingsPage() {
             <div className="flex justify-end pt-2">
               <Button type="submit" size="sm" className="bg-emerald-600 hover:bg-emerald-700 font-bold text-xs text-white gap-1.5 rounded-xl h-9 shadow-xs">
                 <Check className="w-4 h-4" />
-                <span>Salvar Configurações</span>
+                <span>Salvar Regras Operacionais</span>
               </Button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* TAB 5: CONFIGURAÇÕES DEDICADAS DE IMPRESSÃO & COMANDAS TÉRMICAS */}
+      {activeTab === 'impressao' && hasPermission('manage_company') && (
+        <div className="space-y-6">
+          {/* Header Card */}
+          <div className="bg-white dark:bg-[#0e1626] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-6 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 gap-3">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <Printer className="w-5 h-5 text-emerald-600" />
+                  <span>Central de Configurações de Impressão & Comandas Térmicas</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Configure a quantidade de vias (1 via / 2 vias), disparos automáticos, largura de bobina e seções personalizadas com preview em tempo real.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Link href="/impressao">
+                  <Button variant="outline" size="sm" className="text-xs font-bold gap-1.5 rounded-xl h-9">
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Abrir Emissor de Comandas</span>
+                  </Button>
+                </Link>
+              </div>
+            </div>
+
+            {printSaveSuccess && (
+              <div className="p-3 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 rounded-xl flex items-center gap-2 text-emerald-800 dark:text-emerald-200 text-xs font-semibold animate-in fade-in">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Configurações de impressão salvas e aplicadas a todo o sistema!</span>
+              </div>
+            )}
+
+            {/* Two-Column Studio Layout: Settings Form on Left, Live Mockup on Right */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-2">
+              {/* LEFT COLUMN: Controls & Preferences (7 Cols) */}
+              <form onSubmit={handleSavePrinting} className="lg:col-span-7 space-y-5">
+                {/* 1. Formato da Bobina & Tipografia */}
+                <div className="p-4 bg-slate-50 dark:bg-slate-900/60 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3">
+                  <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                    <Sliders className="w-4 h-4 text-emerald-600" />
+                    <span>1. Formato do Papel & Tipografia</span>
+                  </h4>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                        Largura da Bobina Térmica
+                      </label>
+                      <Select 
+                        value={printerPaperWidth} 
+                        onChange={e => setPrinterPaperWidth(e.target.value as any)} 
+                        className="text-xs rounded-xl font-bold"
+                      >
+                        <option value="80mm">80 mm (Padrão Comercial)</option>
+                        <option value="58mm">58 mm (Bobina Compacta)</option>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                        Tamanho da Fonte
+                      </label>
+                      <Select 
+                        value={printerFontSize} 
+                        onChange={e => setPrinterFontSize(e.target.value as any)} 
+                        className="text-xs rounded-xl"
+                      >
+                        <option value="compact">Pequena (9px - Econômica)</option>
+                        <option value="normal">Média (11px - Padrão)</option>
+                        <option value="large">Grande (13px - Alta Legibilidade)</option>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                        Densidade do Cupom
+                      </label>
+                      <Select 
+                        value={printerDensity} 
+                        onChange={e => setPrinterDensity(e.target.value as any)} 
+                        className="text-xs rounded-xl"
+                      >
+                        <option value="normal">Normal (Espaçado)</option>
+                        <option value="compact">Compacta (Economizar Papel)</option>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Quantidade de Vias & Automações de Disparo */}
+                <div className="p-4 bg-slate-50 dark:bg-slate-900/60 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-4">
+                  <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                    <Scissors className="w-4 h-4 text-emerald-600" />
+                    <span>2. Quantidade de Vias & Automação de Disparo</span>
+                  </h4>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Vias na Entrada */}
+                    <div className="p-3.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                          Vias na Entrada / Abertura da OS
+                        </label>
+                        <Badge className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 text-[10px] font-bold">
+                          {printEntryCopies} via(s)
+                        </Badge>
+                      </div>
+                      <p className="text-[11px] text-slate-500 leading-snug">
+                        {printEntryCopies === 2 
+                          ? 'Imprime 2 vias destacáveis: 1ª Via para a Empresa/Bancada + 2ª Via para o Cliente.' 
+                          : 'Imprime 1 via única entregue ao cliente.'}
+                      </p>
+                      <div className="flex gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setPrintEntryCopies(1)}
+                          className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold border transition-all ${
+                            printEntryCopies === 1
+                              ? 'bg-emerald-600 text-white border-emerald-600'
+                              : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                          }`}
+                        >
+                          1 Via (Única)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPrintEntryCopies(2)}
+                          className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold border transition-all ${
+                            printEntryCopies === 2
+                              ? 'bg-emerald-600 text-white border-emerald-600'
+                              : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                          }`}
+                        >
+                          2 Vias (Loja + Cliente)
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Vias na Finalização / Entrega */}
+                    <div className="p-3.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                          Vias na Finalização / Baixa & Entrega
+                        </label>
+                        <Badge className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 text-[10px] font-bold">
+                          {printDeliveryCopies === 0 ? 'Desativado' : `${printDeliveryCopies} via(s)`}
+                        </Badge>
+                      </div>
+                      <p className="text-[11px] text-slate-500 leading-snug">
+                        {printDeliveryCopies === 2 
+                          ? 'Imprime 2 vias: 1ª Via Empresa (Termo de retirada assinado) + 2ª Via Recibo do Cliente.' 
+                          : printDeliveryCopies === 1 
+                            ? 'Imprime 1 via de comprovante de quitação para o cliente.' 
+                            : 'Não emite comprovante impresso automático na baixa.'}
+                      </p>
+                      <div className="flex gap-1.5 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setPrintDeliveryCopies(0)}
+                          className={`flex-1 py-1.5 px-1.5 rounded-lg text-[11px] font-bold border transition-all ${
+                            printDeliveryCopies === 0
+                              ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 border-slate-900'
+                              : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                          }`}
+                        >
+                          Não Imprimir
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPrintDeliveryCopies(1)}
+                          className={`flex-1 py-1.5 px-1.5 rounded-lg text-[11px] font-bold border transition-all ${
+                            printDeliveryCopies === 1
+                              ? 'bg-emerald-600 text-white border-emerald-600'
+                              : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                          }`}
+                        >
+                          1 Via (Recibo)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPrintDeliveryCopies(2)}
+                          className={`flex-1 py-1.5 px-1.5 rounded-lg text-[11px] font-bold border transition-all ${
+                            printDeliveryCopies === 2
+                              ? 'bg-emerald-600 text-white border-emerald-600'
+                              : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                          }`}
+                        >
+                          2 Vias
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Disparos Automáticos Checkboxes */}
+                  <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-2">
+                    <label className="flex items-center gap-2.5 p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-semibold cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800/60">
+                      <input
+                        type="checkbox"
+                        checked={autoPrintOnEntry}
+                        onChange={e => setAutoPrintOnEntry(e.target.checked)}
+                        className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500"
+                      />
+                      <div>
+                        <span className="text-slate-900 dark:text-slate-100">Disparar janela de impressão imediatamente ao gerar nova OS no Balcão</span>
+                        <p className="text-[10px] text-slate-400 font-normal">Abre o diálogo de impressão do navegador assim que a comanda for criada.</p>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center gap-2.5 p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-semibold cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800/60">
+                      <input
+                        type="checkbox"
+                        checked={autoPrintOnDelivery}
+                        onChange={e => setAutoPrintOnDelivery(e.target.checked)}
+                        className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500"
+                      />
+                      <div>
+                        <span className="text-slate-900 dark:text-slate-100">Disparar janela de impressão automaticamente na Finalização & Baixa</span>
+                        <p className="text-[10px] text-slate-400 font-normal">Abre o diálogo de impressão do comprovante ao confirmar o pagamento e entrega.</p>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
+                {/* 3. Elementos & Seções Visíveis no Cupom */}
+                <div className="p-4 bg-slate-50 dark:bg-slate-900/60 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3">
+                  <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                    <CheckSquare className="w-4 h-4 text-emerald-600" />
+                    <span>3. Elementos & Seções Visíveis no Cupom Térmico</span>
+                  </h4>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    <label className="flex items-center gap-2 p-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer">
+                      <input type="checkbox" checked={showPricesOnReceipt} onChange={e => setShowPricesOnReceipt(e.target.checked)} className="rounded text-emerald-600" />
+                      <span>Exibir Discriminação de Valores & Preços</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 p-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer">
+                      <input type="checkbox" checked={showQrCodeOnReceipt} onChange={e => setShowQrCodeOnReceipt(e.target.checked)} className="rounded text-emerald-600" />
+                      <span>Exibir QR Code de Rastreio Online</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 p-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer">
+                      <input type="checkbox" checked={showChecklistOnReceipt} onChange={e => setShowChecklistOnReceipt(e.target.checked)} className="rounded text-emerald-600" />
+                      <span>Exibir Checklist de Conferência do Item</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 p-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer">
+                      <input type="checkbox" checked={showAccessoriesOnReceipt} onChange={e => setShowAccessoriesOnReceipt(e.target.checked)} className="rounded text-emerald-600" />
+                      <span>Exibir Acessórios Informados na Entrada</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 p-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer">
+                      <input type="checkbox" checked={showReportedIssueOnReceipt} onChange={e => setShowReportedIssueOnReceipt(e.target.checked)} className="rounded text-emerald-600" />
+                      <span>Exibir Defeito / Relato do Cliente</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 p-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer">
+                      <input type="checkbox" checked={showTechnicianOnReceipt} onChange={e => setShowTechnicianOnReceipt(e.target.checked)} className="rounded text-emerald-600" />
+                      <span>Exibir Técnico Responsável</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 p-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer">
+                      <input type="checkbox" checked={showCustomerSignatureLine} onChange={e => setShowCustomerSignatureLine(e.target.checked)} className="rounded text-emerald-600" />
+                      <span>Exibir Linha para Assinatura do Cliente</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 p-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer">
+                      <input type="checkbox" checked={showAttendantSignatureLine} onChange={e => setShowAttendantSignatureLine(e.target.checked)} className="rounded text-emerald-600" />
+                      <span>Exibir Linha para Assinatura do Atendente</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 p-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer">
+                      <input type="checkbox" checked={showCompanyCnpj} onChange={e => setShowCompanyCnpj(e.target.checked)} className="rounded text-emerald-600" />
+                      <span>Exibir CNPJ no Cabeçalho</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 p-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer">
+                      <input type="checkbox" checked={showCompanyContact} onChange={e => setShowCompanyContact(e.target.checked)} className="rounded text-emerald-600" />
+                      <span>Exibir Telefone & WhatsApp no Cabeçalho</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 p-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer sm:col-span-2">
+                      <input type="checkbox" checked={showCompanyAddress} onChange={e => setShowCompanyAddress(e.target.checked)} className="rounded text-emerald-600" />
+                      <span>Exibir Endereço Completo no Cabeçalho</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* 4. Textos Personalizados de Cabeçalho & Rodapé */}
+                <div className="p-4 bg-slate-50 dark:bg-slate-900/60 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3">
+                  <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                    <FileText className="w-4 h-4 text-emerald-600" />
+                    <span>4. Textos e Termos Institucionais Personalizados</span>
+                  </h4>
+
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                        Slogan / Mensagem de Cabeçalho
+                      </label>
+                      <Input
+                        value={receiptHeader}
+                        onChange={e => setReceiptHeader(e.target.value)}
+                        placeholder="Ex: Especialistas em Manutenção, Informática e Recargas"
+                        className="text-xs rounded-xl"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                        Termos de Rodapé na Entrada (Garantia Legal & Prazos)
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={receiptFooter}
+                        onChange={e => setReceiptFooter(e.target.value)}
+                        placeholder="Ex: Garantia legal de 90 dias conforme Art. 26 do CDC. Equipamentos não retirados em 90 dias estarão sujeitos a taxa de guarda."
+                        className="w-full text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2.5 resize-none focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                        Termos de Rodapé na Entrega / Baixa (Quitação & Recebimento)
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={receiptDeliveryFooter}
+                        onChange={e => setReceiptDeliveryFooter(e.target.value)}
+                        placeholder="Ex: Declaro que retirei o equipamento testado, conferido e em perfeitas condições de funcionamento."
+                        className="w-full text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2.5 resize-none focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <Button
+                    type="submit"
+                    className="bg-emerald-600 hover:bg-emerald-700 font-bold text-xs text-white gap-2 rounded-xl h-10 px-5 shadow-md shadow-emerald-600/20"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>Salvar Configurações de Impressão</span>
+                  </Button>
+                </div>
+              </form>
+
+              {/* RIGHT COLUMN: Live Interactive Thermal Preview Studio (5 Cols) */}
+              <div className="lg:col-span-5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Eye className="w-4 h-4 text-purple-600" />
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                      Pré-visualização Térmica em Tempo Real
+                    </h4>
+                  </div>
+
+                  {/* Preview Mode Switcher */}
+                  <div className="flex bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg text-[10px]">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewTab('entrada')}
+                      className={`px-2.5 py-1 rounded-md font-bold transition-all ${
+                        previewTab === 'entrada'
+                          ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-xs'
+                          : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-100'
+                      }`}
+                    >
+                      Entrada (OS)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewTab('entrega')}
+                      className={`px-2.5 py-1 rounded-md font-bold transition-all ${
+                        previewTab === 'entrega'
+                          ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-xs'
+                          : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-100'
+                      }`}
+                    >
+                      Entrega (Baixa)
+                    </button>
+                  </div>
+                </div>
+
+                {/* Thermal Preview Paper Container */}
+                <div className="bg-slate-100 dark:bg-slate-950/80 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 max-h-[780px] overflow-y-auto flex flex-col items-center shadow-inner">
+                  {/* Paper Strip */}
+                  <div 
+                    style={{ 
+                      width: printerPaperWidth === '58mm' ? '280px' : '360px',
+                      maxWidth: '100%' 
+                    }}
+                    className={`bg-white text-black p-4 font-mono shadow-2xl border border-slate-300 rounded-sm ${
+                      printerFontSize === 'compact' ? 'text-[9px] leading-tight' : printerFontSize === 'large' ? 'text-[12px] leading-snug' : 'text-[10px] leading-tight'
+                    }`}
+                  >
+                    {/* Render Function for 1 Copy */}
+                    {previewTab === 'entrada' ? (
+                      <>
+                        {/* 1ª VIA (EMPRESA / OFICINA ou ÚNICA) */}
+                        <div className={printerDensity === 'compact' ? 'space-y-1.5' : 'space-y-2.5'}>
+                          <div className="text-center font-bold text-[9px] bg-black text-white py-0.5 px-1 uppercase tracking-widest">
+                            {printEntryCopies === 2 ? '1ª VIA - ESTABELECIMENTO / OFICINA' : 'VIA ÚNICA / CLIENTE'}
+                          </div>
+
+                          {/* Header */}
+                          <div className="text-center border-b border-dashed border-black pb-1.5 space-y-0.5">
+                            <h4 className="font-black text-xs uppercase">{tradeName || 'SUPREME RECARGAS'}</h4>
+                            {receiptHeader && <p className="text-[8.5px] font-bold">{receiptHeader}</p>}
+                            {showCompanyCnpj && cnpj && <p className="text-[8.5px]">CNPJ: {cnpj}</p>}
+                            {showCompanyContact && (companyPhone || companyWhatsapp) && (
+                              <p className="text-[8.5px]">
+                                {companyPhone && `Tel: ${companyPhone}`} {companyWhatsapp && `• Whats: ${companyWhatsapp}`}
+                              </p>
+                            )}
+                            {showCompanyAddress && companyAddress && (
+                              <p className="text-[8px] text-gray-700">{companyAddress} - {companyCity || 'SP'}</p>
+                            )}
+                          </div>
+
+                          {/* Order & Customer Info */}
+                          <div className="border-b border-dashed border-black pb-1.5 space-y-0.5 text-[9px]">
+                            <div className="flex justify-between font-bold">
+                              <span>ORDEM DE SERVIÇO:</span>
+                              <span>#2026-000142</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Data / Hora:</span>
+                              <span>{formatDateTime(new Date().toISOString())}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Atendente:</span>
+                              <span>{currentUser.full_name || 'Balcão'}</span>
+                            </div>
+                            {showTechnicianOnReceipt && (
+                              <div className="flex justify-between">
+                                <span>Técnico Responsável:</span>
+                                <span>Técnico Roberto</span>
+                              </div>
+                            )}
+                            <div className="pt-1 font-bold">
+                              <span>CLIENTE: Advocacia Pinheiro & Ass.</span>
+                            </div>
+                            <div>
+                              <span>Telefone: (11) 98765-4321</span>
+                            </div>
+                          </div>
+
+                          {/* Items List */}
+                          <div className="border-b border-dashed border-black pb-1.5 space-y-1.5">
+                            <div className="font-bold uppercase text-[9px]">ITENS DA COMANDA (2):</div>
+                            <div className="space-y-0.5">
+                              <div className="flex justify-between font-bold">
+                                <span>#1 HP 664 Tricolor XL</span>
+                                {showPricesOnReceipt && <span>R$ 35,00</span>}
+                              </div>
+                              <div className="flex justify-between text-[8.5px] text-gray-700">
+                                <span>Serial / S/N:</span>
+                                <span className="font-bold">HP-664-9921</span>
+                              </div>
+                              {showReportedIssueOnReceipt && (
+                                <div className="text-[8px] text-gray-600 italic">Defeito: Falhando cor magenta</div>
+                              )}
+                              {showChecklistOnReceipt && (
+                                <div className="text-[8px] text-gray-700">Checklist: [X] Circuito OK  [X] Tampa OK</div>
+                              )}
+                            </div>
+
+                            <div className="space-y-0.5 pt-1 border-t border-dotted border-gray-400">
+                              <div className="flex justify-between font-bold">
+                                <span>#2 Notebook Dell Latitude 3470</span>
+                                {showPricesOnReceipt && <span>R$ 180,00</span>}
+                              </div>
+                              <div className="flex justify-between text-[8.5px] text-gray-700">
+                                <span>Serial:</span>
+                                <span className="font-bold">DELL-8831-SP</span>
+                              </div>
+                              {showAccessoriesOnReceipt && (
+                                <div className="text-[8px] text-gray-600">Acessórios: Fonte original + Cabo</div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Values */}
+                          {showPricesOnReceipt && (
+                            <div className="border-b border-dashed border-black pb-1.5 space-y-0.5 text-[9.5px]">
+                              <div className="flex justify-between">
+                                <span>Subtotal:</span>
+                                <span>R$ 215,00</span>
+                              </div>
+                              <div className="flex justify-between text-gray-700">
+                                <span>Desconto:</span>
+                                <span>- R$ 15,00</span>
+                              </div>
+                              <div className="flex justify-between font-black text-[11px] pt-1 border-t border-dotted border-black">
+                                <span>TOTAL:</span>
+                                <span>R$ 200,00</span>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Signatures for Store Copy */}
+                          {showCustomerSignatureLine && (
+                            <div className="pt-2 text-center space-y-1">
+                              <div className="w-4/5 mx-auto border-b border-black"></div>
+                              <p className="text-[8px]">Assinatura do Cliente</p>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* If 2 Vias: Render Cut Line + 2ª Via Cliente */}
+                        {printEntryCopies === 2 && (
+                          <div className="my-4 pt-3 border-t-2 border-dashed border-slate-400 relative text-center">
+                            <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 text-[8px] font-bold uppercase tracking-wider mb-3">
+                              <Scissors className="w-3 h-3" />
+                              <span>DESTACAR AQUI / CORTE DA BOBINA</span>
+                            </div>
+
+                            {/* 2ª VIA - CLIENTE */}
+                            <div className={printerDensity === 'compact' ? 'space-y-1.5 text-left' : 'space-y-2.5 text-left'}>
+                              <div className="text-center font-bold text-[9px] bg-black text-white py-0.5 px-1 uppercase tracking-widest">
+                                2ª VIA - CLIENTE (COMPROVANTE)
+                              </div>
+
+                              {/* Header 2ª Via */}
+                              <div className="text-center border-b border-dashed border-black pb-1.5 space-y-0.5">
+                                <h4 className="font-black text-xs uppercase">{tradeName || 'SUPREME RECARGAS'}</h4>
+                                {receiptHeader && <p className="text-[8.5px] font-bold">{receiptHeader}</p>}
+                                {showCompanyContact && (companyPhone || companyWhatsapp) && (
+                                  <p className="text-[8.5px]">Tel: {companyPhone} • Whats: {companyWhatsapp}</p>
+                                )}
+                              </div>
+
+                              {/* Order & Customer */}
+                              <div className="border-b border-dashed border-black pb-1.5 space-y-0.5 text-[9px]">
+                                <div className="flex justify-between font-bold">
+                                  <span>ORDEM DE SERVIÇO:</span>
+                                  <span>#2026-000142</span>
+                                </div>
+                                <div><span>CLIENTE: Advocacia Pinheiro</span></div>
+                              </div>
+
+                              {/* QR Code Online Tracking */}
+                              {showQrCodeOnReceipt && (
+                                <div className="py-2 text-center border-b border-dashed border-black space-y-1">
+                                  <p className="font-bold text-[8.5px] uppercase">CONSULTE O STATUS PELO CELULAR:</p>
+                                  {previewQrUrl ? (
+                                    <img src={previewQrUrl} alt="QR Code" className="w-20 h-20 mx-auto my-1 border border-black p-0.5" />
+                                  ) : (
+                                    <div className="w-20 h-20 bg-gray-200 mx-auto flex items-center justify-center text-[8px]">QR Code</div>
+                                  )}
+                                  <p className="text-[7.5px] font-mono">Token: TRK-DEMO-2026</p>
+                                </div>
+                              )}
+
+                              {/* Legal Footer Terms */}
+                              <div className="text-center text-[7.5px] text-gray-700 leading-snug pt-1">
+                                {receiptFooter || 'Garantia legal de 90 dias conforme Art. 26 do CDC. Equipamentos não retirados em 90 dias serão considerados abandonados.'}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      /* PREVIEW DA FINALIZAÇÃO / BAIXA / ENTREGA */
+                      <div className={printerDensity === 'compact' ? 'space-y-1.5' : 'space-y-2.5'}>
+                        <div className="text-center font-bold text-[9px] bg-emerald-700 text-white py-0.5 px-1 uppercase tracking-widest">
+                          {printDeliveryCopies === 2 ? '1ª VIA - RECIBO DE QUITAÇÃO (LOJA)' : 'COMPROVANTE DE ENTREGA & QUITAÇÃO'}
+                        </div>
+
+                        <div className="text-center border-b border-dashed border-black pb-1.5 space-y-0.5">
+                          <h4 className="font-black text-xs uppercase">{tradeName || 'SUPREME RECARGAS'}</h4>
+                          <p className="text-[8.5px] font-bold">COMPROVANTE DE SAÍDA E RETIRADA</p>
+                        </div>
+
+                        <div className="border-b border-dashed border-black pb-1.5 space-y-0.5 text-[9px]">
+                          <div className="flex justify-between font-bold">
+                            <span>ORDEM DE SERVIÇO:</span>
+                            <span>#2026-000142</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Data da Retirada:</span>
+                            <span>{formatDateTime(new Date().toISOString())}</span>
+                          </div>
+                          <div><span>Cliente: Advocacia Pinheiro & Ass.</span></div>
+                        </div>
+
+                        {/* Financial Settlement */}
+                        <div className="border-b border-dashed border-black pb-1.5 space-y-0.5 text-[9.5px]">
+                          <div className="flex justify-between">
+                            <span>Valor Total Liquidado:</span>
+                            <span className="font-bold">R$ 200,00</span>
+                          </div>
+                          <div className="flex justify-between text-gray-700">
+                            <span>Forma de Pagamento:</span>
+                            <span className="font-bold">PIX / Dinheiro</span>
+                          </div>
+                          <div className="flex justify-between text-emerald-800 font-bold text-[10px] pt-1">
+                            <span>STATUS:</span>
+                            <span>PAGO & ENTREGUE</span>
+                          </div>
+                        </div>
+
+                        {/* Delivery Statement */}
+                        <div className="text-center text-[8px] text-gray-800 italic leading-snug py-1">
+                          {receiptDeliveryFooter || 'Declaro que retirei o equipamento testado, conferido e em perfeitas condições de funcionamento.'}
+                        </div>
+
+                        {/* Customer Signature */}
+                        <div className="pt-3 text-center space-y-1">
+                          <div className="w-4/5 mx-auto border-b border-black"></div>
+                          <p className="text-[8px]">Assinatura do Recebedor</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] text-slate-500 px-1">
+                  <span>Largura selecionada: <strong>{printerPaperWidth}</strong></span>
+                  <Link href="/impressao">
+                    <span className="text-emerald-600 hover:underline font-bold">Abrir Emissor Completo →</span>
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1388,29 +2080,25 @@ export default function CompanySettingsPage() {
                   <label className="text-xs font-semibold mb-1 block text-slate-700 dark:text-slate-300">E-mail Corporativo *</label>
                   <Input required type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="usuario@supreme.com.br" className="text-xs rounded-xl" />
                 </div>
+
                 <div>
-                  <label className="text-xs font-semibold mb-1 block text-slate-700 dark:text-slate-300">Senha Inicial *</label>
-                  <Input required type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Mínimo 4 dígitos" className="text-xs rounded-xl" />
+                  <label className="text-xs font-semibold mb-1 block text-slate-700 dark:text-slate-300">Telefone / Whats</label>
+                  <Input value={phone} onChange={e => setPhone(e.target.value)} placeholder="(11) 98888-0000" className="text-xs rounded-xl" />
                 </div>
               </div>
 
               <div>
-                <label className="text-xs font-semibold mb-1 block text-slate-700 dark:text-slate-300">Telefone / WhatsApp</label>
-                <Input value={phone} onChange={e => setPhone(e.target.value)} placeholder="(11) 99999-9999" className="text-xs rounded-xl" />
+                <label className="text-xs font-semibold mb-1 block text-slate-700 dark:text-slate-300">Grupo de Permissões Inicial *</label>
+                <Select value={selectedGroupId} onChange={e => setSelectedGroupId(e.target.value)} className="text-xs rounded-xl">
+                  {permissionGroups.map(g => (
+                    <option key={g.id} value={g.id}>{g.name} ({g.default_role})</option>
+                  ))}
+                </Select>
               </div>
 
               <div>
-                <label className="text-xs font-semibold mb-1 block text-slate-700 dark:text-slate-300">Grupo de Permissões *</label>
-                <Select value={selectedGroupId} onChange={e => setSelectedGroupId(e.target.value)} className="text-xs rounded-xl">
-                  {permissionGroups.map(g => (
-                    <option key={g.id} value={g.id}>
-                      {g.name} {g.is_system_default ? '(Padrão)' : '(Customizado)'}
-                    </option>
-                  ))}
-                </Select>
-                <p className="text-[10px] text-slate-400 mt-1">
-                  O usuário herdará todas as permissões de acesso do grupo selecionado.
-                </p>
+                <label className="text-xs font-semibold mb-1 block text-slate-700 dark:text-slate-300">Senha Provisória</label>
+                <Input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="123456" className="text-xs rounded-xl" />
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
@@ -1418,7 +2106,7 @@ export default function CompanySettingsPage() {
                   Cancelar
                 </Button>
                 <Button type="submit" size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs">
-                  Criar Usuário
+                  Cadastrar Usuário
                 </Button>
               </div>
             </form>
@@ -1429,24 +2117,21 @@ export default function CompanySettingsPage() {
       {/* MODAL: CRIAR / EDITAR GRUPO DE PERMISSÕES */}
       {showGroupModal && (
         <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 w-full max-w-xl p-5 sm:p-6 shadow-2xl space-y-4 max-h-[92vh] flex flex-col overflow-hidden">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 w-full max-w-lg p-5 sm:p-6 shadow-2xl space-y-4 max-h-[92vh] flex flex-col overflow-hidden">
             <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800 shrink-0">
-              <div className="flex items-center gap-2">
-                <Shield className="w-5 h-5 text-emerald-600" />
-                <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
-                  {editingGroup ? 'Editar Grupo de Permissões' : 'Criar Novo Grupo de Permissões'}
-                </h3>
-              </div>
+              <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
+                {editingGroup ? `Editar Grupo: ${editingGroup.name}` : 'Criar Novo Grupo de Permissões'}
+              </h3>
               <Button size="sm" variant="ghost" onClick={() => setShowGroupModal(false)} className="h-8 w-8 p-0 text-slate-400">
                 <X className="w-4 h-4" />
               </Button>
             </div>
 
-            <form onSubmit={handleSaveGroup} className="space-y-4 flex-1 overflow-y-auto pr-1">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <form onSubmit={handleSaveGroup} className="space-y-3 flex-1 overflow-y-auto pr-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
                   <label className="text-xs font-semibold mb-1 block text-slate-700 dark:text-slate-300">Nome do Grupo *</label>
-                  <Input required value={groupName} onChange={e => setGroupName(e.target.value)} placeholder="Ex: Técnicos Plenos, Supervisores..." className="text-xs rounded-xl" />
+                  <Input required value={groupName} onChange={e => setGroupName(e.target.value)} placeholder="Ex: Técnicos Nível 2" className="text-xs rounded-xl" />
                 </div>
 
                 <div>
@@ -1492,7 +2177,7 @@ export default function CompanySettingsPage() {
               <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                    Permissões Habilitadas para este Grupo:
+                    Permissões Habilitadas para este Grupo ({AVAILABLE_PERMISSIONS.filter(p => Boolean(groupPermissions[p.key])).length} ativas):
                   </span>
                   <div className="flex gap-2 text-[11px]">
                     <button type="button" onClick={() => handleSelectAllGroupPermissions(true)} className="text-emerald-600 hover:underline font-semibold">Marcar Todas</button>
@@ -1623,43 +2308,50 @@ export default function CompanySettingsPage() {
         </div>
       )}
 
-      {/* MODAL: RESET DE SENHA POR ADMINISTRADOR */}
+      {/* MODAL: RESETAR SENHA DO USUÁRIO */}
       {userToResetPass && (
         <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 w-full max-w-sm p-5 shadow-2xl space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
-              <div className="flex items-center gap-2">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
                 <KeyRound className="w-4 h-4 text-amber-600" />
-                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Redefinir Senha</h3>
-              </div>
+                <span>Redefinir Senha de Acesso</span>
+              </h3>
               <Button size="sm" variant="ghost" onClick={() => setUserToResetPass(null)} className="h-7 w-7 p-0 text-slate-400">
-                <X className="w-3.5 h-3.5" />
+                <X className="w-4 h-4" />
               </Button>
             </div>
 
             <form onSubmit={handleResetPasswordSubmit} className="space-y-3">
               <p className="text-xs text-slate-500">
-                Defina uma nova senha de acesso para <strong>{userToResetPass.full_name}</strong>:
+                Defina uma nova senha para o usuário <strong>{userToResetPass.full_name}</strong> ({userToResetPass.email}):
               </p>
 
-              {resetSuccess ? (
-                <div className="p-3 bg-emerald-50 text-emerald-800 rounded-xl text-xs flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              <div>
+                <label className="text-xs font-semibold mb-1 block text-slate-700 dark:text-slate-300">Nova Senha</label>
+                <Input
+                  type="password"
+                  required
+                  value={adminNewPass}
+                  onChange={e => setAdminNewPass(e.target.value)}
+                  placeholder="Mínimo 4 caracteres"
+                  className="text-xs rounded-xl"
+                />
+              </div>
+
+              {resetSuccess && (
+                <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 rounded-xl text-emerald-800 dark:text-emerald-300 text-xs font-semibold flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4" />
                   <span>Senha redefinida com sucesso!</span>
-                </div>
-              ) : (
-                <div>
-                  <label className="text-xs font-semibold mb-1 block text-slate-700 dark:text-slate-300">Nova Senha *</label>
-                  <Input required type="password" value={adminNewPass} onChange={e => setAdminNewPass(e.target.value)} placeholder="Digite a nova senha" className="text-xs rounded-xl" />
                 </div>
               )}
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+              <div className="flex items-center justify-end gap-2 pt-2">
                 <Button type="button" variant="outline" size="sm" onClick={() => setUserToResetPass(null)} className="rounded-xl text-xs">
                   Cancelar
                 </Button>
-                <Button type="submit" size="sm" disabled={resetSuccess || !adminNewPass} className="bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs">
-                  Atualizar Senha
+                <Button type="submit" size="sm" className="bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs">
+                  Redefinir Senha
                 </Button>
               </div>
             </form>
@@ -1667,5 +2359,13 @@ export default function CompanySettingsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function CompanySettingsPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-xs text-slate-500">Carregando configurações...</div>}>
+      <CompanySettingsContent />
+    </Suspense>
   );
 }

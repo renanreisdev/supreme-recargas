@@ -946,13 +946,37 @@ export const MOCK_COMPANY_SETTINGS: CompanySettings = {
   id: 'sett-001',
   tenant_id: MOCK_COMPANY_SUPREME.id,
   active_templates: ['RECARGA_CARTUCHOS', 'ASSISTENCIA_INFORMATICA', 'ASSISTENCIA_CELULARES'],
-  show_prices_on_receipt: true,
-  receipt_header_note: 'Agradecemos a preferência! Garantia legal de 90 dias.',
-  receipt_footer_note: 'Acompanhe online com o QR Code ao lado.',
   thermal_paper_width_mm: 80,
+  printer_paper_width: '80mm',
+  printer_font_size: 'normal',
+  printer_density: 'normal',
+  print_entry_copies: 2, // Por padrão: 2 vias na entrada (1ª Via Loja/Oficina + 2ª Via Cliente)
+  print_delivery_copies: 1, // Por padrão: 1 via na entrega (Comprovante do Cliente)
+  auto_print_on_entry: true,
+  auto_print_on_delivery: true,
+  show_prices_on_receipt: true,
+  show_qr_code_on_receipt: true,
+  show_checklist_on_receipt: true,
+  show_accessories_on_receipt: true,
+  show_reported_issue_on_receipt: true,
+  show_technician_on_receipt: true,
+  show_customer_signature_line: true,
+  show_attendant_signature_line: false,
+  show_company_cnpj: true,
+  show_company_contact: true,
+  show_company_address: true,
+  receipt_header: 'Especialistas em Cartuchos, Toners, Informática e Manutenção Especializada',
+  receipt_header_note: 'Agradecemos a preferência! Tradição e qualidade no atendimento.',
+  receipt_footer: 'Garantia legal de 90 dias para serviços executados. Equipamentos prontos não retirados em 90 dias estão sujeitos a cobrança de taxa de guarda ou descarte conforme Art. 1.275 do Código Civil.',
+  receipt_footer_note: 'Acompanhe online com o QR Code ao lado.',
+  receipt_delivery_footer: 'Declaro que retirei o equipamento testado, conferido e em perfeitas condições de funcionamento.',
   require_customer_document: false,
   require_item_serial: true,
   require_technician_on_entry: false,
+  sku_mode: 'AUTO_INCREMENT',
+  sku_prefix: 'OS-',
+  sku_start_number: 1,
+  sku_digits: 4,
   item_description_display_mode: 'BASIC',
   technician_group_ids: ['default-tech-group']
 };
@@ -2776,6 +2800,21 @@ export class AppStore {
     }
     if (updates.receipt_footer_note !== undefined && updates.receipt_footer_note !== old.receipt_footer_note) {
       diffs.push(`Mensagem de rodapé do recibo atualizada`);
+    }
+    if (updates.print_entry_copies !== undefined && updates.print_entry_copies !== old.print_entry_copies) {
+      diffs.push(`Vias de impressão na entrada: ${updates.print_entry_copies} via(s)`);
+    }
+    if (updates.print_delivery_copies !== undefined && updates.print_delivery_copies !== old.print_delivery_copies) {
+      diffs.push(`Vias de impressão na entrega: ${updates.print_delivery_copies === 0 ? 'Desativado' : `${updates.print_delivery_copies} via(s)`}`);
+    }
+    if (updates.auto_print_on_entry !== undefined && updates.auto_print_on_entry !== old.auto_print_on_entry) {
+      diffs.push(`Disparo automático na entrada: ${updates.auto_print_on_entry ? 'Ativado' : 'Desativado'}`);
+    }
+    if (updates.auto_print_on_delivery !== undefined && updates.auto_print_on_delivery !== old.auto_print_on_delivery) {
+      diffs.push(`Disparo automático na entrega: ${updates.auto_print_on_delivery ? 'Ativado' : 'Desativado'}`);
+    }
+    if (updates.printer_font_size !== undefined && updates.printer_font_size !== old.printer_font_size) {
+      diffs.push(`Tamanho da fonte de impressão: ${updates.printer_font_size}`);
     }
 
     this.logAudit({
