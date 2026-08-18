@@ -672,5 +672,59 @@ describe('Custom Services, Kanban & Financial Report Suite', () => {
       expect(techGroup?.permissions.edit_other_technician_orders).toBe(false);
     });
   });
+
+  describe('23. Comprehensive Audit Trail & Detailed Field Diffs', () => {
+    it('records detailed audit log when customer phone is updated', () => {
+      // Create a customer
+      const cust = AppStore.addCustomer({
+        tenant_id: tenantId,
+        name: 'Cliente Auditoria Teste',
+        phone: '(11) 98888-7777',
+        email: 'auditoria@teste.com'
+      }, 'Atendente Maria');
+
+      expect(cust.id).toBeDefined();
+
+      // Check creation audit log
+      let logs = AppStore.getAuditLogs(tenantId);
+      const creationLog = logs.find(l => l.resource_id === cust.id && l.action === 'CADASTRO_CLIENTE');
+      expect(creationLog).toBeDefined();
+      expect(creationLog?.user_name).toBe('Atendente Maria');
+      expect(creationLog?.details).toContain('Cliente Auditoria Teste');
+      expect(creationLog?.details).toContain('(11) 98888-7777');
+
+      // Update phone number
+      AppStore.updateCustomer(cust.id, {
+        phone: '(11) 99999-0000'
+      }, 'Operador Carlos');
+
+      logs = AppStore.getAuditLogs(tenantId);
+      const updateLog = logs.find(l => l.resource_id === cust.id && l.action === 'ALTERACAO_CLIENTE');
+      expect(updateLog).toBeDefined();
+      expect(updateLog?.user_name).toBe('Operador Carlos');
+      expect(updateLog?.details).toContain('Telefone de "(11) 98888-7777" para "(11) 99999-0000"');
+    });
+
+    it('records detailed audit log when model or service is updated', () => {
+      const srv = AppStore.addService({
+        tenant_id: tenantId,
+        name: 'Troca de Sensor Óptico',
+        code: 'SRV_OPTICO',
+        default_price: 150.00,
+        is_active: true
+      }, 'Admin João');
+
+      // Update service price
+      AppStore.updateService(srv.id, {
+        default_price: 180.00
+      }, 'Gerente Ana');
+
+      const logs = AppStore.getAuditLogs(tenantId);
+      const srvLog = logs.find(l => l.resource_id === srv.id && l.action === 'ALTERACAO_SERVICO');
+      expect(srvLog).toBeDefined();
+      expect(srvLog?.user_name).toBe('Gerente Ana');
+      expect(srvLog?.details).toContain('Preço padrão de R$ 150.00 para R$ 180.00');
+    });
+  });
 });
 

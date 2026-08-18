@@ -1137,10 +1137,35 @@ export class AppStore {
     const data = this.getStoreData();
     const idx = data.companies.findIndex((c: Company) => c.id === id);
     if (idx === -1) throw new Error('Empresa não encontrada');
-    const updated = { ...data.companies[idx], ...updates, updated_at: new Date().toISOString() };
+    const old = data.companies[idx];
+    const updated = { ...old, ...updates, updated_at: new Date().toISOString() };
     data.companies[idx] = updated;
     this.saveStoreData(data);
     supabase.from('companies').update(updates).eq('id', id).then();
+
+    const diffs: string[] = [];
+    if (updates.trade_name !== undefined && updates.trade_name !== old.trade_name) diffs.push(`Nome Fantasia de "${old.trade_name}" para "${updates.trade_name}"`);
+    if (updates.corporate_name !== undefined && updates.corporate_name !== old.corporate_name) diffs.push(`Razão Social de "${old.corporate_name || '(vazio)'}" para "${updates.corporate_name || '(vazio)'}"`);
+    if (updates.cnpj !== undefined && updates.cnpj !== old.cnpj) diffs.push(`CNPJ de "${old.cnpj || '(vazio)'}" para "${updates.cnpj || '(vazio)'}"`);
+    if (updates.phone !== undefined && updates.phone !== old.phone) diffs.push(`Telefone de "${old.phone || '(vazio)'}" para "${updates.phone || '(vazio)'}"`);
+    if (updates.whatsapp !== undefined && updates.whatsapp !== old.whatsapp) diffs.push(`WhatsApp de "${old.whatsapp || '(vazio)'}" para "${updates.whatsapp || '(vazio)'}"`);
+    if (updates.email !== undefined && updates.email !== old.email) diffs.push(`E-mail de "${old.email || '(vazio)'}" para "${updates.email || '(vazio)'}"`);
+    if (updates.address !== undefined && updates.address !== old.address) diffs.push(`Endereço de "${old.address || '(vazio)'}" para "${updates.address || '(vazio)'}"`);
+    if (updates.city !== undefined && updates.city !== old.city) diffs.push(`Cidade de "${old.city || '(vazio)'}" para "${updates.city || '(vazio)'}"`);
+    if (updates.state !== undefined && updates.state !== old.state) diffs.push(`UF de "${old.state || '(vazio)'}" para "${updates.state || '(vazio)'}"`);
+    if (updates.responsible_name !== undefined && updates.responsible_name !== old.responsible_name) diffs.push(`Responsável de "${old.responsible_name || '(vazio)'}" para "${updates.responsible_name || '(vazio)'}"`);
+
+    this.logAudit({
+      tenant_id: id,
+      user_name: performedByName || 'Administrador',
+      action: 'ALTERACAO_EMPRESA',
+      resource: 'companies',
+      resource_id: id,
+      details: diffs.length > 0
+        ? `Alterados dados cadastrais da empresa "${old.trade_name}": ${diffs.join('; ')}`
+        : `Atualizado cadastro da empresa "${old.trade_name}"`
+    });
+
     return updated;
   }
 
@@ -1148,17 +1173,41 @@ export class AppStore {
     const data = this.getStoreData();
     const comp = data.companies.find((c: Company) => c.id === companyId);
     if (!comp) throw new Error('Empresa não encontrada');
+    const oldSegment = comp.business_segment || comp.active_template_keys?.[0] || 'RECARGA_CARTUCHOS';
     comp.active_template_keys = [segment];
     comp.business_segment = segment;
     this.saveStoreData(data);
+
+    this.logAudit({
+      tenant_id: companyId,
+      user_name: performedByName || 'Administrador',
+      action: 'ALTERACAO_SEGMENTO',
+      resource: 'companies',
+      resource_id: companyId,
+      details: `Segmento de atuação alterado de "${oldSegment}" para "${segment}"`
+    });
+
     return comp;
   }
 
   static deleteCompany(id: string, performedByName?: string): boolean {
     const data = this.getStoreData();
+    const old = (data.companies || []).find((c: Company) => c.id === id);
     data.companies = (data.companies || []).filter((c: Company) => c.id !== id);
     this.saveStoreData(data);
     supabase.from('companies').delete().eq('id', id).then();
+
+    if (old) {
+      this.logAudit({
+        tenant_id: id,
+        user_name: performedByName || 'Super Administrador',
+        action: 'EXCLUSAO_EMPRESA',
+        resource: 'companies',
+        resource_id: id,
+        details: `Excluída empresa "${old.trade_name}" (CNPJ: ${old.cnpj || 'N/A'})`
+      });
+    }
+
     return true;
   }
 
@@ -1175,6 +1224,15 @@ export class AppStore {
     const newPlan: Plan = { ...plan, id: generateUUID(), created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
     data.plans.push(newPlan);
     this.saveStoreData(data);
+
+    this.logAudit({
+      user_name: performedByName || 'Super Administrador',
+      action: 'CADASTRO_PLANO',
+      resource: 'plans',
+      resource_id: newPlan.id,
+      details: `Criado novo plano "${newPlan.name}" (R$ ${newPlan.monthly_price}/mês, ${newPlan.max_users} usuários base)`
+    });
+
     return newPlan;
   }
 
@@ -1182,16 +1240,38 @@ export class AppStore {
     const data = this.getStoreData();
     const idx = data.plans.findIndex((p: Plan) => p.id === id);
     if (idx === -1) throw new Error('Plano não encontrado');
-    const updated = { ...data.plans[idx], ...updates, updated_at: new Date().toISOString() };
+    const old = data.plans[idx];
+    const updated = { ...old, ...updates, updated_at: new Date().toISOString() };
     data.plans[idx] = updated;
     this.saveStoreData(data);
+
+    this.logAudit({
+      user_name: performedByName || 'Super Administrador',
+      action: 'ALTERACAO_PLANO',
+      resource: 'plans',
+      resource_id: id,
+      details: `Atualizado plano "${old.name}" (Preço: R$ ${updated.price_monthly}, Limite: ${updated.max_users} usuários)`
+    });
+
     return updated;
   }
 
   static deletePlan(id: string, performedByName?: string): boolean {
     const data = this.getStoreData();
+    const old = data.plans.find((p: Plan) => p.id === id);
     data.plans = data.plans.filter((p: Plan) => p.id !== id);
     this.saveStoreData(data);
+
+    if (old) {
+      this.logAudit({
+        user_name: performedByName || 'Super Administrador',
+        action: 'EXCLUSAO_PLANO',
+        resource: 'plans',
+        resource_id: id,
+        details: `Excluído plano "${old.name}"`
+      });
+    }
+
     return true;
   }
 
@@ -1326,6 +1406,16 @@ export class AppStore {
     const newGroup: PermissionGroup = { ...group, id: generateUUID(), is_system_default: false, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
     data.permissionGroups.push(newGroup);
     this.saveStoreData(data);
+
+    this.logAudit({
+      tenant_id: newGroup.tenant_id,
+      user_name: performedByName || 'Administrador',
+      action: 'CRIACAO_GRUPO_PERMISSOES',
+      resource: 'permission_groups',
+      resource_id: newGroup.id,
+      details: `Criado grupo de permissões "${newGroup.name}" (Perfil base: ${newGroup.default_role}, Limite Desconto: ${newGroup.default_max_discount_percent}%)`
+    });
+
     return newGroup;
   }
 
@@ -1333,9 +1423,34 @@ export class AppStore {
     const data = this.getStoreData();
     const idx = data.permissionGroups.findIndex((g: PermissionGroup) => g.id === id);
     if (idx === -1) throw new Error('Grupo não encontrado');
-    const updated = { ...data.permissionGroups[idx], ...updates, updated_at: new Date().toISOString() };
+    const old = data.permissionGroups[idx];
+    const updated = { ...old, ...updates, updated_at: new Date().toISOString() };
     data.permissionGroups[idx] = updated;
     this.saveStoreData(data);
+
+    const diffs: string[] = [];
+    if (updates.name !== undefined && updates.name !== old.name) diffs.push(`Nome de "${old.name}" para "${updates.name}"`);
+    if (updates.description !== undefined && updates.description !== old.description) diffs.push(`Descrição de "${old.description}" para "${updates.description}"`);
+    if (updates.default_role !== undefined && updates.default_role !== old.default_role) diffs.push(`Função base de "${old.default_role}" para "${updates.default_role}"`);
+    if (updates.default_max_discount_percent !== undefined && updates.default_max_discount_percent !== old.default_max_discount_percent) {
+      diffs.push(`Limite de desconto de ${old.default_max_discount_percent}% para ${updates.default_max_discount_percent}%`);
+    }
+    if (updates.permissions) {
+      const activeCount = Object.values(updates.permissions).filter(Boolean).length;
+      diffs.push(`Permissões atualizadas (${activeCount} ativas)`);
+    }
+
+    this.logAudit({
+      tenant_id: old.tenant_id,
+      user_name: performedByName || 'Administrador',
+      action: 'ALTERACAO_GRUPO_PERMISSOES',
+      resource: 'permission_groups',
+      resource_id: id,
+      details: diffs.length > 0
+        ? `Atualizado grupo de permissões "${old.name}": ${diffs.join('; ')}`
+        : `Atualizado grupo de permissões "${old.name}"`
+    });
+
     return updated;
   }
 
@@ -1345,6 +1460,18 @@ export class AppStore {
     if (group?.is_system_default) throw new Error('Grupos padrão do sistema não podem ser excluídos.');
     data.permissionGroups = data.permissionGroups.filter((g: PermissionGroup) => g.id !== id);
     this.saveStoreData(data);
+
+    if (group) {
+      this.logAudit({
+        tenant_id: group.tenant_id,
+        user_name: performedByName || 'Administrador',
+        action: 'EXCLUSAO_GRUPO_PERMISSOES',
+        resource: 'permission_groups',
+        resource_id: id,
+        details: `Excluído grupo de permissões "${group.name}"`
+      });
+    }
+
     return true;
   }
 
@@ -1358,6 +1485,16 @@ export class AppStore {
     data.profiles.push(newUser);
     this.saveStoreData(data);
     supabase.from('profiles').insert(newUser).then();
+
+    this.logAudit({
+      tenant_id: newUser.tenant_id,
+      user_name: performedByName || 'Administrador',
+      action: 'CADASTRO_USUARIO',
+      resource: 'profiles',
+      resource_id: newUser.id,
+      details: `Cadastrado novo usuário "${newUser.full_name}" (Função: ${newUser.role}, Grupo: ${newUser.group_name || 'Nenhum'}, E-mail: ${newUser.email}${newUser.phone ? `, Tel: ${newUser.phone}` : ''})`
+    });
+
     return newUser;
   }
 
@@ -1365,22 +1502,101 @@ export class AppStore {
     const data = this.getStoreData();
     const idx = data.profiles.findIndex((p: Profile) => p.id === id);
     if (idx === -1) throw new Error('Usuário não encontrado');
-    const updated = { ...data.profiles[idx], ...updates };
+    const old = data.profiles[idx];
+    const updated = { ...old, ...updates };
     data.profiles[idx] = updated;
     this.saveStoreData(data);
     supabase.from('profiles').update(updates).eq('id', id).then();
+
+    const diffs: string[] = [];
+    if (updates.full_name !== undefined && updates.full_name !== old.full_name) diffs.push(`Nome de "${old.full_name}" para "${updates.full_name}"`);
+    if (updates.email !== undefined && updates.email !== old.email) diffs.push(`E-mail de "${old.email}" para "${updates.email}"`);
+    if (updates.phone !== undefined && updates.phone !== old.phone) diffs.push(`Telefone de "${old.phone || '(vazio)'}" para "${updates.phone || '(vazio)'}"`);
+    if (updates.role !== undefined && updates.role !== old.role) diffs.push(`Função de "${old.role}" para "${updates.role}"`);
+    if (updates.group_name !== undefined && updates.group_name !== old.group_name) diffs.push(`Grupo de "${old.group_name || 'Nenhum'}" para "${updates.group_name}"`);
+    if (updates.is_active !== undefined && updates.is_active !== old.is_active) diffs.push(updates.is_active ? `Status ativado` : `Status desativado (Inativo)`);
+    if (updates.max_discount_percent !== undefined && updates.max_discount_percent !== old.max_discount_percent) {
+      diffs.push(`Limite de desconto de ${old.max_discount_percent ?? 10}% para ${updates.max_discount_percent}%`);
+    }
+
+    this.logAudit({
+      tenant_id: old.tenant_id,
+      user_name: performedByName || 'Administrador',
+      action: 'ALTERACAO_USUARIO',
+      resource: 'profiles',
+      resource_id: id,
+      details: diffs.length > 0
+        ? `Alterado usuário "${old.full_name}": ${diffs.join('; ')}`
+        : `Atualizado cadastro do usuário "${old.full_name}"`
+    });
+
     return updated;
+  }
+
+  static deleteUser(id: string, performedByName?: string): boolean {
+    const data = this.getStoreData();
+    const old = (data.profiles || []).find((p: Profile) => p.id === id);
+    data.profiles = (data.profiles || []).filter((p: Profile) => p.id !== id);
+    this.saveStoreData(data);
+    supabase.from('profiles').delete().eq('id', id).then();
+
+    if (old) {
+      this.logAudit({
+        tenant_id: old.tenant_id,
+        user_name: performedByName || 'Administrador',
+        action: 'EXCLUSAO_USUARIO',
+        resource: 'profiles',
+        resource_id: id,
+        details: `Excluído usuário "${old.full_name}" (${old.email}, Função: ${old.role})`
+      });
+    }
+
+    return true;
+  }
+
+  static changeUserPassword(id: string, newPass: string, performedByName?: string): Profile {
+    const data = this.getStoreData();
+    const idx = data.profiles.findIndex((p: Profile) => p.id === id);
+    if (idx === -1) throw new Error('Usuário não encontrado');
+    const user = data.profiles[idx];
+    user.password = newPass;
+    this.saveStoreData(data);
+    supabase.from('profiles').update({ password: newPass }).eq('id', id).then();
+
+    this.logAudit({
+      tenant_id: user.tenant_id,
+      user_name: performedByName || 'Administrador',
+      action: 'ALTERACAO_SENHA',
+      resource: 'profiles',
+      resource_id: id,
+      details: `Redefinida a senha de acesso do usuário "${user.full_name}" (${user.email})`
+    });
+
+    return user;
   }
 
   static updateUserPermissions(id: string, permissions: Record<string, boolean>, performedByName?: string, maxDiscountPercent?: number): Profile {
     const data = this.getStoreData();
     const idx = data.profiles.findIndex((p: Profile) => p.id === id);
     if (idx === -1) throw new Error('Usuário não encontrado');
+    const oldUser = data.profiles[idx];
+    const newPermCount = Object.values(permissions || {}).filter(Boolean).length;
+
     data.profiles[idx].custom_permissions = permissions;
     if (maxDiscountPercent !== undefined) {
       data.profiles[idx].max_discount_percent = maxDiscountPercent;
     }
     this.saveStoreData(data);
+
+    this.logAudit({
+      tenant_id: oldUser.tenant_id,
+      user_name: performedByName || 'Administrador',
+      action: 'PERMISSOES_USUARIO',
+      resource: 'profiles',
+      resource_id: id,
+      details: `Atualizadas permissões personalizadas do usuário "${oldUser.full_name}" (${newPermCount} permissões concedidas${maxDiscountPercent !== undefined ? `, Limite Desconto: ${maxDiscountPercent}%` : ''})`
+    });
+
     return data.profiles[idx];
   }
 
@@ -1423,6 +1639,16 @@ export class AppStore {
     data.customers.push(newCustomer);
     this.saveStoreData(data);
     supabase.from('customers').insert(newCustomer).then();
+
+    this.logAudit({
+      tenant_id: newCustomer.tenant_id,
+      user_name: performedByName || 'Atendente',
+      action: 'CADASTRO_CLIENTE',
+      resource: 'customers',
+      resource_id: newCustomer.id,
+      details: `Cadastrado cliente "${newCustomer.name}" (Cód: ${newCustomer.internal_code}, Tel: ${newCustomer.phone}${newCustomer.document ? `, Doc: ${newCustomer.document}` : ''}${newCustomer.email ? `, E-mail: ${newCustomer.email}` : ''}${newCustomer.company_name ? `, Razão: ${newCustomer.company_name}` : ''})`
+    });
+
     return newCustomer;
   }
 
@@ -1430,18 +1656,54 @@ export class AppStore {
     const data = this.getStoreData();
     const idx = data.customers.findIndex((c: Customer) => c.id === id);
     if (idx === -1) throw new Error('Cliente não encontrado');
-    const updated = { ...data.customers[idx], ...updates, updated_at: new Date().toISOString() };
+    const old = data.customers[idx];
+    const updated = { ...old, ...updates, updated_at: new Date().toISOString() };
     data.customers[idx] = updated;
     this.saveStoreData(data);
     supabase.from('customers').update(updates).eq('id', id).then();
+
+    const diffs: string[] = [];
+    if (updates.name !== undefined && updates.name !== old.name) diffs.push(`Nome de "${old.name}" para "${updates.name}"`);
+    if (updates.phone !== undefined && updates.phone !== old.phone) diffs.push(`Telefone de "${old.phone || '(vazio)'}" para "${updates.phone}"`);
+    if (updates.secondary_phone !== undefined && updates.secondary_phone !== old.secondary_phone) diffs.push(`Tel. Secundário de "${old.secondary_phone || '(vazio)'}" para "${updates.secondary_phone || '(vazio)'}"`);
+    if (updates.whatsapp !== undefined && updates.whatsapp !== old.whatsapp) diffs.push(`WhatsApp de "${old.whatsapp || '(vazio)'}" para "${updates.whatsapp || '(vazio)'}"`);
+    if (updates.document !== undefined && updates.document !== old.document) diffs.push(`Documento/CPF/CNPJ de "${old.document || '(vazio)'}" para "${updates.document || '(vazio)'}"`);
+    if (updates.email !== undefined && updates.email !== old.email) diffs.push(`E-mail de "${old.email || '(vazio)'}" para "${updates.email || '(vazio)'}"`);
+    if (updates.company_name !== undefined && updates.company_name !== old.company_name) diffs.push(`Razão Social/Empresa de "${old.company_name || '(vazio)'}" para "${updates.company_name || '(vazio)'}"`);
+    if (updates.notes !== undefined && updates.notes !== old.notes) diffs.push(`Observações atualizadas`);
+
+    this.logAudit({
+      tenant_id: old.tenant_id,
+      user_name: performedByName || 'Atendente',
+      action: 'ALTERACAO_CLIENTE',
+      resource: 'customers',
+      resource_id: id,
+      details: diffs.length > 0
+        ? `Alterado cliente "${old.name}" (Cód: ${old.internal_code}): ${diffs.join('; ')}`
+        : `Atualizado cadastro do cliente "${old.name}"`
+    });
+
     return updated;
   }
 
   static deleteCustomer(id: string, performedByName?: string): boolean {
     const data = this.getStoreData();
+    const old = (data.customers || []).find((c: Customer) => c.id === id);
     data.customers = (data.customers || []).filter((c: Customer) => c.id !== id);
     this.saveStoreData(data);
     supabase.from('customers').delete().eq('id', id).then();
+
+    if (old) {
+      this.logAudit({
+        tenant_id: old.tenant_id,
+        user_name: performedByName || 'Administrador',
+        action: 'EXCLUSAO_CLIENTE',
+        resource: 'customers',
+        resource_id: id,
+        details: `Excluído cliente "${old.name}" (Cód: ${old.internal_code}, Tel: ${old.phone || 'N/A'})`
+      });
+    }
+
     return true;
   }
 
@@ -1467,6 +1729,16 @@ export class AppStore {
     if (!Array.isArray(data.categories)) data.categories = [...INITIAL_CATEGORIES];
     data.categories.push(newCategory);
     this.saveStoreData(data);
+
+    this.logAudit({
+      tenant_id: newCategory.tenant_id,
+      user_name: performedByName || 'Administrador',
+      action: 'CADASTRO_CATEGORIA',
+      resource: 'categories',
+      resource_id: newCategory.id,
+      details: `Cadastrada categoria de equipamento "${newCategory.name}" (Tipo de inspeção: ${newCategory.inspection_type})`
+    });
+
     return newCategory;
   }
 
@@ -1475,17 +1747,50 @@ export class AppStore {
     if (!Array.isArray(data.categories)) data.categories = [...INITIAL_CATEGORIES];
     const idx = data.categories.findIndex((c: ItemCategory) => c.id === id);
     if (idx === -1) throw new Error('Categoria não encontrada');
-    const updated = { ...data.categories[idx], ...updates, updated_at: new Date().toISOString() };
+    const old = data.categories[idx];
+    const updated = { ...old, ...updates, updated_at: new Date().toISOString() };
     data.categories[idx] = updated;
     this.saveStoreData(data);
+
+    const diffs: string[] = [];
+    if (updates.name !== undefined && updates.name !== old.name) diffs.push(`Nome de "${old.name}" para "${updates.name}"`);
+    if (updates.inspection_type !== undefined && updates.inspection_type !== old.inspection_type) diffs.push(`Tipo de inspeção de "${old.inspection_type}" para "${updates.inspection_type}"`);
+    if (updates.identifier_label !== undefined && updates.identifier_label !== old.identifier_label) diffs.push(`Rótulo do identificador de "${old.identifier_label}" para "${updates.identifier_label}"`);
+    if (updates.technical_verdicts) diffs.push(`Pareceres técnicos atualizados (${updates.technical_verdicts.length} opções)`);
+    if (updates.custom_fields) diffs.push(`Campos personalizados atualizados (${updates.custom_fields.length} campos)`);
+
+    this.logAudit({
+      tenant_id: old.tenant_id,
+      user_name: performedByName || 'Administrador',
+      action: 'ALTERACAO_CATEGORIA',
+      resource: 'categories',
+      resource_id: id,
+      details: diffs.length > 0
+        ? `Alterada categoria "${old.name}": ${diffs.join('; ')}`
+        : `Atualizada categoria "${old.name}"`
+    });
+
     return updated;
   }
 
   static deleteCategory(id: string, performedByName?: string): boolean {
     const data = this.getStoreData();
     if (!Array.isArray(data.categories)) data.categories = [...INITIAL_CATEGORIES];
+    const old = data.categories.find((c: ItemCategory) => c.id === id);
     data.categories = data.categories.filter((c: ItemCategory) => c.id !== id);
     this.saveStoreData(data);
+
+    if (old) {
+      this.logAudit({
+        tenant_id: old.tenant_id,
+        user_name: performedByName || 'Administrador',
+        action: 'EXCLUSAO_CATEGORIA',
+        resource: 'categories',
+        resource_id: id,
+        details: `Excluída categoria de equipamento "${old.name}"`
+      });
+    }
+
     return true;
   }
 
@@ -1508,6 +1813,16 @@ export class AppStore {
     if (!Array.isArray(data.brands)) data.brands = [...INITIAL_BRANDS];
     data.brands.push(newBrand);
     this.saveStoreData(data);
+
+    this.logAudit({
+      tenant_id: newBrand.tenant_id,
+      user_name: performedByName || 'Administrador',
+      action: 'CADASTRO_MARCA',
+      resource: 'brands',
+      resource_id: newBrand.id,
+      details: `Cadastrada marca "${newBrand.name}"`
+    });
+
     return newBrand;
   }
 
@@ -1516,17 +1831,41 @@ export class AppStore {
     if (!Array.isArray(data.brands)) data.brands = [...INITIAL_BRANDS];
     const idx = data.brands.findIndex((b: Brand) => b.id === id);
     if (idx === -1) throw new Error('Marca não encontrada');
-    const updated = { ...data.brands[idx], ...updates, updated_at: new Date().toISOString() };
+    const old = data.brands[idx];
+    const updated = { ...old, ...updates, updated_at: new Date().toISOString() };
     data.brands[idx] = updated;
     this.saveStoreData(data);
+
+    this.logAudit({
+      tenant_id: old.tenant_id,
+      user_name: performedByName || 'Administrador',
+      action: 'ALTERACAO_MARCA',
+      resource: 'brands',
+      resource_id: id,
+      details: `Alterada marca "${old.name}" para "${updated.name}"`
+    });
+
     return updated;
   }
 
   static deleteBrand(id: string, performedByName?: string): boolean {
     const data = this.getStoreData();
     if (!Array.isArray(data.brands)) data.brands = [...INITIAL_BRANDS];
+    const old = data.brands.find((b: Brand) => b.id === id);
     data.brands = data.brands.filter((b: Brand) => b.id !== id);
     this.saveStoreData(data);
+
+    if (old) {
+      this.logAudit({
+        tenant_id: old.tenant_id,
+        user_name: performedByName || 'Administrador',
+        action: 'EXCLUSAO_MARCA',
+        resource: 'brands',
+        resource_id: id,
+        details: `Excluída marca "${old.name}"`
+      });
+    }
+
     return true;
   }
 
@@ -1599,6 +1938,17 @@ export class AppStore {
     if (!Array.isArray(data.models)) data.models = [];
     data.models.push(newModel);
     this.saveStoreData(data);
+
+    const cat = (data.categories || INITIAL_CATEGORIES).find((c: ItemCategory) => c.id === model.category_id);
+    this.logAudit({
+      tenant_id: newModel.tenant_id,
+      user_name: performedByName || 'Administrador',
+      action: 'CADASTRO_MODELO',
+      resource: 'models',
+      resource_id: newModel.id,
+      details: `Cadastrado modelo "${newModel.name}" (Cód: ${newModel.internal_code || 'N/A'}, Categoria: ${cat?.name || 'Geral'}${newModel.brand_name ? `, Marca: ${newModel.brand_name}` : ''})`
+    });
+
     return newModel;
   }
 
@@ -1606,16 +1956,53 @@ export class AppStore {
     const data = this.getStoreData();
     const idx = data.models.findIndex((m: ItemModel) => m.id === id);
     if (idx === -1) throw new Error('Modelo não encontrado');
-    const updated = { ...data.models[idx], ...updates, updated_at: new Date().toISOString() };
+    const old = data.models[idx];
+    const updated = { ...old, ...updates, updated_at: new Date().toISOString() };
     data.models[idx] = updated;
     this.saveStoreData(data);
+
+    const diffs: string[] = [];
+    if (updates.name !== undefined && updates.name !== old.name) diffs.push(`Nome de "${old.name}" para "${updates.name}"`);
+    if (updates.internal_code !== undefined && updates.internal_code !== old.internal_code) diffs.push(`Código de "${old.internal_code || '(vazio)'}" para "${updates.internal_code || '(vazio)'}"`);
+    if (updates.brand_name !== undefined && updates.brand_name !== old.brand_name) diffs.push(`Marca de "${old.brand_name || '(vazio)'}" para "${updates.brand_name || '(vazio)'}"`);
+    if (updates.description !== undefined && updates.description !== old.description) diffs.push(`Descrição atualizada`);
+    if (updates.empty_weight_grams !== undefined && updates.empty_weight_grams !== old.empty_weight_grams) diffs.push(`Peso vazio de ${old.empty_weight_grams ?? '--'}g para ${updates.empty_weight_grams}g`);
+    if (updates.full_weight_grams !== undefined && updates.full_weight_grams !== old.full_weight_grams) diffs.push(`Peso cheio de ${old.full_weight_grams ?? '--'}g para ${updates.full_weight_grams}g`);
+    if (updates.service_prices) {
+      diffs.push(`Tabela de preços de serviços atualizada (${Object.keys(updates.service_prices).length} preços vinculados)`);
+    }
+
+    this.logAudit({
+      tenant_id: old.tenant_id,
+      user_name: performedByName || 'Administrador',
+      action: 'ALTERACAO_MODELO',
+      resource: 'models',
+      resource_id: id,
+      details: diffs.length > 0
+        ? `Alterado modelo "${old.name}": ${diffs.join('; ')}`
+        : `Atualizado modelo "${old.name}"`
+    });
+
     return updated;
   }
 
   static deleteModel(id: string, performedByName?: string): boolean {
     const data = this.getStoreData();
+    const old = (data.models || []).find((m: ItemModel) => m.id === id);
     data.models = data.models.filter((m: ItemModel) => m.id !== id);
     this.saveStoreData(data);
+
+    if (old) {
+      this.logAudit({
+        tenant_id: old.tenant_id,
+        user_name: performedByName || 'Administrador',
+        action: 'EXCLUSAO_MODELO',
+        resource: 'models',
+        resource_id: id,
+        details: `Excluído modelo "${old.name}" (Cód: ${old.internal_code || 'N/A'})`
+      });
+    }
+
     return true;
   }
 
@@ -1630,6 +2017,16 @@ export class AppStore {
     if (!Array.isArray(data.services)) data.services = [];
     data.services.push(newService);
     this.saveStoreData(data);
+
+    this.logAudit({
+      tenant_id: newService.tenant_id,
+      user_name: performedByName || 'Administrador',
+      action: 'CADASTRO_SERVICO',
+      resource: 'services',
+      resource_id: newService.id,
+      details: `Cadastrado serviço "${newService.name}" (Valor padrão: R$ ${(newService.default_price || 0).toFixed(2)}, Código: ${newService.code})`
+    });
+
     return newService;
   }
 
@@ -1637,16 +2034,52 @@ export class AppStore {
     const data = this.getStoreData();
     const idx = data.services.findIndex((s: Service) => s.id === id);
     if (idx === -1) throw new Error('Serviço não encontrado');
-    const updated = { ...data.services[idx], ...updates, updated_at: new Date().toISOString() };
+    const old = data.services[idx];
+    const updated = { ...old, ...updates, updated_at: new Date().toISOString() };
     data.services[idx] = updated;
     this.saveStoreData(data);
+
+    const diffs: string[] = [];
+    if (updates.name !== undefined && updates.name !== old.name) diffs.push(`Nome de "${old.name}" para "${updates.name}"`);
+    if (updates.code !== undefined && updates.code !== old.code) diffs.push(`Código de "${old.code}" para "${updates.code}"`);
+    if (updates.default_price !== undefined && updates.default_price !== old.default_price) {
+      diffs.push(`Preço padrão de R$ ${Number(old.default_price || 0).toFixed(2)} para R$ ${Number(updates.default_price || 0).toFixed(2)}`);
+    }
+    if (updates.estimated_time_minutes !== undefined && updates.estimated_time_minutes !== old.estimated_time_minutes) {
+      diffs.push(`Tempo estimado de ${old.estimated_time_minutes || 0}min para ${updates.estimated_time_minutes}min`);
+    }
+
+    this.logAudit({
+      tenant_id: old.tenant_id,
+      user_name: performedByName || 'Administrador',
+      action: 'ALTERACAO_SERVICO',
+      resource: 'services',
+      resource_id: id,
+      details: diffs.length > 0
+        ? `Alterado serviço "${old.name}": ${diffs.join('; ')}`
+        : `Atualizado serviço "${old.name}"`
+    });
+
     return updated;
   }
 
   static deleteService(id: string, performedByName?: string): boolean {
     const data = this.getStoreData();
+    const old = (data.services || []).find((s: Service) => s.id === id);
     data.services = data.services.filter((s: Service) => s.id !== id);
     this.saveStoreData(data);
+
+    if (old) {
+      this.logAudit({
+        tenant_id: old.tenant_id,
+        user_name: performedByName || 'Administrador',
+        action: 'EXCLUSAO_SERVICO',
+        resource: 'services',
+        resource_id: id,
+        details: `Excluído serviço "${old.name}" (Preço padrão: R$ ${(old.default_price || 0).toFixed(2)})`
+      });
+    }
+
     return true;
   }
 
@@ -1673,6 +2106,16 @@ export class AppStore {
     };
     data.workflowStates.push(newState);
     this.saveStoreData(data);
+
+    this.logAudit({
+      tenant_id: tenantId,
+      user_name: performedByName || 'Administrador',
+      action: 'CRIACAO_ETAPA_KANBAN',
+      resource: 'workflow_states',
+      resource_id: newState.id,
+      details: `Criada nova etapa no Kanban "${newState.name}" (Código: ${newState.code}, Tipo: ${newState.stage_type})`
+    });
+
     return newState;
   }
 
@@ -1681,17 +2124,49 @@ export class AppStore {
     if (!Array.isArray(data.workflowStates)) data.workflowStates = [...INITIAL_WORKFLOW_STATES];
     const idx = data.workflowStates.findIndex((st: WorkflowState) => st.id === id);
     if (idx === -1) throw new Error('Situação / Etapa não encontrada');
-    const updated = { ...data.workflowStates[idx], ...updates };
+    const old = data.workflowStates[idx];
+    const updated = { ...old, ...updates };
     data.workflowStates[idx] = updated;
     this.saveStoreData(data);
+
+    const diffs: string[] = [];
+    if (updates.name !== undefined && updates.name !== old.name) diffs.push(`Nome de "${old.name}" para "${updates.name}"`);
+    if (updates.code !== undefined && updates.code !== old.code) diffs.push(`Código de "${old.code}" para "${updates.code}"`);
+    if (updates.color !== undefined && updates.color !== old.color) diffs.push(`Cor de "${old.color}" para "${updates.color}"`);
+    if (updates.stage_type !== undefined && updates.stage_type !== old.stage_type) diffs.push(`Tipo de "${old.stage_type}" para "${updates.stage_type}"`);
+
+    this.logAudit({
+      tenant_id: old.tenant_id,
+      user_name: performedByName || 'Administrador',
+      action: 'ALTERACAO_ETAPA_KANBAN',
+      resource: 'workflow_states',
+      resource_id: id,
+      details: diffs.length > 0
+        ? `Alterada etapa do Kanban "${old.name}": ${diffs.join('; ')}`
+        : `Atualizada etapa do Kanban "${old.name}"`
+    });
+
     return updated;
   }
 
   static deleteWorkflowState(id: string, performedByName?: string): boolean {
     const data = this.getStoreData();
     if (!Array.isArray(data.workflowStates)) data.workflowStates = [...INITIAL_WORKFLOW_STATES];
+    const old = data.workflowStates.find((st: WorkflowState) => st.id === id);
     data.workflowStates = data.workflowStates.filter((st: WorkflowState) => st.id !== id);
     this.saveStoreData(data);
+
+    if (old) {
+      this.logAudit({
+        tenant_id: old.tenant_id,
+        user_name: performedByName || 'Administrador',
+        action: 'EXCLUSAO_ETAPA_KANBAN',
+        resource: 'workflow_states',
+        resource_id: id,
+        details: `Excluída etapa do Kanban "${old.name}" (Código: ${old.code})`
+      });
+    }
+
     return true;
   }
 
@@ -1705,6 +2180,16 @@ export class AppStore {
       }
     });
     this.saveStoreData(data);
+
+    this.logAudit({
+      tenant_id: tenantId,
+      user_name: performedByName || 'Administrador',
+      action: 'REORDENACAO_KANBAN',
+      resource: 'workflow_states',
+      resource_id: tenantId,
+      details: `Reordenadas as colunas do Kanban (${stateIds.length} etapas)`
+    });
+
     return this.getWorkflowStates(tenantId);
   }
 
@@ -1712,6 +2197,16 @@ export class AppStore {
     const data = this.getStoreData();
     data.workflowStates = [...INITIAL_WORKFLOW_STATES];
     this.saveStoreData(data);
+
+    this.logAudit({
+      tenant_id: tenantId,
+      user_name: performedByName || 'Administrador',
+      action: 'REORDENACAO_KANBAN',
+      resource: 'workflow_states',
+      resource_id: tenantId,
+      details: `Restauradas as etapas padrão do Kanban`
+    });
+
     return this.getWorkflowStates(tenantId);
   }
 
@@ -2030,6 +2525,33 @@ export class AppStore {
     }
 
     this.saveStoreData(data);
+
+    // Audit Log for Technical Update
+    const modelName = targetItem.model?.name || targetItem.model?.description || 'Item';
+    const diffs: string[] = [];
+    if (updates.status) diffs.push(`Etapa: "${updates.status}"`);
+    if (updates.result_code) diffs.push(`Parecer: "${updates.result_code}"`);
+    if (updates.result_description) diffs.push(`Detalhe: "${updates.result_description}"`);
+    if (updates.custom_field_values?.input_weight_grams !== undefined || updates.custom_field_values?.output_weight_grams !== undefined) {
+      const inW = updates.custom_field_values?.input_weight_grams;
+      const outW = updates.custom_field_values?.output_weight_grams;
+      diffs.push(`Pesagem: Entrada ${inW !== undefined ? inW + 'g' : '--'} / Saída ${outW !== undefined ? outW + 'g' : '--'}`);
+    }
+    if (updates.checklist) {
+      const checked = updates.checklist.filter(c => c.checked).length;
+      diffs.push(`Checklist: ${checked}/${updates.checklist.length} itens checados`);
+    }
+    if (updates.technical_notes) diffs.push(`Obs: "${updates.technical_notes}"`);
+
+    this.logAudit({
+      tenant_id: targetItem.tenant_id,
+      user_name: performedByName || techName || 'Técnico',
+      action: 'DIAGNOSTICO_TECNICO',
+      resource: 'service_order_items',
+      resource_id: targetItem.id,
+      details: `OS #${parentOrder.order_number} - ${modelName} (${targetItem.internal_identifier}): ${diffs.join('; ')}`
+    });
+
     return targetItem;
   }
 
@@ -2218,9 +2740,51 @@ export class AppStore {
 
   static updateSettings(tenantId: string, updates: Partial<CompanySettings>, performedByName?: string): CompanySettings {
     const data = this.getStoreData();
-    const updated = { ...data.settings, ...updates, tenant_id: tenantId };
+    const old = data.settings || MOCK_COMPANY_SETTINGS;
+    const updated = { ...old, ...updates, tenant_id: tenantId };
     data.settings = updated;
     this.saveStoreData(data);
+
+    const diffs: string[] = [];
+    if (updates.thermal_paper_width_mm !== undefined && updates.thermal_paper_width_mm !== old.thermal_paper_width_mm) {
+      diffs.push(`Largura da bobina de ${old.thermal_paper_width_mm}mm para ${updates.thermal_paper_width_mm}mm`);
+    }
+    if (updates.require_customer_document !== undefined && updates.require_customer_document !== old.require_customer_document) {
+      diffs.push(`Exigir CPF/CNPJ: ${updates.require_customer_document ? 'Sim' : 'Não'}`);
+    }
+    if (updates.require_item_serial !== undefined && updates.require_item_serial !== old.require_item_serial) {
+      diffs.push(`Exigir Nº de Série: ${updates.require_item_serial ? 'Sim' : 'Não'}`);
+    }
+    if (updates.require_technician_on_entry !== undefined && updates.require_technician_on_entry !== old.require_technician_on_entry) {
+      diffs.push(`Exigir Técnico na Entrada: ${updates.require_technician_on_entry ? 'Sim' : 'Não'}`);
+    }
+    if (updates.active_templates) {
+      diffs.push(`Segmentos de atuação: [${updates.active_templates.join(', ')}]`);
+    }
+    if (updates.technician_group_ids) {
+      diffs.push(`Grupos de técnicos permitidos atualizados (${updates.technician_group_ids.length} grupos)`);
+    }
+    if (updates.item_description_display_mode !== undefined && updates.item_description_display_mode !== old.item_description_display_mode) {
+      diffs.push(`Exibição de descrição: ${updates.item_description_display_mode}`);
+    }
+    if (updates.receipt_header_note !== undefined && updates.receipt_header_note !== old.receipt_header_note) {
+      diffs.push(`Mensagem de cabeçalho do recibo atualizada`);
+    }
+    if (updates.receipt_footer_note !== undefined && updates.receipt_footer_note !== old.receipt_footer_note) {
+      diffs.push(`Mensagem de rodapé do recibo atualizada`);
+    }
+
+    this.logAudit({
+      tenant_id: tenantId,
+      user_name: performedByName || 'Administrador',
+      action: 'ALTERACAO_CONFIGURACOES',
+      resource: 'settings',
+      resource_id: tenantId,
+      details: diffs.length > 0
+        ? `Alteradas configurações do sistema: ${diffs.join('; ')}`
+        : `Atualizadas configurações da empresa`
+    });
+
     return updated;
   }
 
@@ -2307,23 +2871,6 @@ export class AppStore {
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('supreme_store_updated'));
     }
-  }
-
-  static changeUserPassword(userId: string, newPass: string, performedByName?: string): Profile {
-    const data = this.getStoreData();
-    const user = (data.profiles || []).find((p: Profile) => p.id === userId);
-    if (!user) throw new Error('Usuário não encontrado.');
-    user.password = newPass;
-    this.saveStoreData(data);
-    this.logAudit({
-      tenant_id: user.tenant_id,
-      user_name: performedByName || user.full_name,
-      action: 'ALTERAR_SENHA',
-      resource: 'profiles',
-      resource_id: user.id,
-      details: 'Usuário alterou a senha.'
-    });
-    return user;
   }
 
   static logLogout(user: Profile) {

@@ -59,11 +59,20 @@ export default function AuditLogsPage() {
   };
 
   const getActionBadgeColor = (action: string) => {
-    if (action.includes('NOVA_ENTRADA')) return 'bg-emerald-100/80 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border-emerald-300/80';
-    if (action.includes('BAIXA_ENTREGA')) return 'bg-teal-100/80 text-teal-800 dark:bg-teal-950/80 dark:text-teal-300 border-teal-300/80';
-    if (action.includes('DIAGNOSTICO')) return 'bg-amber-100/80 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border-amber-300/80';
-    if (action.includes('PERMISSOES') || action.includes('USUARIO')) return 'bg-purple-100/80 text-purple-800 dark:bg-purple-950/80 dark:text-purple-300 border-purple-300/80';
-    if (action.includes('PRECOS') || action.includes('CONFIGURACAO')) return 'bg-blue-100/80 text-blue-800 dark:bg-blue-950/80 dark:text-blue-300 border-blue-300/80';
+    if (action.includes('CRIACAO_ORDEM') || action.includes('NOVA_ENTRADA')) return 'bg-emerald-100/80 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border-emerald-300/80';
+    if (action.includes('ENTREGA') || action.includes('BAIXA')) return 'bg-teal-100/80 text-teal-800 dark:bg-teal-950/80 dark:text-teal-300 border-teal-300/80';
+    if (action.includes('DIAGNOSTICO') || action.includes('BANCADA') || action.includes('ATUALIZACAO')) return 'bg-amber-100/80 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border-amber-300/80';
+    if (action.includes('ATRIBUICAO_TECNICO')) return 'bg-indigo-100/80 text-indigo-800 dark:bg-indigo-950/80 dark:text-indigo-300 border-indigo-300/80';
+    if (action.includes('CLIENTE')) return 'bg-cyan-100/80 text-cyan-800 dark:bg-cyan-950/80 dark:text-cyan-300 border-cyan-300/80';
+    if (action.includes('USUARIO') || action.includes('PERMISSOES') || action.includes('SENHA') || action.includes('GRUPO')) return 'bg-purple-100/80 text-purple-800 dark:bg-purple-950/80 dark:text-purple-300 border-purple-300/80';
+    if (action.includes('MODELO')) return 'bg-blue-100/80 text-blue-800 dark:bg-blue-950/80 dark:text-blue-300 border-blue-300/80';
+    if (action.includes('SERVICO')) return 'bg-violet-100/80 text-violet-800 dark:bg-violet-950/80 dark:text-violet-300 border-violet-300/80';
+    if (action.includes('CATEGORIA') || action.includes('MARCA') || action.includes('CHECKLIST')) return 'bg-sky-100/80 text-sky-800 dark:bg-sky-950/80 dark:text-sky-300 border-sky-300/80';
+    if (action.includes('KANBAN')) return 'bg-orange-100/80 text-orange-800 dark:bg-orange-950/80 dark:text-orange-300 border-orange-300/80';
+    if (action.includes('CONFIGURACOES') || action.includes('EMPRESA') || action.includes('SEGMENTO') || action.includes('PLANO')) return 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-300';
+    if (action.includes('REABERTURA')) return 'bg-rose-100/80 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300 border-rose-300/80';
+    if (action.includes('EXCLUSAO')) return 'bg-red-100/80 text-red-800 dark:bg-red-950/80 dark:text-red-300 border-red-300/80';
+    if (action.includes('LOGIN')) return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border-emerald-200';
     return 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-300';
   };
 
@@ -79,7 +88,7 @@ export default function AuditLogsPage() {
             </h1>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Registro cronológico e imutável de todas as ações operacionais, alterações de preço, baixas e permissões
+            Registro cronológico e imutável de todas as ações operacionais, alterações cadastrais, diagnósticos técnicos, baixas e permissões
           </p>
         </div>
 
@@ -141,13 +150,50 @@ export default function AuditLogsPage() {
           <div className="flex items-center gap-2 w-full sm:w-auto">
             <Select value={selectedAction} onChange={(e) => setSelectedAction(e.target.value)} className="text-xs h-9 rounded-xl">
               <option value="">-- Todos os Tipos de Ação --</option>
-              <option value="NOVA_ENTRADA">Nova Entrada (Balcão)</option>
-              <option value="DIAGNOSTICO_TECNICO">Diagnóstico Técnico / Pesagem</option>
-              <option value="BAIXA_ENTREGA">Baixa Financeira & Entrega</option>
-              <option value="CONFIGURACAO_PRECOS">Configuração de Preços</option>
-              <option value="PERMISSOES_USUARIO">Permissões de Usuário</option>
-              <option value="CADASTRO_CLIENTE">Cadastro de Cliente</option>
-              <option value="CADASTRO_MODELO">Cadastro de Modelo</option>
+              <optgroup label="Ordens de Serviço & Balcão">
+                <option value="CRIACAO_ORDEM_SERVICO">Abertura de OS</option>
+                <option value="ENTREGA_ORDEM_SERVICO">Entrega & Baixa de OS</option>
+                <option value="REABERTURA_ORDEM_SERVICO">Reabertura de OS</option>
+                <option value="EXCLUSAO_ORDEM_SERVICO">Exclusão de OS</option>
+              </optgroup>
+              <optgroup label="Oficina & Bancada Técnica">
+                <option value="DIAGNOSTICO_TECNICO">Diagnóstico Técnico & Pesagem</option>
+                <option value="ATRIBUICAO_TECNICO">Atribuição / Transferência de Técnico</option>
+              </optgroup>
+              <optgroup label="Clientes">
+                <option value="CADASTRO_CLIENTE">Cadastro de Cliente</option>
+                <option value="ALTERACAO_CLIENTE">Alteração de Cliente</option>
+                <option value="EXCLUSAO_CLIENTE">Exclusão de Cliente</option>
+              </optgroup>
+              <optgroup label="Usuários & Segurança">
+                <option value="CADASTRO_USUARIO">Cadastro de Usuário</option>
+                <option value="ALTERACAO_USUARIO">Alteração de Usuário</option>
+                <option value="PERMISSOES_USUARIO">Permissões de Usuário</option>
+                <option value="ALTERACAO_SENHA">Redefinição de Senha</option>
+                <option value="EXCLUSAO_USUARIO">Exclusão de Usuário</option>
+                <option value="CRIACAO_GRUPO_PERMISSOES">Criação de Grupo de Permissões</option>
+                <option value="ALTERACAO_GRUPO_PERMISSOES">Alteração de Grupo de Permissões</option>
+                <option value="LOGIN_SUCESSO">Login de Usuário</option>
+              </optgroup>
+              <optgroup label="Catálogo de Produtos & Serviços">
+                <option value="CADASTRO_MODELO">Cadastro de Modelo/Equipamento</option>
+                <option value="ALTERACAO_MODELO">Alteração de Modelo/Equipamento</option>
+                <option value="EXCLUSAO_MODELO">Exclusão de Modelo/Equipamento</option>
+                <option value="CADASTRO_SERVICO">Cadastro de Serviço</option>
+                <option value="ALTERACAO_SERVICO">Alteração de Serviço</option>
+                <option value="EXCLUSAO_SERVICO">Exclusão de Serviço</option>
+                <option value="CADASTRO_CATEGORIA">Cadastro de Categoria</option>
+                <option value="ALTERACAO_CATEGORIA">Alteração de Categoria</option>
+                <option value="CADASTRO_MARCA">Cadastro de Marca</option>
+                <option value="ALTERACAO_MARCA">Alteração de Marca</option>
+              </optgroup>
+              <optgroup label="Fluxo Kanban & Configurações">
+                <option value="CRIACAO_ETAPA_KANBAN">Criação de Etapa do Kanban</option>
+                <option value="ALTERACAO_ETAPA_KANBAN">Alteração de Etapa do Kanban</option>
+                <option value="REORDENACAO_KANBAN">Reordenação de Etapas do Kanban</option>
+                <option value="ALTERACAO_CONFIGURACOES">Alteração de Configurações</option>
+                <option value="ALTERACAO_EMPRESA">Alteração de Dados da Empresa</option>
+              </optgroup>
             </Select>
           </div>
         </div>
