@@ -38,6 +38,7 @@ import {
 import { useAuth } from '@/lib/auth-context';
 import { AppStore, SEGMENT_PRESETS, BUSINESS_PRESETS } from '@/lib/store';
 import { formatCurrency, formatDate, getRoleBadgeConfig, cn } from '@/lib/utils';
+import { toast } from '@/lib/toast';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -157,8 +158,11 @@ export default function SuperAdminPage() {
   }, []);
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
-    setNotification({ message, type });
-    setTimeout(() => setNotification(null), 3500);
+    if (type === 'error') {
+      toast.error(message);
+    } else {
+      toast.success(message);
+    }
   };
 
   // Auth Guard
@@ -527,19 +531,6 @@ Incluso: Emissão de Comandas, Bancada Técnica Kanban, Rastreio e Impressão T�
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
       {/* Global Dialog Modal */}
       {dialogModal && <DialogModal {...dialogModal} />}
-
-      {/* Toast Notification */}
-      {notification && (
-        <div className={cn(
-          "fixed top-4 right-4 z-50 px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2.5 text-xs font-bold animate-in fade-in slide-in-from-top-3 border",
-          notification.type === 'success' 
-            ? "bg-emerald-950 border-emerald-700 text-emerald-200"
-            : "bg-rose-950 border-rose-700 text-rose-200"
-        )}>
-          {notification.type === 'success' ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <AlertCircle className="w-4 h-4 text-rose-400" />}
-          <span>{notification.message}</span>
-        </div>
-      )}
 
       {/* Hero Banner */}
       <div className="relative overflow-hidden bg-gradient-to-r from-purple-950 via-slate-900 to-indigo-950 p-6 md:p-8 rounded-3xl text-white shadow-2xl border border-purple-800/40">

@@ -35,6 +35,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select } from '@/components/ui/select';
 import { DialogModal, DialogModalProps } from '@/components/ui/dialog-modal';
+import { toast } from '@/lib/toast';
 
 const COLOR_MAP: Record<string, { bg: string; border: string; text: string; headerBg: string; badge: string }> = {
   amber: {
@@ -243,6 +244,7 @@ export default function TechnicianWorkbenchPage() {
         onConfirm: () => {
           setDialogModal(null);
           AppStore.assignOrderItemTechnician(item.id, currentUser.id, currentUser.full_name, currentUser.full_name);
+          toast.success(`Item "${item.model?.name || 'Item'}" transferido para você!`);
           loadData();
         }
       });
@@ -251,6 +253,7 @@ export default function TechnicianWorkbenchPage() {
 
     // Se não tem técnico: assume diretamente
     AppStore.assignOrderItemTechnician(item.id, currentUser.id, currentUser.full_name, currentUser.full_name);
+    toast.success(`Item "${item.model?.name || 'Item'}" atribuído a você!`);
     loadData();
   };
 
@@ -309,26 +312,31 @@ export default function TechnicianWorkbenchPage() {
       }
     }
 
-    const inNum = inputWeight ? parseFloat(inputWeight) : undefined;
-    const outNum = outputWeight ? parseFloat(outputWeight) : undefined;
-    const assignedTechProfile = technicians.find(t => t.id === modalAssignedTechId);
+    try {
+      const inNum = inputWeight ? parseFloat(inputWeight) : undefined;
+      const outNum = outputWeight ? parseFloat(outputWeight) : undefined;
+      const assignedTechProfile = technicians.find(t => t.id === modalAssignedTechId);
 
-    AppStore.updateOrderItemStatus(selectedItem.id, {
-      status: targetStatus,
-      result_code: resultCode,
-      result_description: resultDesc,
-      technical_notes: techNotes,
-      assigned_technician_id: modalAssignedTechId || selectedItem.assigned_technician_id || currentUser.id,
-      assigned_technician_name: assignedTechProfile ? assignedTechProfile.full_name : (modalAssignedTechId ? undefined : (selectedItem.assigned_technician_name || currentUser.full_name)),
-      custom_field_values: {
-        ...(selectedItem.custom_field_values || {}),
-        input_weight_grams: inNum,
-        output_weight_grams: outNum
-      },
-      checklist: checklistState
-    }, currentUser.full_name);
+      AppStore.updateOrderItemStatus(selectedItem.id, {
+        status: targetStatus,
+        result_code: resultCode,
+        result_description: resultDesc,
+        technical_notes: techNotes,
+        assigned_technician_id: modalAssignedTechId || selectedItem.assigned_technician_id || currentUser.id,
+        assigned_technician_name: assignedTechProfile ? assignedTechProfile.full_name : (modalAssignedTechId ? undefined : (selectedItem.assigned_technician_name || currentUser.full_name)),
+        custom_field_values: {
+          ...(selectedItem.custom_field_values || {}),
+          input_weight_grams: inNum,
+          output_weight_grams: outNum
+        },
+        checklist: checklistState
+      }, currentUser.full_name);
 
-    setSelectedItem(null);
+      toast.success(`Atualização técnica do item (${selectedItem.internal_identifier}) salva com sucesso!`);
+      setSelectedItem(null);
+    } catch (err: any) {
+      toast.error(err?.message || 'Erro ao salvar atualização técnica.');
+    }
   };
 
   const handleQuickApprove = () => {
@@ -350,31 +358,36 @@ export default function TechnicianWorkbenchPage() {
       return;
     }
 
-    const outNum = outputWeight ? parseFloat(outputWeight) : undefined;
-    const cat = categories.find(c => c.id === selectedItem.category_id || c.id === selectedItem.model?.category_id);
-    const isScaleInspection = cat?.inspection_type === 'SCALE';
-    const verdicts = (cat?.technical_verdicts && cat.technical_verdicts.length > 0)
-      ? cat.technical_verdicts
-      : isScaleInspection
-        ? ['100% OK / Concluído', 'CID / Circuito Queimado', 'Queimado / Sem Reparo', 'Entupido Irrecuperável', 'Recusado / Devolvido']
-        : ['100% OK / Concluído', 'Reparo Concluído com Sucesso', 'Reparado com Ressalvas', 'Sem Reparo / Placa Inviável', 'Aguardando Peça do Cliente', 'Orçamento Reprovado / Devolvido'];
+    try {
+      const outNum = outputWeight ? parseFloat(outputWeight) : undefined;
+      const cat = categories.find(c => c.id === selectedItem.category_id || c.id === selectedItem.model?.category_id);
+      const isScaleInspection = cat?.inspection_type === 'SCALE';
+      const verdicts = (cat?.technical_verdicts && cat.technical_verdicts.length > 0)
+        ? cat.technical_verdicts
+        : isScaleInspection
+          ? ['100% OK / Concluído', 'CID / Circuito Queimado', 'Queimado / Sem Reparo', 'Entupido Irrecuperável', 'Recusado / Devolvido']
+          : ['100% OK / Concluído', 'Reparo Concluído com Sucesso', 'Reparado com Ressalvas', 'Sem Reparo / Placa Inviável', 'Aguardando Peça do Cliente', 'Orçamento Reprovado / Devolvido'];
 
-    const successVerdict = verdicts[0] || '100% OK / Concluído';
+      const successVerdict = verdicts[0] || '100% OK / Concluído';
 
-    AppStore.updateOrderItemStatus(selectedItem.id, {
-      status: 'FINALIZADO',
-      result_code: successVerdict,
-      technical_notes: techNotes || 'Testado, aprovado e finalizado na bancada técnica.',
-      assigned_technician_id: selectedItem.assigned_technician_id || currentUser.id,
-      assigned_technician_name: selectedItem.assigned_technician_name || currentUser.full_name,
-      custom_field_values: {
-        ...(selectedItem.custom_field_values || {}),
-        output_weight_grams: outNum
-      },
-      checklist: checklistState.map(c => ({ ...c, checked: true }))
-    }, currentUser.full_name);
+      AppStore.updateOrderItemStatus(selectedItem.id, {
+        status: 'FINALIZADO',
+        result_code: successVerdict,
+        technical_notes: techNotes || 'Testado, aprovado e finalizado na bancada técnica.',
+        assigned_technician_id: selectedItem.assigned_technician_id || currentUser.id,
+        assigned_technician_name: selectedItem.assigned_technician_name || currentUser.full_name,
+        custom_field_values: {
+          ...(selectedItem.custom_field_values || {}),
+          output_weight_grams: outNum
+        },
+        checklist: checklistState
+      }, currentUser.full_name);
 
-    setSelectedItem(null);
+      toast.success(`Item (${selectedItem.internal_identifier}) aprovado e marcado como Pronto!`);
+      setSelectedItem(null);
+    } catch (err: any) {
+      toast.error(err?.message || 'Erro ao aprovar item.');
+    }
   };
 
   // ==========================================

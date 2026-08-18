@@ -12,6 +12,8 @@ export const metadata: Metadata = {
   description: "Sistema SaaS Multi-tenant para recepção, verificação, bancada técnica, pesagem, testes e entrega de cartuchos de impressora.",
 };
 
+import { ToastContainer } from "@/components/ui/toast-container";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -39,6 +41,7 @@ export default function RootLayout({
         <ThemeProvider>
           <AuthProvider>
             <AppShell>{children}</AppShell>
+            <ToastContainer />
           </AuthProvider>
         </ThemeProvider>
       </body>

@@ -52,6 +52,7 @@ import { DialogModal, DialogModalProps } from '@/components/ui/dialog-modal';
 import { CustomerCombobox } from '@/components/CustomerCombobox';
 import { ModelCombobox } from '@/components/ModelCombobox';
 import { CategoryCombobox } from '@/components/CategoryCombobox';
+import { toast } from '@/lib/toast';
 
 interface ServiceItemServiceInput {
   service_id: string;
@@ -318,6 +319,7 @@ export default function NovaEntradaPage() {
     setCustomers(updatedCusts);
     setSelectedCustomerId(created.id);
     setShowQuickCustomerModal(false);
+    toast.success(`Cliente "${created.name}" cadastrado com sucesso!`);
     setNewCustName('');
     setNewCustPhone('');
     setNewCustSecondaryPhone('');
@@ -454,7 +456,9 @@ export default function NovaEntradaPage() {
     try {
       const created = AppStore.addServiceOrder(orderPayload, currentUser.full_name);
       setCreatedOrder(created);
+      toast.success(`Ordem de Serviço nº ${created.order_number} criada com sucesso!`);
     } catch (err: any) {
+      toast.error(err?.message || 'Erro ao gerar ordem de serviço.');
       setDialogModal({
         isOpen: true,
         type: 'danger',

@@ -27,13 +27,14 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { DialogModal, DialogModalProps } from '@/components/ui/dialog-modal';
 
+import { toast } from '@/lib/toast';
+
 export default function CustomersPage() {
   const { currentCompany, currentUser, hasPermission } = useAuth();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingCustomerId, setEditingCustomerId] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState('');
   const [settings, setSettings] = useState(AppStore.getSettings(currentCompany.id));
   const [dialogModal, setDialogModal] = useState<DialogModalProps | null>(null);
 
@@ -179,7 +180,7 @@ export default function CustomersPage() {
           notes: notes.trim()
         }, currentUser?.full_name || 'Atendente');
 
-        setSuccessMessage('Dados do cliente atualizados com sucesso!');
+        toast.success(`Dados do cliente "${name.trim()}" atualizados com sucesso!`);
       } else {
         if (!canCreate) {
           setDialogModal({
@@ -208,7 +209,7 @@ export default function CustomersPage() {
           notes: notes.trim()
         }, currentUser?.full_name || 'Atendente');
 
-        setSuccessMessage('Cliente cadastrado com sucesso na base de dados!');
+        toast.success(`Cliente "${name.trim()}" cadastrado com sucesso!`);
       }
 
       loadData();
@@ -223,17 +224,8 @@ export default function CustomersPage() {
       setCompanyName('');
       setNotes('');
       setEditingCustomerId(null);
-      setTimeout(() => setSuccessMessage(''), 4000);
     } catch (err: any) {
-      setDialogModal({
-        isOpen: true,
-        type: 'danger',
-        title: 'Erro ao Salvar Cliente',
-        message: `Erro ao salvar cliente: ${err?.message || 'Verifique os dados informados.'}`,
-        isAlertOnly: true,
-        confirmLabel: 'Entendido',
-        onConfirm: () => setDialogModal(null)
-      });
+      toast.error(err?.message || 'Erro ao salvar cliente.');
     }
   };
 
@@ -244,19 +236,6 @@ export default function CustomersPage() {
     <div className="space-y-6">
       {/* Global Dialog Modal */}
       {dialogModal && <DialogModal {...dialogModal} />}
-
-      {/* Success Notification Banner */}
-      {successMessage && (
-        <div className="p-4 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 rounded-2xl flex items-center justify-between text-emerald-800 dark:text-emerald-200 text-xs font-semibold shadow-sm animate-in fade-in slide-in-from-top-2">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            <span>{successMessage}</span>
-          </div>
-          <Button variant="ghost" size="sm" onClick={() => setSuccessMessage('')} className="h-6 w-6 p-0 text-emerald-700">
-            <X className="w-3.5 h-3.5" />
-          </Button>
-        </div>
-      )}
 
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-[#0e1626] p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">

@@ -51,6 +51,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { toast } from '@/lib/toast';
 
 interface DialogModalState {
   isOpen: boolean;
@@ -170,8 +171,11 @@ export default function CatalogAndModelsPage() {
   const canManage = hasPermission('manage_models') || hasPermission('catalog_manage') || currentUser?.role === 'ADMINISTRADOR';
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
-    setNotification({ message, type });
-    setTimeout(() => setNotification(null), 3500);
+    if (type === 'error') {
+      toast.error(message);
+    } else {
+      toast.success(message);
+    }
   };
 
   // Helper to open Informative Modal

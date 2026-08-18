@@ -45,6 +45,7 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { DialogModal, DialogModalProps } from '@/components/ui/dialog-modal';
+import { toast } from '@/lib/toast';
 
 function EntriesListContent() {
   const searchParams = useSearchParams();
@@ -207,24 +208,13 @@ function EntriesListContent() {
       }, currentUser?.full_name || 'Atendente');
 
       loadData();
+      const orderNum = selectedOrderForDelivery.order_number;
       setSelectedOrderForDelivery(null);
       setShowZeroValueModal(false);
       setZeroValueReason('');
-      setActionAlert({ 
-        type: 'success', 
-        message: `Baixa e entrega da OS #${selectedOrderForDelivery.order_number} concluída com sucesso!` 
-      });
-      setTimeout(() => setActionAlert(null), 4000);
+      toast.success(`Baixa e entrega da OS #${orderNum} concluída com sucesso!`);
     } catch (err: any) {
-      setDialogModal({
-        isOpen: true,
-        type: 'danger',
-        title: 'Erro ao Registrar Baixa',
-        message: err?.message || 'Ocorreu um erro inesperado ao salvar a entrega.',
-        isAlertOnly: true,
-        confirmLabel: 'Entendido',
-        onConfirm: () => setDialogModal(null)
-      });
+      toast.error(err?.message || 'Ocorreu um erro inesperado ao salvar a entrega.');
     }
   };
 
@@ -353,22 +343,14 @@ function EntriesListContent() {
     if (!orderToReopen) return;
 
     try {
+      const orderNum = orderToReopen.order_number;
       AppStore.reopenServiceOrder(orderToReopen.id, reopenReason, currentUser.full_name);
       loadData();
       setShowReopenModal(false);
       setOrderToReopen(null);
-      setActionAlert({ type: 'success', message: 'Ordem de serviço reaberta com sucesso e enviada de volta à bancada!' });
-      setTimeout(() => setActionAlert(null), 4000);
+      toast.info(`Ordem de serviço #${orderNum} reaberta e enviada à bancada!`);
     } catch (err: any) {
-      setDialogModal({
-        isOpen: true,
-        type: 'danger',
-        title: 'Erro ao Reabrir OS',
-        message: err?.message || 'Não foi possível reabrir a ordem de serviço.',
-        isAlertOnly: true,
-        confirmLabel: 'Entendido',
-        onConfirm: () => setDialogModal(null)
-      });
+      toast.error(err?.message || 'Não foi possível reabrir a ordem de serviço.');
     }
   };
 
@@ -380,22 +362,14 @@ function EntriesListContent() {
   const handleConfirmDelete = () => {
     if (!orderToDelete) return;
     try {
+      const orderNum = orderToDelete.order_number;
       AppStore.deleteServiceOrder(orderToDelete.id, currentUser.full_name);
       loadData();
       setShowDeleteModal(false);
       setOrderToDelete(null);
-      setActionAlert({ type: 'success', message: 'Ordem de serviço excluída com sucesso.' });
-      setTimeout(() => setActionAlert(null), 4000);
+      toast.info(`Ordem de serviço #${orderNum} excluída com sucesso.`);
     } catch (err: any) {
-      setDialogModal({
-        isOpen: true,
-        type: 'danger',
-        title: 'Erro ao Excluir OS',
-        message: err?.message || 'Não foi possível excluir a ordem de serviço.',
-        isAlertOnly: true,
-        confirmLabel: 'Entendido',
-        onConfirm: () => setDialogModal(null)
-      });
+      toast.error(err?.message || 'Não foi possível excluir a ordem de serviço.');
     }
   };
 

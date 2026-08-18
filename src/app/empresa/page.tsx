@@ -30,6 +30,7 @@ import { Select } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { DialogModal, DialogModalProps } from '@/components/ui/dialog-modal';
 import { Profile, UserRole, CompanySettings, PermissionGroup, Company } from '@/types';
+import { toast } from '@/lib/toast';
 
 interface PermissionOption {
   key: string;
@@ -204,6 +205,7 @@ export default function CompanySettingsPage() {
     }, currentUser?.full_name || 'Administrador');
     setSettings(updated);
     setPolicySaveSuccess(true);
+    toast.success('Configurações operacionais salvas com sucesso!');
     setTimeout(() => setPolicySaveSuccess(false), 3500);
   };
 
@@ -220,35 +222,32 @@ export default function CompanySettingsPage() {
   const handleSaveCompanyData = (e: React.FormEvent) => {
     e.preventDefault();
     if (!tradeName.trim()) {
-      setDialogModal({
-        isOpen: true,
-        type: 'warning',
-        title: 'Nome Obrigatório',
-        message: 'O Nome Fantasia da empresa é obrigatório.',
-        isAlertOnly: true,
-        confirmLabel: 'Entendido',
-        onConfirm: () => setDialogModal(null)
-      });
+      toast.warning('O Nome Fantasia da empresa é obrigatório.');
       return;
     }
 
-    AppStore.updateCompany(currentCompany.id, {
-      trade_name: tradeName.trim(),
-      corporate_name: corporateName.trim() || undefined,
-      cnpj: cnpj.trim() || undefined,
-      phone: companyPhone.trim() || undefined,
-      whatsapp: companyWhatsapp.trim() || undefined,
-      email: companyEmail.trim() || undefined,
-      address: companyAddress.trim() || undefined,
-      city: companyCity.trim() || undefined,
-      state: companyState.trim() || undefined,
-      zip_code: companyZipCode.trim() || undefined,
-      responsible_name: companyResponsible.trim() || undefined
-    }, currentUser?.full_name || 'Administrador');
+    try {
+      AppStore.updateCompany(currentCompany.id, {
+        trade_name: tradeName.trim(),
+        corporate_name: corporateName.trim() || undefined,
+        cnpj: cnpj.trim() || undefined,
+        phone: companyPhone.trim() || undefined,
+        whatsapp: companyWhatsapp.trim() || undefined,
+        email: companyEmail.trim() || undefined,
+        address: companyAddress.trim() || undefined,
+        city: companyCity.trim() || undefined,
+        state: companyState.trim() || undefined,
+        zip_code: companyZipCode.trim() || undefined,
+        responsible_name: companyResponsible.trim() || undefined
+      }, currentUser?.full_name || 'Administrador');
 
-    setCompanySaveSuccess(true);
-    setTimeout(() => setCompanySaveSuccess(false), 3500);
-    loadData();
+      setCompanySaveSuccess(true);
+      toast.success('Dados cadastrais da empresa salvos com sucesso!');
+      setTimeout(() => setCompanySaveSuccess(false), 3500);
+      loadData();
+    } catch (err: any) {
+      toast.error(err?.message || 'Erro ao salvar dados da empresa.');
+    }
   };
 
   if (!currentUser) return null;
@@ -256,7 +255,10 @@ export default function CompanySettingsPage() {
   // Add User Handler with Group Association
   const handleAddUser = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fullName || !email) return;
+    if (!fullName || !email) {
+      toast.warning('Preencha o nome completo e o e-mail do usuário.');
+      return;
+    }
 
     const group = permissionGroups.find(g => g.id === selectedGroupId) || permissionGroups[0];
     const userRole: UserRole = group?.default_role || 'ATENDENTE';
@@ -274,6 +276,7 @@ export default function CompanySettingsPage() {
         is_active: true
       }, currentUser.full_name);
 
+      toast.success(`Usuário "${fullName}" cadastrado com sucesso!`);
       loadData();
       setShowAddModal(false);
       setFullName('');
@@ -281,15 +284,7 @@ export default function CompanySettingsPage() {
       setPhone('');
       setPassword('123456');
     } catch (err: any) {
-      setDialogModal({
-        isOpen: true,
-        type: 'danger',
-        title: 'Erro ao Cadastrar Usuário',
-        message: err?.message || 'Ocorreu um erro ao cadastrar o usuário.',
-        isAlertOnly: true,
-        confirmLabel: 'Entendido',
-        onConfirm: () => setDialogModal(null)
-      });
+      toast.error(err?.message || 'Erro ao cadastrar usuário.');
     }
   };
 
@@ -329,7 +324,10 @@ export default function CompanySettingsPage() {
 
   const handleSaveGroup = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!groupName.trim()) return;
+    if (!groupName.trim()) {
+      toast.warning('Informe o nome do grupo de permissões.');
+      return;
+    }
 
     try {
       if (editingGroup) {
@@ -340,6 +338,7 @@ export default function CompanySettingsPage() {
           default_max_discount_percent: Math.min(100, Math.max(0, Number(groupMaxDiscount) || 0)),
           permissions: groupPermissions
         }, currentUser.full_name);
+        toast.success(`Grupo "${groupName.trim()}" atualizado com sucesso!`);
       } else {
         AppStore.addPermissionGroup({
           tenant_id: currentCompany.id,
@@ -349,20 +348,13 @@ export default function CompanySettingsPage() {
           default_max_discount_percent: Math.min(100, Math.max(0, Number(groupMaxDiscount) || 0)),
           permissions: groupPermissions
         }, currentUser.full_name);
+        toast.success(`Grupo "${groupName.trim()}" criado com sucesso!`);
       }
 
       loadData();
       setShowGroupModal(false);
     } catch (err: any) {
-      setDialogModal({
-        isOpen: true,
-        type: 'danger',
-        title: 'Erro ao Salvar Grupo',
-        message: err?.message || 'Ocorreu um erro ao salvar o grupo de permissões.',
-        isAlertOnly: true,
-        confirmLabel: 'Entendido',
-        onConfirm: () => setDialogModal(null)
-      });
+      toast.error(err?.message || 'Erro ao salvar grupo de permissões.');
     }
   };
 
@@ -380,17 +372,10 @@ export default function CompanySettingsPage() {
         try {
           AppStore.deletePermissionGroup(groupId, currentUser.full_name);
           setDialogModal(null);
+          toast.info('Grupo de permissões excluído.');
           loadData();
         } catch (err: any) {
-          setDialogModal({
-            isOpen: true,
-            type: 'danger',
-            title: 'Erro ao Excluir Grupo',
-            message: err?.message || 'Não foi possível excluir o grupo.',
-            isAlertOnly: true,
-            confirmLabel: 'Entendido',
-            onConfirm: () => setDialogModal(null)
-          });
+          toast.error(err?.message || 'Não foi possível excluir o grupo.');
         }
       }
     });
@@ -415,14 +400,19 @@ export default function CompanySettingsPage() {
     e.preventDefault();
     if (!userToResetPass || !adminNewPass) return;
 
-    AppStore.changeUserPassword(userToResetPass.id, adminNewPass, currentUser.full_name);
-    setResetSuccess(true);
-    setTimeout(() => {
-      setResetSuccess(false);
-      setUserToResetPass(null);
-      setAdminNewPass('');
-      loadData();
-    }, 1500);
+    try {
+      AppStore.changeUserPassword(userToResetPass.id, adminNewPass, currentUser.full_name);
+      setResetSuccess(true);
+      toast.success(`Senha de "${userToResetPass.full_name}" redefinida com sucesso!`);
+      setTimeout(() => {
+        setResetSuccess(false);
+        setUserToResetPass(null);
+        setAdminNewPass('');
+        loadData();
+      }, 1500);
+    } catch (err: any) {
+      toast.error(err?.message || 'Erro ao redefinir senha.');
+    }
   };
 
   // Open Individual Permissions Modal
@@ -461,16 +451,21 @@ export default function CompanySettingsPage() {
 
   const handleSavePermissions = () => {
     if (!editingUser) return;
-    AppStore.updateUserPermissions(
-      editingUser.id,
-      userPermissions,
-      currentUser.full_name,
-      Math.min(100, Math.max(0, Number(userMaxDiscount) || 0))
-    );
-    loadData();
-    refreshUser();
-    setShowPermissionsModal(false);
-    setEditingUser(null);
+    try {
+      AppStore.updateUserPermissions(
+        editingUser.id,
+        userPermissions,
+        currentUser.full_name,
+        Math.min(100, Math.max(0, Number(userMaxDiscount) || 0))
+      );
+      toast.success(`Permissões do usuário "${editingUser.full_name}" salvas com sucesso!`);
+      loadData();
+      refreshUser();
+      setShowPermissionsModal(false);
+      setEditingUser(null);
+    } catch (err: any) {
+      toast.error(err?.message || 'Erro ao salvar permissões do usuário.');
+    }
   };
 
   const togglePermission = (key: string) => {
