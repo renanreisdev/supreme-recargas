@@ -657,7 +657,7 @@ describe('Custom Services, Kanban & Financial Report Suite', () => {
 
       const techGroup = groups.find(g => g.id === 'default-tech-group');
       expect(techGroup?.permissions.technical_workbench).toBe(true);
-      expect(techGroup?.permissions.technical_update).toBe(true);
+      expect(techGroup?.permissions.update_tech_status).toBe(true);
     });
   });
 
@@ -724,6 +724,21 @@ describe('Custom Services, Kanban & Financial Report Suite', () => {
       expect(srvLog).toBeDefined();
       expect(srvLog?.user_name).toBe('Gerente Ana');
       expect(srvLog?.details).toContain('Preço padrão de R$ 150.00 para R$ 180.00');
+    });
+  });
+
+  describe('24. Permission Group Rules Count Validation', () => {
+    it('has exactly 23 canonical permission rules in admin group', () => {
+      const groups = AppStore.getPermissionGroups(tenantId);
+      const adminGroup = groups.find(g => g.id === 'default-admin-group');
+      const activeAdminKeys = Object.entries(adminGroup?.permissions || {}).filter(([_, v]) => Boolean(v)).map(([k]) => k);
+      expect(activeAdminKeys.length).toBe(23);
+
+      const techGroup = groups.find(g => g.id === 'default-tech-group');
+      const activeTechKeys = Object.entries(techGroup?.permissions || {}).filter(([_, v]) => Boolean(v)).map(([k]) => k);
+      expect(activeTechKeys.length).toBe(2);
+      expect(activeTechKeys).toContain('technical_workbench');
+      expect(activeTechKeys).toContain('update_tech_status');
     });
   });
 });

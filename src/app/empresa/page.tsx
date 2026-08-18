@@ -767,7 +767,7 @@ export default function CompanySettingsPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {permissionGroups.map((g) => {
               const assignedUsersCount = users.filter(u => u.group_id === g.id).length;
-              const permsCount = Object.values(g.permissions || {}).filter(Boolean).length;
+              const permsCount = AVAILABLE_PERMISSIONS.filter(p => Boolean(g.permissions?.[p.key])).length;
 
               return (
                 <Card key={g.id} className="bg-white dark:bg-[#0e1626] border-slate-200 dark:border-slate-800 shadow-sm rounded-2xl">
