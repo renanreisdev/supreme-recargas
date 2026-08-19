@@ -1166,7 +1166,9 @@ export class AppStore {
     if (Array.isArray(allowedGroupIds) && allowedGroupIds.length > 0) {
       return users.filter(u => {
         if (u.group_id && allowedGroupIds.includes(u.group_id)) return true;
-        if (!u.group_id && u.role === 'TECNICO') return true;
+        if (allowedGroupIds.includes('default-tech-group') && u.role === 'TECNICO') return true;
+        if (allowedGroupIds.includes('default-admin-group') && (u.role === 'ADMINISTRADOR' || u.role === 'SUPER_ADMIN')) return true;
+        if (allowedGroupIds.includes('default-atendente-group') && u.role === 'ATENDENTE') return true;
         return false;
       });
     }
@@ -1191,6 +1193,7 @@ export class AppStore {
     const newGroup: PermissionGroup = { ...group, id: generateUUID(), is_system_default: false, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
     data.permissionGroups.push(newGroup);
     this.saveStoreData(data);
+    supabase.from('permission_groups').insert(newGroup).then();
 
     this.logAudit({
       tenant_id: newGroup.tenant_id,
@@ -1212,6 +1215,7 @@ export class AppStore {
     const updated = { ...old, ...updates, updated_at: new Date().toISOString() };
     data.permissionGroups[idx] = updated;
     this.saveStoreData(data);
+    supabase.from('permission_groups').update(updates).eq('id', id).then();
 
     const diffs: string[] = [];
     if (updates.name !== undefined && updates.name !== old.name) diffs.push(`Nome de "${old.name}" para "${updates.name}"`);
@@ -1245,6 +1249,7 @@ export class AppStore {
     if (group?.is_system_default) throw new Error('Grupos padrão do sistema não podem ser excluídos.');
     data.permissionGroups = data.permissionGroups.filter((g: PermissionGroup) => g.id !== id);
     this.saveStoreData(data);
+    supabase.from('permission_groups').delete().eq('id', id).then();
 
     if (group) {
       this.logAudit({
@@ -2782,20 +2787,42 @@ export class AppStore {
       sku_prefix: updated.sku_prefix,
       sku_digits: updated.sku_digits,
       sku_start_number: updated.sku_start_number,
+      sku_current_number: updated.sku_current_number,
       thermal_paper_width_mm: updated.thermal_paper_width_mm,
       require_customer_document: updated.require_customer_document,
-      require_item_serial: updated.require_item_serial,
+      require_item_serial: updated.require_item_serial ?? updated.require_cartridge_serial,
+      require_cartridge_serial: updated.require_cartridge_serial ?? updated.require_item_serial,
       require_technician_on_entry: updated.require_technician_on_entry,
       auto_print_on_entry: updated.auto_print_on_entry,
+      auto_print_on_delivery: updated.auto_print_on_delivery,
       print_entry_copies: updated.print_entry_copies,
       print_delivery_copies: updated.print_delivery_copies,
+      printer_paper_width: updated.printer_paper_width,
+      printer_font_size: updated.printer_font_size,
+      printer_density: updated.printer_density,
+      show_prices_on_receipt: updated.show_prices_on_receipt,
+      show_qr_code_on_receipt: updated.show_qr_code_on_receipt,
+      show_checklist_on_receipt: updated.show_checklist_on_receipt,
+      show_accessories_on_receipt: updated.show_accessories_on_receipt,
+      show_reported_issue_on_receipt: updated.show_reported_issue_on_receipt,
+      show_technician_on_receipt: updated.show_technician_on_receipt,
+      show_customer_signature_line: updated.show_customer_signature_line,
+      show_attendant_signature_line: updated.show_attendant_signature_line,
+      show_company_cnpj: updated.show_company_cnpj,
+      show_company_contact: updated.show_company_contact,
+      show_company_address: updated.show_company_address,
+      receipt_header: updated.receipt_header,
+      receipt_footer: updated.receipt_footer,
+      receipt_delivery_footer: updated.receipt_delivery_footer,
+      receipt_header_note: updated.receipt_header_note,
+      receipt_footer_note: updated.receipt_footer_note,
       active_templates: updated.active_templates,
       technician_group_ids: updated.technician_group_ids,
       item_description_display_mode: updated.item_description_display_mode,
-      receipt_header_note: updated.receipt_header_note,
-      receipt_footer_note: updated.receipt_footer_note,
       updated_at: new Date().toISOString()
-    }, { onConflict: 'tenant_id' }).then();
+    }, { onConflict: 'tenant_id' }).then(({ error }) => {
+      if (error) console.error('Error updating company_settings in Supabase:', error);
+    });
 
     const diffs: string[] = [];
     if (updates.thermal_paper_width_mm !== undefined && updates.thermal_paper_width_mm !== old.thermal_paper_width_mm) {
@@ -2957,6 +2984,12 @@ export class AppStore {
         .select('*')
         .eq('tenant_id', targetTenant);
 
+      // 5b. Fetch Permission Groups
+      const { data: permGroupsData } = await supabase
+        .from('permission_groups')
+        .select('*')
+        .or(`tenant_id.eq.${targetTenant},is_system_default.eq.true`);
+
       // 6. Fetch Customers
       const { data: customersData } = await supabase
         .from('customers')
@@ -3051,6 +3084,7 @@ export class AppStore {
       if (plansData && plansData.length > 0) current.plans = plansData;
       if (subsData && subsData.length > 0) current.subscriptions = subsData;
       if (settingsData && settingsData.length > 0) current.settings = settingsData[0];
+      if (permGroupsData && permGroupsData.length > 0) current.permissionGroups = permGroupsData;
       current.customers = customersData || [];
       current.categories = categoriesData || [];
       current.brands = brandsData || [];

@@ -146,4 +146,56 @@ describe('Supabase Full End-to-End Persistence and Hydration', () => {
     AppStore.deleteCategory(cat.id);
     AppStore.deleteService(srv.id);
   });
+
+  it('persists company settings (SKU mode, technician groups, description mode) to Supabase and resolves eligible technicians', async () => {
+    // 1. Update operational settings
+    const updatedSettings = AppStore.updateSettings(tenantId, {
+      sku_mode: 'AUTO_INCREMENT',
+      sku_prefix: 'SUP-',
+      sku_digits: 5,
+      sku_start_number: 100,
+      item_description_display_mode: 'FULL',
+      technician_group_ids: ['default-tech-group', 'default-admin-group']
+    }, 'Admin Teste');
+
+    expect(updatedSettings.sku_mode).toBe('AUTO_INCREMENT');
+    expect(updatedSettings.sku_prefix).toBe('SUP-');
+    expect(updatedSettings.item_description_display_mode).toBe('FULL');
+
+    // Wait for Supabase upsert
+    await new Promise((r) => setTimeout(r, 600));
+
+    // 2. Query Supabase directly
+    const { data: dbSettings, error } = await supabase
+      .from('company_settings')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .single();
+
+    expect(error).toBeNull();
+    expect(dbSettings).toBeDefined();
+    expect(dbSettings.sku_mode).toBe('AUTO_INCREMENT');
+    expect(dbSettings.sku_prefix).toBe('SUP-');
+    expect(dbSettings.sku_digits).toBe(5);
+    expect(dbSettings.item_description_display_mode).toBe('FULL');
+    expect(dbSettings.technician_group_ids).toContain('default-tech-group');
+    expect(dbSettings.technician_group_ids).toContain('default-admin-group');
+
+    // 3. Verify getEligibleTechnicians returns both technicians and admins
+    const eligible = AppStore.getEligibleTechnicians(tenantId);
+    expect(eligible.length).toBeGreaterThanOrEqual(2);
+    const techNames = eligible.map(t => t.full_name);
+    expect(techNames.some(n => n.includes('Rafael') || n.includes('Marcos'))).toBe(true);
+
+    // Reset settings back to default manual
+    AppStore.updateSettings(tenantId, {
+      sku_mode: 'MANUAL',
+      sku_prefix: 'MOD-',
+      sku_digits: 4,
+      sku_start_number: 1,
+      item_description_display_mode: 'BASIC',
+      technician_group_ids: ['default-tech-group']
+    });
+  });
 });
+

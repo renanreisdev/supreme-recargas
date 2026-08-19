@@ -1170,7 +1170,9 @@ function CompanySettingsContent() {
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                 {permissionGroups.map(group => {
                   const isSelected = technicianGroupIds.includes(group.id);
-                  const membersInGroup = users.filter(u => u.group_id === group.id && u.is_active);
+                  const membersInGroup = users.filter(u => 
+                    (u.group_id === group.id || (!u.group_id && (u.role === group.default_role || (group.id === 'default-admin-group' && u.role === 'SUPER_ADMIN')))) && u.is_active
+                  );
 
                   return (
                     <div
@@ -1213,36 +1215,47 @@ function CompanySettingsContent() {
               </div>
 
               {/* Dynamic Preview of Eligible Technicians */}
-              <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800 text-xs space-y-1.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                    <Users className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Usuários que aparecerão como Técnicos Responsáveis:</span>
-                  </span>
-                  <span className="text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                    {users.filter(u => u.is_active && u.group_id && technicianGroupIds.includes(u.group_id)).length} profissional(is)
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-1.5 pt-0.5">
-                  {users
-                    .filter(u => u.is_active && u.group_id && technicianGroupIds.includes(u.group_id))
-                    .map(u => (
-                      <span
-                        key={u.id}
-                        className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-800 dark:text-emerald-300 text-[11px] font-semibold"
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
-                        {u.full_name}
-                        <span className="text-[9px] text-emerald-600/80 dark:text-emerald-400/80 font-normal">({getGroupNameForUser(u)})</span>
+              {(() => {
+                const eligibleUsers = users.filter(u => {
+                  if (!u.is_active) return false;
+                  if (u.group_id && technicianGroupIds.includes(u.group_id)) return true;
+                  if (technicianGroupIds.includes('default-tech-group') && u.role === 'TECNICO') return true;
+                  if (technicianGroupIds.includes('default-admin-group') && (u.role === 'ADMINISTRADOR' || u.role === 'SUPER_ADMIN')) return true;
+                  if (technicianGroupIds.includes('default-atendente-group') && u.role === 'ATENDENTE') return true;
+                  return false;
+                });
+
+                return (
+                  <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800 text-xs space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                        <Users className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Usuários que aparecerão como Técnicos Responsáveis:</span>
                       </span>
-                    ))}
-                  {users.filter(u => u.is_active && u.group_id && technicianGroupIds.includes(u.group_id)).length === 0 && (
-                    <span className="text-[11px] text-amber-600 dark:text-amber-400 italic">
-                      Nenhum usuário ativo pertence aos grupos marcados.
-                    </span>
-                  )}
-                </div>
-              </div>
+                      <span className="text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                        {eligibleUsers.length} profissional(is)
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 pt-0.5">
+                      {eligibleUsers.map(u => (
+                        <span
+                          key={u.id}
+                          className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-800 dark:text-emerald-300 text-[11px] font-semibold"
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
+                          {u.full_name}
+                          <span className="text-[9px] text-emerald-600/80 dark:text-emerald-400/80 font-normal">({getGroupNameForUser(u)})</span>
+                        </span>
+                      ))}
+                      {eligibleUsers.length === 0 && (
+                        <span className="text-[11px] text-amber-600 dark:text-amber-400 italic">
+                          Nenhum usuário ativo pertence aos grupos marcados.
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* SKU / Código Interno Configuration Section */}
