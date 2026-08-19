@@ -46,9 +46,15 @@ describe('Custom Services, Kanban & Financial Report Suite', () => {
       const states = AppStore.getWorkflowStates(tenantId);
       expect(states.length).toBeGreaterThanOrEqual(3);
 
-      const items = AppStore.getCartridges(tenantId);
-      expect(items.length).toBeGreaterThan(0);
-      const targetItem = items[0];
+      const cust = AppStore.addCustomer({ tenant_id: tenantId, name: 'Cliente Kanban Test', phone: '(11) 97777-1111' });
+      const order = AppStore.addServiceOrder({
+        tenant_id: tenantId,
+        customer_id: cust.id,
+        opened_by: 'd4000000-0000-0000-0000-000000000002',
+        items: [{ model_id: 'mod-test-kanban', internal_identifier: 'KB-01', services: [] }]
+      });
+
+      const targetItem = order.items![0];
 
       const updated = AppStore.updateOrderItemStatus(targetItem.id, {
         status: 'FINALIZADO',
@@ -62,7 +68,32 @@ describe('Custom Services, Kanban & Financial Report Suite', () => {
   });
 
   describe('3. Financial Orders & Balances', () => {
-    it('has populated orders and accurate financial sums', () => {
+    it('calculates accurate financial sums on service orders', () => {
+      const cust = AppStore.addCustomer({ tenant_id: tenantId, name: 'Cliente Finanças Test', phone: '(11) 96666-2222' });
+      const order1 = AppStore.addServiceOrder({
+        tenant_id: tenantId,
+        customer_id: cust.id,
+        opened_by: 'd4000000-0000-0000-0000-000000000002',
+        items: [{
+          model_id: 'mod-f1',
+          internal_identifier: 'F-01',
+          services: [{ service_id: 'srv-f1', quantity: 1, unit_price: 150.00 }]
+        }],
+        initial_payment: { amount: 50.00, payment_method: 'PIX' }
+      });
+
+      const order2 = AppStore.addServiceOrder({
+        tenant_id: tenantId,
+        customer_id: cust.id,
+        opened_by: 'd4000000-0000-0000-0000-000000000002',
+        items: [{
+          model_id: 'mod-f2',
+          internal_identifier: 'F-02',
+          services: [{ service_id: 'srv-f2', quantity: 1, unit_price: 100.00 }]
+        }],
+        initial_payment: { amount: 100.00, payment_method: 'DINHEIRO' }
+      });
+
       const orders = AppStore.getServiceOrders(tenantId);
       expect(orders.length).toBeGreaterThanOrEqual(2);
 
@@ -70,7 +101,7 @@ describe('Custom Services, Kanban & Financial Report Suite', () => {
       expect(partialOrPending.length).toBeGreaterThan(0);
 
       const totalReceived = orders.reduce((acc, curr) => acc + (curr.paid_amount || 0), 0);
-      expect(totalReceived).toBeGreaterThanOrEqual(100.00);
+      expect(totalReceived).toBeGreaterThanOrEqual(150.00);
     });
   });
 

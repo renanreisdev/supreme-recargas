@@ -10,7 +10,7 @@ describe('Supabase Full End-to-End Persistence and Hydration', () => {
     expect(synced).toBeDefined();
     expect(synced.companies.length).toBeGreaterThan(0);
     expect(synced.profiles.length).toBeGreaterThan(0);
-    expect(synced.categories.length).toBeGreaterThan(0);
+    expect(Array.isArray(synced.categories)).toBe(true);
     expect(synced.workflowStates.length).toBeGreaterThan(0);
   });
 
@@ -47,13 +47,19 @@ describe('Supabase Full End-to-End Persistence and Hydration', () => {
   });
 
   it('creates a service order with items and services, persisting all to Supabase', async () => {
+    const cat = AppStore.addCategory({ tenant_id: tenantId, name: 'Cartuchos', slug: 'cartuchos', is_active: true });
+    const brand = AppStore.addBrand({ tenant_id: tenantId, name: 'HP', slug: 'hp', is_active: true });
+    await new Promise((r) => setTimeout(r, 600));
+
+    const model = AppStore.addModel({ tenant_id: tenantId, category_id: cat.id, brand_id: brand.id, name: 'HP 664', is_active: true });
+    const srv = AppStore.addService({ tenant_id: tenantId, name: 'Recarga Tinta', code: 'RECARGA', default_price: 30, is_active: true });
     const cust = AppStore.addCustomer({
       tenant_id: tenantId,
       name: 'Cliente OS Sync Supabase',
       phone: '(11) 98888-7777'
     });
 
-    await new Promise((r) => setTimeout(r, 600));
+    await new Promise((r) => setTimeout(r, 800));
 
     const newOrder = AppStore.addServiceOrder({
       tenant_id: tenantId,
@@ -65,13 +71,13 @@ describe('Supabase Full End-to-End Persistence and Hydration', () => {
       notes: 'OS de Teste com persistência Supabase',
       items: [
         {
-          model_id: 'a1000000-0000-0000-0000-000000000001',
+          model_id: model.id,
           internal_identifier: 'TEST-A01',
           reported_issue: 'Falhando na impressão',
           custom_field_values: { input_weight_grams: 28.5 },
           services: [
             {
-              service_id: 'a2000000-0000-0000-0000-000000000001',
+              service_id: srv.id,
               quantity: 1,
               unit_price: 30.00
             }
@@ -135,5 +141,9 @@ describe('Supabase Full End-to-End Persistence and Hydration', () => {
     // Clean up
     AppStore.deleteServiceOrder(newOrder.id);
     AppStore.deleteCustomer(cust.id);
+    AppStore.deleteModel(model.id);
+    AppStore.deleteBrand(brand.id);
+    AppStore.deleteCategory(cat.id);
+    AppStore.deleteService(srv.id);
   });
 });

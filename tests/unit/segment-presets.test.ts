@@ -27,7 +27,11 @@ describe('Multi-Segment Presets & Extensible Domain Tests', () => {
 
   it('should allow emitting a multi-item service order with different categories simultaneously', () => {
     const tenantId = MOCK_COMPANY_SUPREME.id;
-    const customer = AppStore.getCustomers(tenantId)[0];
+    const customer = AppStore.addCustomer({
+      tenant_id: tenantId,
+      name: 'Cliente Segment Presets Test',
+      phone: '(11) 98765-0000'
+    });
     const models = AppStore.getModels(tenantId);
     const services = AppStore.getServices(tenantId);
 

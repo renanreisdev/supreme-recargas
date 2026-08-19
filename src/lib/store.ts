@@ -41,7 +41,7 @@ import {
 } from '@/types';
 import { supabase } from './supabase';
 
-const LOCAL_STORAGE_KEY = 'supreme_recargas_v3_store';
+const LOCAL_STORAGE_KEY = 'supreme_recargas_v4_clean';
 
 
 function generateUUID(): string {
@@ -652,300 +652,38 @@ export const MOCK_PROFILES: Profile[] = [
   }
 ];
 
-export const MOCK_CUSTOMERS: Customer[] = [
-  {
-    id: 'cust-01',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    internal_code: 101,
-    name: 'Advocacia Pinheiro & Associados',
-    document: '23.456.789/0001-01',
-    phone: '(11) 98765-4321',
-    phone_is_whatsapp: true,
-    secondary_phone: '(11) 3344-5566',
-    secondary_phone_is_whatsapp: false,
-    email: 'contato@pinheiroadv.com.br',
-    company_name: 'Pinheiro Advogados',
-    address: 'Rua Bela Cintra, 450 - Consolação',
-    created_at: new Date('2026-01-15').toISOString()
-  },
-  {
-    id: 'cust-02',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    internal_code: 102,
-    name: 'Juliana Ferreira Mendes',
-    document: '345.678.901-23',
-    phone: '(11) 97654-3210',
-    phone_is_whatsapp: true,
-    email: 'juliana.mendes@email.com',
-    address: 'Rua Augusta, 1200 - Cerqueira César',
-    created_at: new Date('2026-01-20').toISOString()
-  },
-  {
-    id: 'cust-03',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    internal_code: 103,
-    name: 'Colégio Futuro Brilhante',
-    document: '11.222.333/0001-44',
-    phone: '(11) 96543-2109',
-    phone_is_whatsapp: true,
-    email: 'financeiro@futurobrilhante.edu.br',
-    created_at: new Date('2026-02-01').toISOString()
-  }
-];
+export const MOCK_CUSTOMERS: Customer[] = [];
 
-// Initial Categories, Brands, Models & Services (Extracted from Presets)
-const INITIAL_CATEGORIES: ItemCategory[] = [
-  ...BUSINESS_PRESETS.RECARGA_CARTUCHOS.categories,
-  ...BUSINESS_PRESETS.ASSISTENCIA_INFORMATICA.categories,
-  ...BUSINESS_PRESETS.ASSISTENCIA_CELULARES.categories,
-  ...BUSINESS_PRESETS.FERRAMENTAS_MOTORES.categories
-];
+// Initial Categories, Brands, Models & Services (Clean State for Manual Population)
+const INITIAL_CATEGORIES: ItemCategory[] = [];
 
-const INITIAL_BRANDS: Brand[] = [
-  ...BUSINESS_PRESETS.RECARGA_CARTUCHOS.brands,
-  ...BUSINESS_PRESETS.ASSISTENCIA_INFORMATICA.brands,
-  ...BUSINESS_PRESETS.FERRAMENTAS_MOTORES.brands
-];
+const INITIAL_BRANDS: Brand[] = [];
 
-const INITIAL_MODELS: ItemModel[] = [
-  ...BUSINESS_PRESETS.RECARGA_CARTUCHOS.models.map(m => ({ ...m, tenant_id: MOCK_COMPANY_SUPREME.id } as ItemModel)),
-  ...BUSINESS_PRESETS.ASSISTENCIA_INFORMATICA.models.map(m => ({ ...m, tenant_id: MOCK_COMPANY_SUPREME.id } as ItemModel)),
-  ...BUSINESS_PRESETS.ASSISTENCIA_CELULARES.models.map(m => ({ ...m, tenant_id: MOCK_COMPANY_SUPREME.id } as ItemModel)),
-  ...BUSINESS_PRESETS.FERRAMENTAS_MOTORES.models.map(m => ({ ...m, tenant_id: MOCK_COMPANY_ALFA.id } as ItemModel))
-];
+const INITIAL_MODELS: ItemModel[] = [];
 
-const INITIAL_SERVICES: Service[] = [
-  ...BUSINESS_PRESETS.RECARGA_CARTUCHOS.services.map(s => ({ ...s, tenant_id: MOCK_COMPANY_SUPREME.id } as Service)),
-  ...BUSINESS_PRESETS.ASSISTENCIA_INFORMATICA.services.map(s => ({ ...s, tenant_id: MOCK_COMPANY_SUPREME.id } as Service)),
-  ...BUSINESS_PRESETS.ASSISTENCIA_CELULARES.services.map(s => ({ ...s, tenant_id: MOCK_COMPANY_SUPREME.id } as Service)),
-  ...BUSINESS_PRESETS.FERRAMENTAS_MOTORES.services.map(s => ({ ...s, tenant_id: MOCK_COMPANY_ALFA.id } as Service))
-];
+const INITIAL_SERVICES: Service[] = [];
 
 const INITIAL_WORKFLOW_STATES: WorkflowState[] = [
-  ...(BUSINESS_PRESETS.RECARGA_CARTUCHOS.workflow.states || []).map(st => ({ ...st, tenant_id: MOCK_COMPANY_SUPREME.id })),
-  ...(BUSINESS_PRESETS.ASSISTENCIA_INFORMATICA.workflow.states || []).map(st => ({ ...st, tenant_id: MOCK_COMPANY_SUPREME.id }))
+  { id: 'a4000000-0000-0000-0000-000000000001', tenant_id: MOCK_COMPANY_SUPREME.id, workflow_id: 'a3000000-0000-0000-0000-000000000001', code: 'RECEBIDO', name: 'Recebido na Recepção', color: 'slate', stage_type: 'RECEBIDO', sort_order: 1, is_initial: true, is_final: false },
+  { id: 'a4000000-0000-0000-0000-000000000002', tenant_id: MOCK_COMPANY_SUPREME.id, workflow_id: 'a3000000-0000-0000-0000-000000000001', code: 'AGUARDANDO_VERIFICACAO', name: 'Aguard. Verificação', color: 'amber', stage_type: 'EM_ANDAMENTO', sort_order: 2, is_initial: false, is_final: false },
+  { id: 'a4000000-0000-0000-0000-000000000003', tenant_id: MOCK_COMPANY_SUPREME.id, workflow_id: 'a3000000-0000-0000-0000-000000000001', code: 'EM_VERIFICACAO', name: 'Em Verificação', color: 'amber', stage_type: 'EM_ANDAMENTO', sort_order: 3, is_initial: false, is_final: false },
+  { id: 'a4000000-0000-0000-0000-000000000004', tenant_id: MOCK_COMPANY_SUPREME.id, workflow_id: 'a3000000-0000-0000-0000-000000000001', code: 'AGUARDANDO_RECARGA', name: 'Aguard. Execução / Recarga', color: 'purple', stage_type: 'EM_ANDAMENTO', sort_order: 4, is_initial: false, is_final: false },
+  { id: 'a4000000-0000-0000-0000-000000000005', tenant_id: MOCK_COMPANY_SUPREME.id, workflow_id: 'a3000000-0000-0000-0000-000000000001', code: 'EM_RECARGA', name: 'Em Execução / Bancada', color: 'purple', stage_type: 'EM_ANDAMENTO', sort_order: 5, is_initial: false, is_final: false },
+  { id: 'a4000000-0000-0000-0000-000000000006', tenant_id: MOCK_COMPANY_SUPREME.id, workflow_id: 'a3000000-0000-0000-0000-000000000001', code: 'AGUARDANDO_TESTE', name: 'Aguard. Testes', color: 'blue', stage_type: 'EM_ANDAMENTO', sort_order: 6, is_initial: false, is_final: false },
+  { id: 'a4000000-0000-0000-0000-000000000007', tenant_id: MOCK_COMPANY_SUPREME.id, workflow_id: 'a3000000-0000-0000-0000-000000000001', code: 'EM_TESTE', name: 'Em Testes Finais', color: 'blue', stage_type: 'EM_ANDAMENTO', sort_order: 7, is_initial: false, is_final: false },
+  { id: 'a4000000-0000-0000-0000-000000000008', tenant_id: MOCK_COMPANY_SUPREME.id, workflow_id: 'a3000000-0000-0000-0000-000000000001', code: 'FINALIZADO', name: 'Pronto p/ Retirada', color: 'emerald', stage_type: 'CONCLUIDO', sort_order: 8, is_initial: false, is_final: true },
+  { id: 'a4000000-0000-0000-0000-000000000009', tenant_id: MOCK_COMPANY_SUPREME.id, workflow_id: 'a3000000-0000-0000-0000-000000000001', code: 'ENTREGUE', name: 'Entregue ao Cliente', color: 'slate', stage_type: 'CONCLUIDO', sort_order: 9, is_initial: false, is_final: true },
+  { id: 'a4000000-0000-0000-0000-000000000010', tenant_id: MOCK_COMPANY_SUPREME.id, workflow_id: 'a3000000-0000-0000-0000-000000000001', code: 'COM_PROBLEMA', name: 'Com Problema / Aguardando', color: 'rose', stage_type: 'EM_ANDAMENTO', sort_order: 10, is_initial: false, is_final: false },
+  { id: 'a4000000-0000-0000-0000-000000000011', tenant_id: MOCK_COMPANY_SUPREME.id, workflow_id: 'a3000000-0000-0000-0000-000000000001', code: 'SEM_REPARO', name: 'Sem Reparo (Inviável)', color: 'rose', stage_type: 'CONCLUIDO', sort_order: 11, is_initial: false, is_final: true }
 ];
 
-const INITIAL_CHECKLISTS: ChecklistTemplate[] = [
-  { id: 'chk-template-inf', tenant_id: MOCK_COMPANY_SUPREME.id, category_id: 'cat-notebook', name: 'Checklist Entrada Notebook', items: BUSINESS_PRESETS.ASSISTENCIA_INFORMATICA.checklist?.items || [] },
-  { id: 'chk-template-cel', tenant_id: MOCK_COMPANY_SUPREME.id, category_id: 'cat-smartphone', name: 'Checklist Entrada Smartphone', items: BUSINESS_PRESETS.ASSISTENCIA_CELULARES.checklist?.items || [] }
-];
+const INITIAL_CHECKLISTS: ChecklistTemplate[] = [];
 
-// Initial Service Orders & Order Items Demo Data
-export const INITIAL_SERVICE_ORDERS: ServiceOrder[] = [
-  {
-    id: 'ord-2026-000001',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    order_number: '2026-000001',
-    order_sequence: 1,
-    order_year: 2026,
-    customer_id: 'cust-01',
-    opened_by: 'd4000000-0000-0000-0000-000000000002',
-    opened_by_name: 'Mariana Santos',
-    opened_at: new Date('2026-08-16T09:30:00Z').toISOString(),
-    status: 'EM_ANDAMENTO',
-    financial_status: 'PENDENTE',
-    subtotal_amount: 60.00,
-    discount_amount: 0.00,
-    surcharge_amount: 0.00,
-    total_amount: 60.00,
-    paid_amount: 0.00,
-    remaining_amount: 60.00,
-    tracking_token: 'tok-recarga-hp664-pinheiro-01',
-    notes: 'Recarga urgente para petição jurídica',
-    created_at: new Date('2026-08-16T09:30:00Z').toISOString(),
-    customer: MOCK_CUSTOMERS[0],
-    items: [
-      {
-        id: 'item-001-01',
-        tenant_id: MOCK_COMPANY_SUPREME.id,
-        service_order_id: 'ord-2026-000001',
-        model_id: 'mod-hp-664',
-        item_index: 1,
-        internal_identifier: 'A942',
-        reported_issue: 'Tinta preta esgotou',
-        current_state_id: 'st-rec-recarga',
-        status: 'EM_RECARGA',
-        assigned_technician_id: 'd4000000-0000-0000-0000-000000000003',
-        subtotal_amount: 30.00,
-        discount_amount: 0.00,
-        total_amount: 30.00,
-        received_at: new Date('2026-08-16T09:30:00Z').toISOString(),
-        created_at: new Date('2026-08-16T09:30:00Z').toISOString(),
-        updated_at: new Date('2026-08-16T10:00:00Z').toISOString(),
-        custom_field_values: { input_weight_grams: 28.5, color: 'Preto' },
-        services: [
-          {
-            id: 'srv-item-001',
-            tenant_id: MOCK_COMPANY_SUPREME.id,
-            service_order_item_id: 'item-001-01',
-            service_id: 'srv-recarga',
-            service_name: 'Recarga de Tinta',
-            quantity: 1,
-            unit_price: 30.00,
-            discount_amount: 0,
-            surcharge_amount: 0,
-            total_amount: 30.00,
-            status: 'EM_EXECUCAO',
-            field_data: { input_weight: 28.5 }
-          }
-        ]
-      },
-      {
-        id: 'item-001-02',
-        tenant_id: MOCK_COMPANY_SUPREME.id,
-        service_order_id: 'ord-2026-000001',
-        model_id: 'mod-hp-664',
-        item_index: 2,
-        internal_identifier: 'B112',
-        reported_issue: 'Tricolor falhando',
-        current_state_id: 'st-rec-teste',
-        status: 'EM_TESTE',
-        assigned_technician_id: 'd4000000-0000-0000-0000-000000000003',
-        subtotal_amount: 30.00,
-        discount_amount: 0.00,
-        total_amount: 30.00,
-        received_at: new Date('2026-08-16T09:30:00Z').toISOString(),
-        created_at: new Date('2026-08-16T09:30:00Z').toISOString(),
-        updated_at: new Date('2026-08-16T10:15:00Z').toISOString(),
-        custom_field_values: { input_weight_grams: 29.0, output_weight_grams: 37.5, color: 'Tricolor' },
-        services: [
-          {
-            id: 'srv-item-002',
-            tenant_id: MOCK_COMPANY_SUPREME.id,
-            service_order_item_id: 'item-001-02',
-            service_id: 'srv-recarga',
-            service_name: 'Recarga de Tinta',
-            quantity: 1,
-            unit_price: 30.00,
-            discount_amount: 0,
-            surcharge_amount: 0,
-            total_amount: 30.00,
-            status: 'CONCLUIDO',
-            field_data: { input_weight: 29.0, output_weight: 37.5 }
-          }
-        ]
-      }
-    ]
-  },
-  {
-    id: 'ord-2026-000002',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    order_number: '2026-000002',
-    order_sequence: 2,
-    order_year: 2026,
-    customer_id: 'cust-02',
-    opened_by: 'd4000000-0000-0000-0000-000000000002',
-    opened_by_name: 'Mariana Santos',
-    opened_at: new Date('2026-08-16T11:00:00Z').toISOString(),
-    status: 'EM_ANDAMENTO',
-    financial_status: 'PAGO_PARCIAL',
-    subtotal_amount: 210.00,
-    discount_amount: 10.00,
-    surcharge_amount: 0.00,
-    total_amount: 200.00,
-    paid_amount: 100.00,
-    remaining_amount: 100.00,
-    tracking_token: 'tok-notebook-dell-juliana-02',
-    notes: 'Cliente deixou sinal de R$ 100 via PIX',
-    created_at: new Date('2026-08-16T11:00:00Z').toISOString(),
-    customer: MOCK_CUSTOMERS[1],
-    items: [
-      {
-        id: 'item-002-01',
-        tenant_id: MOCK_COMPANY_SUPREME.id,
-        service_order_id: 'ord-2026-000002',
-        model_id: 'mod-dell-latitude',
-        item_index: 1,
-        internal_identifier: 'DELL-SN-849201',
-        reported_issue: 'Superaquecendo e travando na inicialização',
-        accessories: 'Acompanha Carregador Original 65W',
-        current_state_id: 'st-inf-reparo',
-        status: 'EM_REPARO',
-        assigned_technician_id: 'd4000000-0000-0000-0000-000000000003',
-        subtotal_amount: 210.00,
-        discount_amount: 10.00,
-        total_amount: 200.00,
-        received_at: new Date('2026-08-16T11:00:00Z').toISOString(),
-        created_at: new Date('2026-08-16T11:00:00Z').toISOString(),
-        updated_at: new Date('2026-08-16T11:30:00Z').toISOString(),
-        checklist: [
-          { item: 'Acompanha Carregador / Fonte Original', checked: true },
-          { item: 'Liga normalmente (Dá vídeo)', checked: true },
-          { item: 'Carcaça / Dobradiça possui trincas ou riscos', checked: false },
-          { item: 'Teclado e Touchpad funcionais', checked: true },
-          { item: 'Tela LCD sem manchas ou linhas', checked: true }
-        ],
-        services: [
-          {
-            id: 'srv-item-003',
-            tenant_id: MOCK_COMPANY_SUPREME.id,
-            service_order_item_id: 'item-002-01',
-            service_id: 'srv-formatacao',
-            service_name: 'Formatação & Reinstalação de Sistema',
-            quantity: 1,
-            unit_price: 120.00,
-            discount_amount: 0,
-            surcharge_amount: 0,
-            total_amount: 120.00,
-            status: 'EM_EXECUCAO'
-          },
-          {
-            id: 'srv-item-004',
-            tenant_id: MOCK_COMPANY_SUPREME.id,
-            service_order_item_id: 'item-002-01',
-            service_id: 'srv-limpeza-preventiva',
-            service_name: 'Limpeza Preventiva & Troca de Pasta Térmica',
-            quantity: 1,
-            unit_price: 90.00,
-            discount_amount: 10.00,
-            surcharge_amount: 0,
-            total_amount: 80.00,
-            status: 'CONCLUIDO'
-          }
-        ]
-      }
-    ]
-  }
-];
+export const INITIAL_SERVICE_ORDERS: ServiceOrder[] = [];
 
-export const INITIAL_PAYMENTS: Payment[] = [
-  {
-    id: 'pay-001',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    service_order_id: 'ord-2026-000002',
-    amount: 100.00,
-    payment_method: 'PIX',
-    received_by: 'd4000000-0000-0000-0000-000000000002',
-    received_by_name: 'Mariana Santos',
-    paid_at: new Date('2026-08-16T11:05:00Z').toISOString(),
-    notes: 'Adiantamento de 50% no balcão',
-    created_at: new Date('2026-08-16T11:05:00Z').toISOString()
-  }
-];
+export const INITIAL_PAYMENTS: Payment[] = [];
 
-export const INITIAL_AUDIT_LOGS: AuditLog[] = [
-  {
-    id: 'aud-001',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    user_name: 'Mariana Santos',
-    action: 'CRIACAO_ORDEM_SERVICO',
-    resource: 'service_orders',
-    resource_id: 'ord-2026-000001',
-    details: 'Abertura de OS nº 2026-000001 para Advocacia Pinheiro (2 cartuchos HP 664)',
-    created_at: new Date('2026-08-16T09:30:00Z').toISOString()
-  },
-  {
-    id: 'aud-002',
-    tenant_id: MOCK_COMPANY_SUPREME.id,
-    user_name: 'Mariana Santos',
-    action: 'CRIACAO_ORDEM_SERVICO',
-    resource: 'service_orders',
-    resource_id: 'ord-2026-000002',
-    details: 'Abertura de OS nº 2026-000002 para Juliana Mendes (Notebook Dell Latitude 3470)',
-    created_at: new Date('2026-08-16T11:00:00Z').toISOString()
-  }
-];
+export const INITIAL_AUDIT_LOGS: AuditLog[] = [];
 
 export const MOCK_COMPANY_SETTINGS: CompanySettings = {
   id: 'sett-001',
@@ -1061,16 +799,16 @@ export class AppStore {
       if (!Array.isArray(parsed.subscriptions) || parsed.subscriptions.length === 0) parsed.subscriptions = MOCK_SUBSCRIPTIONS;
       if (!Array.isArray(parsed.profiles) || parsed.profiles.length === 0) parsed.profiles = MOCK_PROFILES;
       if (!Array.isArray(parsed.permissionGroups) || parsed.permissionGroups.length === 0) parsed.permissionGroups = DEFAULT_PERMISSION_GROUPS;
-      if (!Array.isArray(parsed.customers)) parsed.customers = MOCK_CUSTOMERS;
-      if (!Array.isArray(parsed.categories) || parsed.categories.length === 0) parsed.categories = INITIAL_CATEGORIES;
-      if (!Array.isArray(parsed.brands) || parsed.brands.length === 0) parsed.brands = INITIAL_BRANDS;
-      if (!Array.isArray(parsed.models) || parsed.models.length === 0) parsed.models = INITIAL_MODELS;
-      if (!Array.isArray(parsed.services) || parsed.services.length === 0) parsed.services = INITIAL_SERVICES;
+      if (!Array.isArray(parsed.customers)) parsed.customers = [];
+      if (!Array.isArray(parsed.categories)) parsed.categories = [];
+      if (!Array.isArray(parsed.brands)) parsed.brands = [];
+      if (!Array.isArray(parsed.models)) parsed.models = [];
+      if (!Array.isArray(parsed.services)) parsed.services = [];
       if (!Array.isArray(parsed.workflowStates) || parsed.workflowStates.length === 0) parsed.workflowStates = INITIAL_WORKFLOW_STATES;
-      if (!Array.isArray(parsed.checklistTemplates) || parsed.checklistTemplates.length === 0) parsed.checklistTemplates = INITIAL_CHECKLISTS;
-      if (!Array.isArray(parsed.serviceOrders)) parsed.serviceOrders = INITIAL_SERVICE_ORDERS;
-      if (!Array.isArray(parsed.payments)) parsed.payments = INITIAL_PAYMENTS;
-      if (!Array.isArray(parsed.auditLogs)) parsed.auditLogs = INITIAL_AUDIT_LOGS;
+      if (!Array.isArray(parsed.checklistTemplates)) parsed.checklistTemplates = [];
+      if (!Array.isArray(parsed.serviceOrders)) parsed.serviceOrders = [];
+      if (!Array.isArray(parsed.payments)) parsed.payments = [];
+      if (!Array.isArray(parsed.auditLogs)) parsed.auditLogs = [];
       if (!parsed.settings) parsed.settings = MOCK_COMPANY_SETTINGS;
       if (!parsed.company) parsed.company = MOCK_COMPANY_SUPREME;
 
@@ -2583,7 +2321,7 @@ export class AppStore {
 
     this.saveStoreData(data);
 
-    // Persist to Supabase Database
+    // Persist to Supabase Database in relational order
     supabase.from('service_orders').insert({
       id: newOrder.id,
       tenant_id: newOrder.tenant_id,
@@ -2604,50 +2342,50 @@ export class AppStore {
       tracking_token: newOrder.tracking_token,
       notes: newOrder.notes || null,
       internal_notes: newOrder.internal_notes || null
-    }).then();
-
-    // Persist items
-    for (const item of orderItems) {
-      const validStateId = isValidUUID(item.current_state_id) ? item.current_state_id : 'a4000000-0000-0000-0000-000000000001';
-      supabase.from('service_order_items').insert({
-        id: item.id,
-        tenant_id: item.tenant_id,
-        service_order_id: item.service_order_id,
-        model_id: item.model_id,
-        variant_id: isValidUUID(item.variant_id) ? item.variant_id : null,
-        item_index: item.item_index,
-        internal_identifier: item.internal_identifier,
-        reported_issue: item.reported_issue || null,
-        reception_notes: item.reception_notes || null,
-        accessories: item.accessories || null,
-        checklist: item.checklist || [],
-        custom_field_values: item.custom_field_values || {},
-        current_state_id: validStateId,
-        status: item.status,
-        assigned_technician_id: isValidUUID(item.assigned_technician_id) ? item.assigned_technician_id : null,
-        subtotal_amount: item.subtotal_amount,
-        discount_amount: item.discount_amount,
-        total_amount: item.total_amount,
-        received_at: item.received_at
-      }).then();
-
-      for (const srv of (item.services || [])) {
-        supabase.from('service_order_item_services').insert({
-          id: srv.id,
-          tenant_id: srv.tenant_id,
-          service_order_item_id: srv.service_order_item_id,
-          service_id: srv.service_id,
-          technician_id: isValidUUID(srv.technician_id) ? srv.technician_id : null,
-          quantity: srv.quantity,
-          unit_price: srv.unit_price,
-          discount_amount: srv.discount_amount,
-          surcharge_amount: srv.surcharge_amount,
-          total_amount: srv.total_amount,
-          status: srv.status,
-          field_data: srv.field_data || {}
-        }).then();
+    }).then(() => {
+      // Persist items
+      for (const item of orderItems) {
+        const validStateId = isValidUUID(item.current_state_id) ? item.current_state_id : 'a4000000-0000-0000-0000-000000000001';
+        supabase.from('service_order_items').insert({
+          id: item.id,
+          tenant_id: item.tenant_id,
+          service_order_id: item.service_order_id,
+          model_id: item.model_id,
+          variant_id: isValidUUID(item.variant_id) ? item.variant_id : null,
+          item_index: item.item_index,
+          internal_identifier: item.internal_identifier,
+          reported_issue: item.reported_issue || null,
+          reception_notes: item.reception_notes || null,
+          accessories: item.accessories || null,
+          checklist: item.checklist || [],
+          custom_field_values: item.custom_field_values || {},
+          current_state_id: validStateId,
+          status: item.status,
+          assigned_technician_id: isValidUUID(item.assigned_technician_id) ? item.assigned_technician_id : null,
+          subtotal_amount: item.subtotal_amount,
+          discount_amount: item.discount_amount,
+          total_amount: item.total_amount,
+          received_at: item.received_at
+        }).then(() => {
+          for (const srv of (item.services || [])) {
+            supabase.from('service_order_item_services').insert({
+              id: srv.id,
+              tenant_id: srv.tenant_id,
+              service_order_item_id: srv.service_order_item_id,
+              service_id: srv.service_id,
+              technician_id: isValidUUID(srv.technician_id) ? srv.technician_id : null,
+              quantity: srv.quantity,
+              unit_price: srv.unit_price,
+              discount_amount: srv.discount_amount,
+              surcharge_amount: srv.surcharge_amount,
+              total_amount: srv.total_amount,
+              status: srv.status,
+              field_data: srv.field_data || {}
+            }).then();
+          }
+        });
       }
-    }
+    });
 
     if (newPayment) {
       supabase.from('payments').insert({
@@ -3313,15 +3051,15 @@ export class AppStore {
       if (plansData && plansData.length > 0) current.plans = plansData;
       if (subsData && subsData.length > 0) current.subscriptions = subsData;
       if (settingsData && settingsData.length > 0) current.settings = settingsData[0];
-      if (customersData && customersData.length > 0) current.customers = customersData;
-      if (categoriesData && categoriesData.length > 0) current.categories = categoriesData;
-      if (brandsData && brandsData.length > 0) current.brands = brandsData;
-      if (modelsData && modelsData.length > 0) current.models = modelsData;
-      if (servicesData && servicesData.length > 0) current.services = servicesData;
+      current.customers = customersData || [];
+      current.categories = categoriesData || [];
+      current.brands = brandsData || [];
+      current.models = modelsData || [];
+      current.services = servicesData || [];
       if (workflowStatesData && workflowStatesData.length > 0) current.workflowStates = workflowStatesData;
-      if (ordersData && ordersData.length > 0) current.serviceOrders = assembledOrders;
-      if (paymentsData && paymentsData.length > 0) current.payments = paymentsData;
-      if (auditLogsData && auditLogsData.length > 0) current.auditLogs = auditLogsData;
+      current.serviceOrders = assembledOrders || [];
+      current.payments = paymentsData || [];
+      current.auditLogs = auditLogsData || [];
 
       this.saveStoreData(current, true);
       return current;
