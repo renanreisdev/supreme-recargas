@@ -48,6 +48,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setCurrentUserState(fresh);
             if (fresh.tenant_id) {
               AppStore.initRealtime(fresh.tenant_id);
+              AppStore.syncFromSupabase(fresh.tenant_id);
+            } else {
+              AppStore.syncFromSupabase();
             }
           } else {
             localStorage.removeItem(AUTH_STORAGE_KEY);
@@ -79,6 +82,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const user = AppStore.authenticate(email, password);
       setCurrentUser(user);
+      if (user.tenant_id) {
+        AppStore.syncFromSupabase(user.tenant_id);
+      } else {
+        AppStore.syncFromSupabase();
+      }
       return { success: true, user };
     } catch (err: any) {
       return { success: false, error: err?.message || 'Falha ao autenticar.' };

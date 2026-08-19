@@ -55,6 +55,11 @@ function generateUUID(): string {
   });
 }
 
+function isValidUUID(str?: string | null): boolean {
+  if (!str) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+}
+
 function generateTrackingToken(): string {
   const bytes = new Uint8Array(16);
   if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
@@ -359,7 +364,7 @@ export const SEGMENT_PRESETS = BUSINESS_PRESETS;
 // ============================================================================
 
 export const MOCK_COMPANY_SUPREME: Company = {
-  id: '00000000-0000-0000-0000-000000000001',
+  id: 'b2000000-0000-0000-0000-000000000001',
   corporate_name: 'Supreme Soluções Tecnológicas LTDA',
   trade_name: 'Supreme Informática & Recargas',
   cnpj: '12.345.678/0001-90',
@@ -378,7 +383,7 @@ export const MOCK_COMPANY_SUPREME: Company = {
 };
 
 export const MOCK_COMPANY_ALFA: Company = {
-  id: '00000000-0000-0000-0000-000000000002',
+  id: 'b2000000-0000-0000-0000-000000000002',
   corporate_name: 'Alfa Motores & Ferramentas LTDA',
   trade_name: 'Alfa Oficina e Motores',
   cnpj: '98.765.432/0001-10',
@@ -564,7 +569,7 @@ export const DEFAULT_PERMISSION_GROUPS: PermissionGroup[] = [
 
 export const MOCK_PROFILES: Profile[] = [
   {
-    id: '00000000-0000-0000-0000-000000000099',
+    id: 'd4000000-0000-0000-0000-000000000099',
     tenant_id: MOCK_COMPANY_SUPREME.id,
     full_name: 'Super Administrador',
     email: 'super@supreme.com.br',
@@ -576,7 +581,7 @@ export const MOCK_PROFILES: Profile[] = [
     created_at: new Date('2026-01-01').toISOString()
   },
   {
-    id: '00000000-0000-0000-0000-000000000010',
+    id: 'd4000000-0000-0000-0000-000000000001',
     tenant_id: MOCK_COMPANY_SUPREME.id,
     full_name: 'Carlos Oliveira (Admin)',
     email: 'admin@supreme.com.br',
@@ -590,7 +595,7 @@ export const MOCK_PROFILES: Profile[] = [
     created_at: new Date('2026-01-01').toISOString()
   },
   {
-    id: '00000000-0000-0000-0000-000000000020',
+    id: 'd4000000-0000-0000-0000-000000000002',
     tenant_id: MOCK_COMPANY_SUPREME.id,
     full_name: 'Mariana Santos (Atendente 1)',
     email: 'atendente1@supreme.com.br',
@@ -604,7 +609,7 @@ export const MOCK_PROFILES: Profile[] = [
     created_at: new Date('2026-01-01').toISOString()
   },
   {
-    id: '00000000-0000-0000-0000-000000000021',
+    id: 'd4000000-0000-0000-0000-000000000004',
     tenant_id: MOCK_COMPANY_SUPREME.id,
     full_name: 'Lucas Lima (Atendente 2)',
     email: 'atendente2@supreme.com.br',
@@ -618,7 +623,7 @@ export const MOCK_PROFILES: Profile[] = [
     created_at: new Date('2026-01-01').toISOString()
   },
   {
-    id: '00000000-0000-0000-0000-000000000030',
+    id: 'd4000000-0000-0000-0000-000000000003',
     tenant_id: MOCK_COMPANY_SUPREME.id,
     full_name: 'Rafael Souza (Técnico 1)',
     email: 'tecnico1@supreme.com.br',
@@ -632,7 +637,7 @@ export const MOCK_PROFILES: Profile[] = [
     created_at: new Date('2026-01-01').toISOString()
   },
   {
-    id: '00000000-0000-0000-0000-000000000031',
+    id: 'd4000000-0000-0000-0000-000000000006',
     tenant_id: MOCK_COMPANY_SUPREME.id,
     full_name: 'Marcos Rocha (Técnico 2)',
     email: 'tecnico2@supreme.com.br',
@@ -735,7 +740,7 @@ export const INITIAL_SERVICE_ORDERS: ServiceOrder[] = [
     order_sequence: 1,
     order_year: 2026,
     customer_id: 'cust-01',
-    opened_by: '00000000-0000-0000-0000-000000000020',
+    opened_by: 'd4000000-0000-0000-0000-000000000002',
     opened_by_name: 'Mariana Santos',
     opened_at: new Date('2026-08-16T09:30:00Z').toISOString(),
     status: 'EM_ANDAMENTO',
@@ -761,7 +766,7 @@ export const INITIAL_SERVICE_ORDERS: ServiceOrder[] = [
         reported_issue: 'Tinta preta esgotou',
         current_state_id: 'st-rec-recarga',
         status: 'EM_RECARGA',
-        assigned_technician_id: '00000000-0000-0000-0000-000000000030',
+        assigned_technician_id: 'd4000000-0000-0000-0000-000000000003',
         subtotal_amount: 30.00,
         discount_amount: 0.00,
         total_amount: 30.00,
@@ -796,7 +801,7 @@ export const INITIAL_SERVICE_ORDERS: ServiceOrder[] = [
         reported_issue: 'Tricolor falhando',
         current_state_id: 'st-rec-teste',
         status: 'EM_TESTE',
-        assigned_technician_id: '00000000-0000-0000-0000-000000000030',
+        assigned_technician_id: 'd4000000-0000-0000-0000-000000000003',
         subtotal_amount: 30.00,
         discount_amount: 0.00,
         total_amount: 30.00,
@@ -830,7 +835,7 @@ export const INITIAL_SERVICE_ORDERS: ServiceOrder[] = [
     order_sequence: 2,
     order_year: 2026,
     customer_id: 'cust-02',
-    opened_by: '00000000-0000-0000-0000-000000000020',
+    opened_by: 'd4000000-0000-0000-0000-000000000002',
     opened_by_name: 'Mariana Santos',
     opened_at: new Date('2026-08-16T11:00:00Z').toISOString(),
     status: 'EM_ANDAMENTO',
@@ -857,7 +862,7 @@ export const INITIAL_SERVICE_ORDERS: ServiceOrder[] = [
         accessories: 'Acompanha Carregador Original 65W',
         current_state_id: 'st-inf-reparo',
         status: 'EM_REPARO',
-        assigned_technician_id: '00000000-0000-0000-0000-000000000030',
+        assigned_technician_id: 'd4000000-0000-0000-0000-000000000003',
         subtotal_amount: 210.00,
         discount_amount: 10.00,
         total_amount: 200.00,
@@ -911,7 +916,7 @@ export const INITIAL_PAYMENTS: Payment[] = [
     service_order_id: 'ord-2026-000002',
     amount: 100.00,
     payment_method: 'PIX',
-    received_by: '00000000-0000-0000-0000-000000000020',
+    received_by: 'd4000000-0000-0000-0000-000000000002',
     received_by_name: 'Mariana Santos',
     paid_at: new Date('2026-08-16T11:05:00Z').toISOString(),
     notes: 'Adiantamento de 50% no balcão',
@@ -1014,8 +1019,8 @@ export class AppStore {
       return this.memoryStore;
     }
 
-    const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (!raw) {
+    const rawStorage = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (!rawStorage) {
       const initial = {
         companies: MOCK_COMPANIES,
         plans: MOCK_PLANS,
@@ -1040,7 +1045,17 @@ export class AppStore {
     }
 
     try {
-      const parsed = JSON.parse(raw);
+      // Auto-migrate legacy 00000000-... IDs to official Supabase b2000000-... and d4000000-... IDs
+      const migratedRaw = rawStorage
+        .replace(/00000000-0000-0000-0000-000000000001/g, 'b2000000-0000-0000-0000-000000000001')
+        .replace(/00000000-0000-0000-0000-000000000010/g, 'd4000000-0000-0000-0000-000000000001')
+        .replace(/00000000-0000-0000-0000-000000000020/g, 'd4000000-0000-0000-0000-000000000002')
+        .replace(/00000000-0000-0000-0000-000000000021/g, 'd4000000-0000-0000-0000-000000000004')
+        .replace(/00000000-0000-0000-0000-000000000030/g, 'd4000000-0000-0000-0000-000000000003')
+        .replace(/00000000-0000-0000-0000-000000000031/g, 'd4000000-0000-0000-0000-000000000006')
+        .replace(/00000000-0000-0000-0000-000000000099/g, 'd4000000-0000-0000-0000-000000000099');
+
+      const parsed = JSON.parse(migratedRaw);
       if (!Array.isArray(parsed.companies) || parsed.companies.length === 0) parsed.companies = MOCK_COMPANIES;
       if (!Array.isArray(parsed.plans) || parsed.plans.length === 0) parsed.plans = MOCK_PLANS;
       if (!Array.isArray(parsed.subscriptions) || parsed.subscriptions.length === 0) parsed.subscriptions = MOCK_SUBSCRIPTIONS;
@@ -1058,6 +1073,10 @@ export class AppStore {
       if (!Array.isArray(parsed.auditLogs)) parsed.auditLogs = INITIAL_AUDIT_LOGS;
       if (!parsed.settings) parsed.settings = MOCK_COMPANY_SETTINGS;
       if (!parsed.company) parsed.company = MOCK_COMPANY_SUPREME;
+
+      if (migratedRaw !== rawStorage) {
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(parsed));
+      }
       return parsed;
     } catch {
       return {
@@ -1615,6 +1634,10 @@ export class AppStore {
       data.profiles[idx].max_discount_percent = maxDiscountPercent;
     }
     this.saveStoreData(data);
+    supabase.from('profiles').update({
+      custom_permissions: permissions,
+      max_discount_percent: maxDiscountPercent
+    }).eq('id', id).then();
 
     this.logAudit({
       tenant_id: oldUser.tenant_id,
@@ -1666,7 +1689,21 @@ export class AppStore {
     };
     data.customers.push(newCustomer);
     this.saveStoreData(data);
-    supabase.from('customers').insert(newCustomer).then();
+    supabase.from('customers').insert({
+      id: newCustomer.id,
+      tenant_id: newCustomer.tenant_id,
+      internal_code: newCustomer.internal_code,
+      name: newCustomer.name,
+      document: newCustomer.document || null,
+      phone: newCustomer.phone,
+      whatsapp: newCustomer.whatsapp || null,
+      email: newCustomer.email || null,
+      company_name: newCustomer.company_name || null,
+      notes: newCustomer.notes || null,
+      phone_is_whatsapp: newCustomer.phone_is_whatsapp || false,
+      secondary_phone: newCustomer.secondary_phone || null,
+      secondary_phone_is_whatsapp: newCustomer.secondary_phone_is_whatsapp || false
+    }).then();
 
     this.logAudit({
       tenant_id: newCustomer.tenant_id,
@@ -1719,7 +1756,7 @@ export class AppStore {
     const old = (data.customers || []).find((c: Customer) => c.id === id);
     data.customers = (data.customers || []).filter((c: Customer) => c.id !== id);
     this.saveStoreData(data);
-    supabase.from('customers').delete().eq('id', id).then();
+    supabase.from('customers').update({ deleted_at: new Date().toISOString() }).eq('id', id).then();
 
     if (old) {
       this.logAudit({
@@ -1757,6 +1794,17 @@ export class AppStore {
     if (!Array.isArray(data.categories)) data.categories = [...INITIAL_CATEGORIES];
     data.categories.push(newCategory);
     this.saveStoreData(data);
+    supabase.from('item_categories').insert({
+      id: newCategory.id,
+      tenant_id: newCategory.tenant_id || null,
+      name: newCategory.name,
+      slug: newCategory.slug,
+      description: newCategory.description || null,
+      icon: newCategory.icon || 'Layers',
+      identifier_label: newCategory.identifier_label || 'Nº de Série',
+      is_system: newCategory.is_system || false,
+      is_active: newCategory.is_active !== false
+    }).then();
 
     this.logAudit({
       tenant_id: newCategory.tenant_id,
@@ -1779,6 +1827,7 @@ export class AppStore {
     const updated = { ...old, ...updates, updated_at: new Date().toISOString() };
     data.categories[idx] = updated;
     this.saveStoreData(data);
+    supabase.from('item_categories').update(updates).eq('id', id).then();
 
     const diffs: string[] = [];
     if (updates.name !== undefined && updates.name !== old.name) diffs.push(`Nome de "${old.name}" para "${updates.name}"`);
@@ -1807,6 +1856,7 @@ export class AppStore {
     const old = data.categories.find((c: ItemCategory) => c.id === id);
     data.categories = data.categories.filter((c: ItemCategory) => c.id !== id);
     this.saveStoreData(data);
+    supabase.from('item_categories').delete().eq('id', id).then();
 
     if (old) {
       this.logAudit({
@@ -1841,6 +1891,14 @@ export class AppStore {
     if (!Array.isArray(data.brands)) data.brands = [...INITIAL_BRANDS];
     data.brands.push(newBrand);
     this.saveStoreData(data);
+    supabase.from('brands').insert({
+      id: newBrand.id,
+      tenant_id: newBrand.tenant_id || null,
+      name: newBrand.name,
+      slug: newBrand.slug,
+      is_system: newBrand.is_system || false,
+      is_active: newBrand.is_active !== false
+    }).then();
 
     this.logAudit({
       tenant_id: newBrand.tenant_id,
@@ -1863,6 +1921,7 @@ export class AppStore {
     const updated = { ...old, ...updates, updated_at: new Date().toISOString() };
     data.brands[idx] = updated;
     this.saveStoreData(data);
+    supabase.from('brands').update(updates).eq('id', id).then();
 
     this.logAudit({
       tenant_id: old.tenant_id,
@@ -1882,6 +1941,7 @@ export class AppStore {
     const old = data.brands.find((b: Brand) => b.id === id);
     data.brands = data.brands.filter((b: Brand) => b.id !== id);
     this.saveStoreData(data);
+    supabase.from('brands').delete().eq('id', id).then();
 
     if (old) {
       this.logAudit({
@@ -1966,6 +2026,18 @@ export class AppStore {
     if (!Array.isArray(data.models)) data.models = [];
     data.models.push(newModel);
     this.saveStoreData(data);
+    supabase.from('item_models').insert({
+      id: newModel.id,
+      tenant_id: newModel.tenant_id,
+      category_id: newModel.category_id,
+      brand_id: newModel.brand_id || null,
+      name: newModel.name,
+      internal_code: newModel.internal_code || null,
+      description: newModel.description || null,
+      technical_notes: newModel.technical_notes || null,
+      attributes: newModel.attributes || {},
+      is_active: newModel.is_active !== false
+    }).then();
 
     const cat = (data.categories || INITIAL_CATEGORIES).find((c: ItemCategory) => c.id === model.category_id);
     this.logAudit({
@@ -1988,6 +2060,7 @@ export class AppStore {
     const updated = { ...old, ...updates, updated_at: new Date().toISOString() };
     data.models[idx] = updated;
     this.saveStoreData(data);
+    supabase.from('item_models').update(updates).eq('id', id).then();
 
     const diffs: string[] = [];
     if (updates.name !== undefined && updates.name !== old.name) diffs.push(`Nome de "${old.name}" para "${updates.name}"`);
@@ -2019,6 +2092,7 @@ export class AppStore {
     const old = (data.models || []).find((m: ItemModel) => m.id === id);
     data.models = data.models.filter((m: ItemModel) => m.id !== id);
     this.saveStoreData(data);
+    supabase.from('item_models').delete().eq('id', id).then();
 
     if (old) {
       this.logAudit({
@@ -2045,6 +2119,16 @@ export class AppStore {
     if (!Array.isArray(data.services)) data.services = [];
     data.services.push(newService);
     this.saveStoreData(data);
+    supabase.from('services').insert({
+      id: newService.id,
+      tenant_id: newService.tenant_id,
+      name: newService.name,
+      code: newService.code,
+      description: newService.description || null,
+      default_price: newService.default_price || 0,
+      estimated_time_minutes: newService.estimated_time_minutes || 60,
+      is_active: newService.is_active !== false
+    }).then();
 
     this.logAudit({
       tenant_id: newService.tenant_id,
@@ -2066,6 +2150,7 @@ export class AppStore {
     const updated = { ...old, ...updates, updated_at: new Date().toISOString() };
     data.services[idx] = updated;
     this.saveStoreData(data);
+    supabase.from('services').update(updates).eq('id', id).then();
 
     const diffs: string[] = [];
     if (updates.name !== undefined && updates.name !== old.name) diffs.push(`Nome de "${old.name}" para "${updates.name}"`);
@@ -2096,6 +2181,7 @@ export class AppStore {
     const old = (data.services || []).find((s: Service) => s.id === id);
     data.services = data.services.filter((s: Service) => s.id !== id);
     this.saveStoreData(data);
+    supabase.from('services').delete().eq('id', id).then();
 
     if (old) {
       this.logAudit({
@@ -2128,12 +2214,25 @@ export class AppStore {
       ...state,
       id: generateUUID(),
       tenant_id: tenantId,
-      workflow_id: state.workflow_id || 'default-workflow',
+      workflow_id: state.workflow_id || 'a3000000-0000-0000-0000-000000000001',
       code: (state.code || state.name.toUpperCase().replace(/\s+/g, '_')).trim(),
       sort_order: state.sort_order || (tenantStates.length + 1)
     };
     data.workflowStates.push(newState);
     this.saveStoreData(data);
+    supabase.from('workflow_states').insert({
+      id: newState.id,
+      tenant_id: newState.tenant_id,
+      workflow_id: newState.workflow_id,
+      code: newState.code,
+      name: newState.name,
+      color: newState.color || 'slate',
+      stage_type: newState.stage_type || 'EM_ANDAMENTO',
+      sort_order: newState.sort_order,
+      is_initial: newState.is_initial || false,
+      is_final: newState.is_final || false,
+      description: newState.description || null
+    }).then();
 
     this.logAudit({
       tenant_id: tenantId,
@@ -2156,6 +2255,7 @@ export class AppStore {
     const updated = { ...old, ...updates };
     data.workflowStates[idx] = updated;
     this.saveStoreData(data);
+    supabase.from('workflow_states').update(updates).eq('id', id).then();
 
     const diffs: string[] = [];
     if (updates.name !== undefined && updates.name !== old.name) diffs.push(`Nome de "${old.name}" para "${updates.name}"`);
@@ -2183,6 +2283,7 @@ export class AppStore {
     const old = data.workflowStates.find((st: WorkflowState) => st.id === id);
     data.workflowStates = data.workflowStates.filter((st: WorkflowState) => st.id !== id);
     this.saveStoreData(data);
+    supabase.from('workflow_states').delete().eq('id', id).then();
 
     if (old) {
       this.logAudit({
@@ -2205,6 +2306,7 @@ export class AppStore {
       const state = data.workflowStates.find((s: WorkflowState) => s.id === id);
       if (state) {
         state.sort_order = idx + 1;
+        supabase.from('workflow_states').update({ sort_order: idx + 1 }).eq('id', id).then();
       }
     });
     this.saveStoreData(data);
@@ -2461,9 +2563,10 @@ export class AppStore {
     data.serviceOrders.unshift(newOrder);
 
     // Initial Payment if provided
+    let newPayment: Payment | null = null;
     if (orderData.initial_payment && orderData.initial_payment.amount > 0) {
       if (!Array.isArray(data.payments)) data.payments = [];
-      const newPayment: Payment = {
+      newPayment = {
         id: generateUUID(),
         tenant_id: orderData.tenant_id,
         service_order_id: orderId,
@@ -2479,6 +2582,86 @@ export class AppStore {
     }
 
     this.saveStoreData(data);
+
+    // Persist to Supabase Database
+    supabase.from('service_orders').insert({
+      id: newOrder.id,
+      tenant_id: newOrder.tenant_id,
+      order_number: newOrder.order_number,
+      order_sequence: newOrder.order_sequence,
+      order_year: newOrder.order_year,
+      customer_id: newOrder.customer_id,
+      opened_by: newOrder.opened_by,
+      opened_at: newOrder.opened_at,
+      expected_at: newOrder.expected_at || null,
+      status: 'ABERTA',
+      financial_status: newOrder.financial_status,
+      subtotal_amount: newOrder.subtotal_amount,
+      discount_amount: newOrder.discount_amount,
+      surcharge_amount: 0,
+      total_amount: newOrder.total_amount,
+      paid_amount: newOrder.paid_amount,
+      tracking_token: newOrder.tracking_token,
+      notes: newOrder.notes || null,
+      internal_notes: newOrder.internal_notes || null
+    }).then();
+
+    // Persist items
+    for (const item of orderItems) {
+      const validStateId = isValidUUID(item.current_state_id) ? item.current_state_id : 'a4000000-0000-0000-0000-000000000001';
+      supabase.from('service_order_items').insert({
+        id: item.id,
+        tenant_id: item.tenant_id,
+        service_order_id: item.service_order_id,
+        model_id: item.model_id,
+        variant_id: isValidUUID(item.variant_id) ? item.variant_id : null,
+        item_index: item.item_index,
+        internal_identifier: item.internal_identifier,
+        reported_issue: item.reported_issue || null,
+        reception_notes: item.reception_notes || null,
+        accessories: item.accessories || null,
+        checklist: item.checklist || [],
+        custom_field_values: item.custom_field_values || {},
+        current_state_id: validStateId,
+        status: item.status,
+        assigned_technician_id: isValidUUID(item.assigned_technician_id) ? item.assigned_technician_id : null,
+        subtotal_amount: item.subtotal_amount,
+        discount_amount: item.discount_amount,
+        total_amount: item.total_amount,
+        received_at: item.received_at
+      }).then();
+
+      for (const srv of (item.services || [])) {
+        supabase.from('service_order_item_services').insert({
+          id: srv.id,
+          tenant_id: srv.tenant_id,
+          service_order_item_id: srv.service_order_item_id,
+          service_id: srv.service_id,
+          technician_id: isValidUUID(srv.technician_id) ? srv.technician_id : null,
+          quantity: srv.quantity,
+          unit_price: srv.unit_price,
+          discount_amount: srv.discount_amount,
+          surcharge_amount: srv.surcharge_amount,
+          total_amount: srv.total_amount,
+          status: srv.status,
+          field_data: srv.field_data || {}
+        }).then();
+      }
+    }
+
+    if (newPayment) {
+      supabase.from('payments').insert({
+        id: newPayment.id,
+        tenant_id: newPayment.tenant_id,
+        service_order_id: newPayment.service_order_id,
+        amount: newPayment.amount,
+        payment_method: newPayment.payment_method,
+        received_by: newPayment.received_by,
+        paid_at: newPayment.paid_at,
+        notes: newPayment.notes
+      }).then();
+    }
+
     this.logAudit({
       tenant_id: orderData.tenant_id,
       user_name: performedByName || 'Atendente',
@@ -2553,6 +2736,35 @@ export class AppStore {
     }
 
     this.saveStoreData(data);
+
+    // Persist to Supabase Database
+    const dbItemUpdates: any = {
+      updated_at: targetItem.updated_at
+    };
+    if (updates.status) dbItemUpdates.status = updates.status;
+    if (updates.current_state_id && isValidUUID(updates.current_state_id)) dbItemUpdates.current_state_id = updates.current_state_id;
+    if (updates.result_code && isValidUUID(updates.result_code)) dbItemUpdates.result_id = updates.result_code;
+    if (updates.technical_notes) dbItemUpdates.technical_notes = updates.technical_notes;
+    if (updates.assigned_technician_id && isValidUUID(updates.assigned_technician_id)) dbItemUpdates.assigned_technician_id = updates.assigned_technician_id;
+    if (updates.custom_field_values) dbItemUpdates.custom_field_values = targetItem.custom_field_values;
+    if (updates.checklist) dbItemUpdates.checklist = updates.checklist;
+
+    supabase.from('service_order_items').update(dbItemUpdates).eq('id', itemId).then();
+    supabase.from('service_orders').update({
+      status: parentOrder.status,
+      assigned_technician_id: parentOrder.assigned_technician_id || null,
+      updated_at: new Date().toISOString()
+    }).eq('id', parentOrder.id).then();
+
+    supabase.from('order_status_history').insert({
+      tenant_id: targetItem.tenant_id,
+      service_order_id: parentOrder.id,
+      item_id: targetItem.id,
+      previous_status: updates.status ? targetItem.status : null,
+      new_status: updates.status || targetItem.status,
+      changed_by: updates.assigned_technician_id || parentOrder.opened_by,
+      notes: updates.technical_notes || null
+    }).then();
 
     // Audit Log for Technical Update
     const modelName = targetItem.model?.name || targetItem.model?.description || 'Item';
@@ -2636,12 +2848,13 @@ export class AppStore {
 
     // Register Payments
     let totalPaidInCheckout = 0;
+    const checkoutPayments: Payment[] = [];
     if (Array.isArray(deliveryData.payments)) {
       if (!Array.isArray(data.payments)) data.payments = [];
       for (const p of deliveryData.payments) {
         if (p.amount > 0) {
           totalPaidInCheckout += p.amount;
-          data.payments.push({
+          const payObj: Payment = {
             id: generateUUID(),
             tenant_id: order.tenant_id,
             service_order_id: orderId,
@@ -2651,7 +2864,9 @@ export class AppStore {
             received_by_name: performedByName || 'Atendente',
             paid_at: deliveredAt,
             created_at: deliveredAt
-          });
+          };
+          data.payments.push(payObj);
+          checkoutPayments.push(payObj);
         }
       }
     }
@@ -2700,6 +2915,40 @@ export class AppStore {
     }
 
     this.saveStoreData(data);
+
+    // Persist delivery to Supabase Database
+    supabase.from('service_orders').update({
+      status: 'ENTREGUE',
+      delivered_at: deliveredAt,
+      closed_at: deliveredAt,
+      discount_amount: order.discount_amount,
+      total_amount: order.total_amount,
+      paid_amount: order.paid_amount,
+      remaining_amount: order.remaining_amount,
+      financial_status: order.financial_status,
+      delivery_info: order.delivery_info,
+      updated_at: deliveredAt
+    }).eq('id', orderId).then();
+
+    supabase.from('service_order_items').update({
+      status: 'ENTREGUE',
+      completed_at: deliveredAt,
+      updated_at: deliveredAt
+    }).eq('service_order_id', orderId).then();
+
+    for (const pay of checkoutPayments) {
+      supabase.from('payments').insert({
+        id: pay.id,
+        tenant_id: pay.tenant_id,
+        service_order_id: pay.service_order_id,
+        amount: pay.amount,
+        payment_method: pay.payment_method,
+        received_by: pay.received_by,
+        paid_at: pay.paid_at,
+        notes: 'Pagamento recebido na entrega / checkout'
+      }).then();
+    }
+
     this.logAudit({
       tenant_id: order.tenant_id,
       user_name: performedByName || 'Atendente',
@@ -2729,6 +2978,19 @@ export class AppStore {
     }
 
     this.saveStoreData(data);
+
+    supabase.from('service_orders').update({
+      status: 'EM_ANDAMENTO',
+      delivered_at: null,
+      closed_at: null,
+      updated_at: new Date().toISOString()
+    }).eq('id', orderId).then();
+
+    supabase.from('service_order_items').update({
+      status: 'RECEBIDO',
+      updated_at: new Date().toISOString()
+    }).eq('service_order_id', orderId).then();
+
     this.logAudit({
       tenant_id: order.tenant_id,
       user_name: performedByName || 'Administrador',
@@ -2747,6 +3009,9 @@ export class AppStore {
     data.serviceOrders = (data.serviceOrders || []).filter((o: ServiceOrder) => o.id !== orderId);
     data.payments = (data.payments || []).filter((p: Payment) => p.service_order_id !== orderId);
     this.saveStoreData(data);
+
+    supabase.from('service_orders').delete().eq('id', orderId).then();
+
     this.logAudit({
       tenant_id: order?.tenant_id,
       user_name: performedByName || 'Administrador',
@@ -2772,6 +3037,27 @@ export class AppStore {
     const updated = { ...old, ...updates, tenant_id: tenantId };
     data.settings = updated;
     this.saveStoreData(data);
+
+    supabase.from('company_settings').upsert({
+      tenant_id: tenantId,
+      sku_mode: updated.sku_mode,
+      sku_prefix: updated.sku_prefix,
+      sku_digits: updated.sku_digits,
+      sku_start_number: updated.sku_start_number,
+      thermal_paper_width_mm: updated.thermal_paper_width_mm,
+      require_customer_document: updated.require_customer_document,
+      require_item_serial: updated.require_item_serial,
+      require_technician_on_entry: updated.require_technician_on_entry,
+      auto_print_on_entry: updated.auto_print_on_entry,
+      print_entry_copies: updated.print_entry_copies,
+      print_delivery_copies: updated.print_delivery_copies,
+      active_templates: updated.active_templates,
+      technician_group_ids: updated.technician_group_ids,
+      item_description_display_mode: updated.item_description_display_mode,
+      receipt_header_note: updated.receipt_header_note,
+      receipt_footer_note: updated.receipt_footer_note,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'tenant_id' }).then();
 
     const diffs: string[] = [];
     if (updates.thermal_paper_width_mm !== undefined && updates.thermal_paper_width_mm !== old.thermal_paper_width_mm) {
@@ -2910,9 +3196,137 @@ export class AppStore {
     return user;
   }
 
+  private static realtimeChannel: any = null;
+
   static async syncFromSupabase(tenantId?: string) {
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new Event('supreme_store_updated'));
+    try {
+      // 1. Fetch Companies
+      const { data: companiesData } = await supabase.from('companies').select('*');
+
+      // 2. Fetch Profiles
+      const { data: profilesData } = await supabase.from('profiles').select('*');
+
+      // 3. Fetch Plans & Subscriptions
+      const { data: plansData } = await supabase.from('plans').select('*');
+      const { data: subsData } = await supabase.from('subscriptions').select('*');
+
+      // 4. Target tenant
+      const targetTenant = tenantId || (companiesData && companiesData[0]?.id) || MOCK_COMPANY_SUPREME.id;
+
+      // 5. Fetch Settings
+      const { data: settingsData } = await supabase
+        .from('company_settings')
+        .select('*')
+        .eq('tenant_id', targetTenant);
+
+      // 6. Fetch Customers
+      const { data: customersData } = await supabase
+        .from('customers')
+        .select('*')
+        .eq('tenant_id', targetTenant)
+        .is('deleted_at', null);
+
+      // 7. Fetch Categories, Brands, Models, Services, Workflow
+      const { data: categoriesData } = await supabase
+        .from('item_categories')
+        .select('*')
+        .or(`tenant_id.eq.${targetTenant},is_system.eq.true`);
+
+      const { data: brandsData } = await supabase
+        .from('brands')
+        .select('*')
+        .or(`tenant_id.eq.${targetTenant},is_system.eq.true`);
+
+      const { data: modelsData } = await supabase
+        .from('item_models')
+        .select('*')
+        .eq('tenant_id', targetTenant);
+
+      const { data: servicesData } = await supabase
+        .from('services')
+        .select('*')
+        .eq('tenant_id', targetTenant);
+
+      const { data: workflowStatesData } = await supabase
+        .from('workflow_states')
+        .select('*')
+        .eq('tenant_id', targetTenant)
+        .order('sort_order', { ascending: true });
+
+      // 8. Fetch Service Orders with items, item services, payments
+      const { data: ordersData } = await supabase
+        .from('service_orders')
+        .select('*')
+        .eq('tenant_id', targetTenant)
+        .order('created_at', { ascending: false });
+
+      const { data: orderItemsData } = await supabase
+        .from('service_order_items')
+        .select('*')
+        .eq('tenant_id', targetTenant);
+
+      const { data: itemServicesData } = await supabase
+        .from('service_order_item_services')
+        .select('*')
+        .eq('tenant_id', targetTenant);
+
+      const { data: paymentsData } = await supabase
+        .from('payments')
+        .select('*')
+        .eq('tenant_id', targetTenant);
+
+      const { data: auditLogsData } = await supabase
+        .from('audit_logs')
+        .select('*')
+        .eq('tenant_id', targetTenant)
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      // Merge items & services into orders
+      const assembledOrders: ServiceOrder[] = (ordersData || []).map(o => {
+        const items = (orderItemsData || [])
+          .filter(it => it.service_order_id === o.id)
+          .map(it => {
+            const srvs = (itemServicesData || []).filter(s => s.service_order_item_id === it.id);
+            const modelObj = (modelsData || []).find(m => m.id === it.model_id);
+            return {
+              ...it,
+              order_number: o.order_number,
+              model: modelObj,
+              services: srvs
+            };
+          });
+
+        const cust = (customersData || []).find(c => c.id === o.customer_id);
+
+        return {
+          ...o,
+          customer: cust,
+          items
+        };
+      });
+
+      // Update store
+      const current = this.getStoreData();
+      if (companiesData && companiesData.length > 0) current.companies = companiesData;
+      if (profilesData && profilesData.length > 0) current.profiles = profilesData;
+      if (plansData && plansData.length > 0) current.plans = plansData;
+      if (subsData && subsData.length > 0) current.subscriptions = subsData;
+      if (settingsData && settingsData.length > 0) current.settings = settingsData[0];
+      if (customersData && customersData.length > 0) current.customers = customersData;
+      if (categoriesData && categoriesData.length > 0) current.categories = categoriesData;
+      if (brandsData && brandsData.length > 0) current.brands = brandsData;
+      if (modelsData && modelsData.length > 0) current.models = modelsData;
+      if (servicesData && servicesData.length > 0) current.services = servicesData;
+      if (workflowStatesData && workflowStatesData.length > 0) current.workflowStates = workflowStatesData;
+      if (ordersData && ordersData.length > 0) current.serviceOrders = assembledOrders;
+      if (paymentsData && paymentsData.length > 0) current.payments = paymentsData;
+      if (auditLogsData && auditLogsData.length > 0) current.auditLogs = auditLogsData;
+
+      this.saveStoreData(current, true);
+      return current;
+    } catch (err) {
+      console.error('Error during syncFromSupabase:', err);
     }
   }
 
@@ -2926,8 +3340,6 @@ export class AppStore {
       details: `Logout de sessão: ${user.full_name}`
     });
   }
-
-
 
   static toggleCompanyStatus(companyId: string, performedByName?: string) {
     const data = this.getStoreData();
@@ -2947,7 +3359,31 @@ export class AppStore {
   }
 
   static initRealtime(tenantId: string) {
-    // Optional Supabase Realtime channel subscription
+    if (typeof window === 'undefined') return;
+    if (this.realtimeChannel) {
+      supabase.removeChannel(this.realtimeChannel);
+      this.realtimeChannel = null;
+    }
+
+    try {
+      this.realtimeChannel = supabase
+        .channel(`realtime:${tenantId}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'service_orders', filter: `tenant_id=eq.${tenantId}` }, () => {
+          this.syncFromSupabase(tenantId);
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'service_order_items', filter: `tenant_id=eq.${tenantId}` }, () => {
+          this.syncFromSupabase(tenantId);
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'customers', filter: `tenant_id=eq.${tenantId}` }, () => {
+          this.syncFromSupabase(tenantId);
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'company_settings', filter: `tenant_id=eq.${tenantId}` }, () => {
+          this.syncFromSupabase(tenantId);
+        })
+        .subscribe();
+    } catch (e) {
+      console.warn('Realtime subscription not supported in current environment:', e);
+    }
   }
 
   // --------------------------------------------------------------------------
