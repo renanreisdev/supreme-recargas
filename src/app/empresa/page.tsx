@@ -961,7 +961,10 @@ function CompanySettingsContent() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Nome Fantasia *</label>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center mb-1">
+                  <span>Nome Fantasia</span>
+                  <span className="text-red-500 font-bold ml-1">*</span>
+                </label>
                 <Input required value={tradeName} onChange={e => setTradeName(e.target.value)} placeholder="Ex: Supreme Recargas" className="text-xs rounded-xl" />
               </div>
 
@@ -2071,13 +2074,19 @@ function CompanySettingsContent() {
 
             <form onSubmit={handleAddUser} className="space-y-3 flex-1 overflow-y-auto pr-1">
               <div>
-                <label className="text-xs font-semibold mb-1 block text-slate-700 dark:text-slate-300">Nome Completo *</label>
+                <label className="text-xs font-semibold mb-1 flex items-center text-slate-700 dark:text-slate-300">
+                  <span>Nome Completo</span>
+                  <span className="text-red-500 font-bold ml-1">*</span>
+                </label>
                 <Input required value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Ex: Roberto Técnico" className="text-xs rounded-xl" />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
-                  <label className="text-xs font-semibold mb-1 block text-slate-700 dark:text-slate-300">E-mail Corporativo *</label>
+                  <label className="text-xs font-semibold mb-1 flex items-center text-slate-700 dark:text-slate-300">
+                    <span>E-mail Corporativo</span>
+                    <span className="text-red-500 font-bold ml-1">*</span>
+                  </label>
                   <Input required type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="usuario@supreme.com.br" className="text-xs rounded-xl" />
                 </div>
 
@@ -2088,7 +2097,10 @@ function CompanySettingsContent() {
               </div>
 
               <div>
-                <label className="text-xs font-semibold mb-1 block text-slate-700 dark:text-slate-300">Grupo de Permissões Inicial *</label>
+                <label className="text-xs font-semibold mb-1 flex items-center text-slate-700 dark:text-slate-300">
+                  <span>Grupo de Permissões Inicial</span>
+                  <span className="text-red-500 font-bold ml-1">*</span>
+                </label>
                 <Select value={selectedGroupId} onChange={e => setSelectedGroupId(e.target.value)} className="text-xs rounded-xl">
                   {permissionGroups.map(g => (
                     <option key={g.id} value={g.id}>{g.name} ({g.default_role})</option>
@@ -2130,12 +2142,18 @@ function CompanySettingsContent() {
             <form onSubmit={handleSaveGroup} className="space-y-3 flex-1 overflow-y-auto pr-1">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
-                  <label className="text-xs font-semibold mb-1 block text-slate-700 dark:text-slate-300">Nome do Grupo *</label>
+                  <label className="text-xs font-semibold mb-1 flex items-center text-slate-700 dark:text-slate-300">
+                    <span>Nome do Grupo</span>
+                    <span className="text-red-500 font-bold ml-1">*</span>
+                  </label>
                   <Input required value={groupName} onChange={e => setGroupName(e.target.value)} placeholder="Ex: Técnicos Nível 2" className="text-xs rounded-xl" />
                 </div>
 
                 <div>
-                  <label className="text-xs font-semibold mb-1 block text-slate-700 dark:text-slate-300">Função Base Herdada *</label>
+                  <label className="text-xs font-semibold mb-1 flex items-center text-slate-700 dark:text-slate-300">
+                    <span>Função Base Herdada</span>
+                    <span className="text-red-500 font-bold ml-1">*</span>
+                  </label>
                   <Select value={groupDefaultRole} onChange={e => setGroupDefaultRole(e.target.value as any)} className="text-xs rounded-xl">
                     <option value="ATENDENTE">Atendente</option>
                     <option value="TECNICO">Técnico</option>

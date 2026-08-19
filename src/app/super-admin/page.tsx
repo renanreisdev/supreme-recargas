@@ -1237,7 +1237,10 @@ Incluso: Emissão de Comandas, Bancada Técnica Kanban, Rastreio e Impressão T�
             <form onSubmit={handleCreateCompany} className="space-y-4 text-xs">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="font-bold text-slate-700 dark:text-slate-300 mb-1 block">Nome Fantasia *</label>
+                  <label className="font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center">
+                    <span>Nome Fantasia</span>
+                    <span className="text-red-500 font-bold ml-1">*</span>
+                  </label>
                   <Input
                     required
                     placeholder="Ex: Alfa Recargas"
@@ -1273,7 +1276,10 @@ Incluso: Emissão de Comandas, Bancada Técnica Kanban, Rastreio e Impressão T�
                   />
                 </div>
                 <div>
-                  <label className="font-bold text-slate-700 dark:text-slate-300 mb-1 block">E-mail da Empresa *</label>
+                  <label className="font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center">
+                    <span>E-mail da Empresa</span>
+                    <span className="text-red-500 font-bold ml-1">*</span>
+                  </label>
                   <Input
                     type="email"
                     required
@@ -1313,7 +1319,10 @@ Incluso: Emissão de Comandas, Bancada Técnica Kanban, Rastreio e Impressão T�
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="font-bold text-slate-700 dark:text-slate-300 mb-1 block">Ramo de Atuação / Segmento *</label>
+                  <label className="font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center">
+                    <span>Ramo de Atuação / Segmento</span>
+                    <span className="text-red-500 font-bold ml-1">*</span>
+                  </label>
                   <Select
                     value={newBusinessSegment}
                     onChange={e => setNewBusinessSegment(e.target.value as BusinessSegment)}
@@ -1328,7 +1337,10 @@ Incluso: Emissão de Comandas, Bancada Técnica Kanban, Rastreio e Impressão T�
                 </div>
 
                 <div>
-                  <label className="font-bold text-slate-700 dark:text-slate-300 mb-1 block">Plano de Assinatura Inicial *</label>
+                  <label className="font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center">
+                    <span>Plano de Assinatura Inicial</span>
+                    <span className="text-red-500 font-bold ml-1">*</span>
+                  </label>
                   <Select
                     value={newPlanId}
                     onChange={e => setNewPlanId(e.target.value)}
@@ -1582,7 +1594,10 @@ Incluso: Emissão de Comandas, Bancada Técnica Kanban, Rastreio e Impressão T�
             <form onSubmit={handleSavePlan} className="space-y-4 text-xs">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="sm:col-span-2">
-                  <label className="font-bold mb-1 block">Nome do Plano *</label>
+                  <label className="font-bold mb-1 flex items-center">
+                    <span>Nome do Plano</span>
+                    <span className="text-red-500 font-bold ml-1">*</span>
+                  </label>
                   <Input
                     required
                     placeholder="Ex: Plano Master Oficina"

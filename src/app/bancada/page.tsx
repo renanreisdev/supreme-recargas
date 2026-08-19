@@ -641,7 +641,7 @@ export default function TechnicianWorkbenchPage() {
               placeholder="Buscar por OS, serial ou cliente..."
               value={searchFilter}
               onChange={e => setSearchFilter(e.target.value)}
-              className="pl-9 h-9 text-xs rounded-xl"
+              className="pl-9 h-10 text-xs rounded-xl"
             />
           </div>
 
@@ -649,7 +649,7 @@ export default function TechnicianWorkbenchPage() {
             <Select
               value={technicianFilter}
               onChange={e => setTechnicianFilter(e.target.value)}
-              className="h-9 text-xs rounded-xl font-medium border-slate-300 dark:border-slate-700"
+              className="h-10 text-xs rounded-xl font-medium border-slate-300 dark:border-slate-700"
               title="Filtrar itens por técnico responsável"
             >
               <option value="ALL">👤 Todos os Técnicos (Padrão)</option>
@@ -667,7 +667,7 @@ export default function TechnicianWorkbenchPage() {
             <Button
               onClick={() => setShowWorkflowModal(true)}
               variant="outline"
-              className="h-9 px-3 text-xs font-bold rounded-xl border-slate-300 dark:border-slate-700 gap-1.5 shrink-0 hover:border-emerald-500"
+              className="h-10 px-3 text-xs font-bold rounded-xl border-slate-300 dark:border-slate-700 gap-1.5 shrink-0 hover:border-emerald-500"
               title="Personalizar Colunas e Situações do Kanban"
             >
               <Sliders className="w-3.5 h-3.5 text-emerald-600" />
@@ -1204,8 +1204,9 @@ export default function TechnicianWorkbenchPage() {
 
             <form onSubmit={handleSaveStateForm} className="p-5 space-y-3">
               <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                  Nome da Etapa *
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center mb-1">
+                  <span>Nome da Etapa</span>
+                  <span className="text-red-500 font-bold ml-1">*</span>
                 </label>
                 <Input
                   value={formStateName}

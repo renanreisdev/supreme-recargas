@@ -182,11 +182,11 @@ export default function ReportsPage() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
           <div>
-            <span className="text-[11px] text-slate-500 block mb-1">Filtrar por Cliente:</span>
+            <span className="text-[11px] text-slate-500 block mb-1 font-medium">Filtrar por Cliente:</span>
             <Select
               value={selectedCustomerId}
               onChange={e => setSelectedCustomerId(e.target.value)}
-              className="h-8 text-xs rounded-xl"
+              className="h-10 text-xs rounded-xl"
             >
               <option value="">Todos os Clientes</option>
               {customers.map(c => (
@@ -198,11 +198,11 @@ export default function ReportsPage() {
           </div>
 
           <div>
-            <span className="text-[11px] text-slate-500 block mb-1">Status de Pagamento:</span>
+            <span className="text-[11px] text-slate-500 block mb-1 font-medium">Status de Pagamento:</span>
             <Select
               value={selectedPaymentStatus}
               onChange={e => setSelectedPaymentStatus(e.target.value)}
-              className="h-8 text-xs rounded-xl"
+              className="h-10 text-xs rounded-xl"
             >
               <option value="">Todos os Status</option>
               <option value="PAGO">Pago</option>
@@ -212,7 +212,7 @@ export default function ReportsPage() {
           </div>
 
           <div>
-            <span className="text-[11px] text-slate-500 block mb-1">Data Início:</span>
+            <span className="text-[11px] text-slate-500 block mb-1 font-medium">Data Início:</span>
             <Input
               type="date"
               value={startDate}
@@ -220,12 +220,12 @@ export default function ReportsPage() {
                 setStartDate(e.target.value);
                 setDatePreset('CUSTOM');
               }}
-              className="h-8 text-xs rounded-xl"
+              className="h-10 text-xs rounded-xl"
             />
           </div>
 
           <div>
-            <span className="text-[11px] text-slate-500 block mb-1">Data Fim:</span>
+            <span className="text-[11px] text-slate-500 block mb-1 font-medium">Data Fim:</span>
             <Input
               type="date"
               value={endDate}
@@ -233,7 +233,7 @@ export default function ReportsPage() {
                 setEndDate(e.target.value);
                 setDatePreset('CUSTOM');
               }}
-              className="h-8 text-xs rounded-xl"
+              className="h-10 text-xs rounded-xl"
             />
           </div>
         </div>

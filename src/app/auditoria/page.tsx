@@ -93,17 +93,17 @@ export default function AuditLogsPage() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <Button onClick={handleExportCSV} variant="outline" size="sm" className="text-xs h-9 gap-1.5 font-semibold rounded-xl border-slate-200 dark:border-slate-700">
+          <Button onClick={handleExportCSV} variant="outline" size="sm" className="text-xs h-10 px-4 gap-1.5 font-semibold rounded-xl border-slate-200 dark:border-slate-700">
             <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
             <span>Exportar CSV</span>
           </Button>
 
-          <Button onClick={() => window.print()} size="sm" className="bg-slate-900 hover:bg-slate-800 text-white gap-1.5 text-xs font-bold h-9 rounded-xl shadow-xs">
+          <Button onClick={() => window.print()} size="sm" className="bg-slate-900 hover:bg-slate-800 text-white gap-1.5 text-xs font-bold h-10 px-4 rounded-xl shadow-xs">
             <Printer className="w-4 h-4 text-emerald-400" />
             <span>Imprimir</span>
           </Button>
 
-          <Button onClick={loadData} size="sm" variant="outline" className="text-xs h-9 gap-1.5 font-semibold rounded-xl border-slate-200 dark:border-slate-700">
+          <Button onClick={loadData} size="sm" variant="outline" className="text-xs h-10 px-4 gap-1.5 font-semibold rounded-xl border-slate-200 dark:border-slate-700">
             <RefreshCw className="w-3.5 h-3.5" />
             <span>Atualizar</span>
           </Button>
@@ -143,12 +143,12 @@ export default function AuditLogsPage() {
               placeholder="Buscar por usuário, ação ou detalhe..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:border-emerald-500 text-slate-900 dark:text-slate-100 font-medium"
+              className="w-full pl-9 pr-3 h-10 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl outline-none focus:border-emerald-500 text-slate-900 dark:text-slate-100 font-medium"
             />
           </div>
 
           <div className="flex items-center gap-2 w-full sm:w-auto">
-            <Select value={selectedAction} onChange={(e) => setSelectedAction(e.target.value)} className="text-xs h-9 rounded-xl">
+            <Select value={selectedAction} onChange={(e) => setSelectedAction(e.target.value)} className="text-xs h-10 rounded-xl">
               <option value="">-- Todos os Tipos de Ação --</option>
               <optgroup label="Ordens de Serviço & Balcão">
                 <option value="CRIACAO_ORDEM_SERVICO">Abertura de OS</option>

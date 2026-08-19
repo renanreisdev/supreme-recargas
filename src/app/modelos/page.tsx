@@ -2094,8 +2094,9 @@ export default function CatalogAndModelsPage() {
                 <h4 className="text-xs font-bold uppercase text-slate-400 tracking-wider">1. Dados Principais</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                      Categoria do Equipamento *
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center mb-1">
+                      <span>Categoria do Equipamento</span>
+                      <span className="text-red-500 font-bold ml-1">*</span>
                     </label>
                     <Select
                       value={modelCategoryId}
@@ -2126,8 +2127,9 @@ export default function CatalogAndModelsPage() {
                   </div>
 
                   <div className="sm:col-span-2">
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                      Nome do Modelo / Descrição Principal *
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center mb-1">
+                      <span>Nome do Modelo / Descrição Principal</span>
+                      <span className="text-red-500 font-bold ml-1">*</span>
                     </label>
                     <Input
                       value={modelName}
@@ -2308,8 +2310,9 @@ export default function CatalogAndModelsPage() {
                   {isScaleCategory && (
                     <div className="pt-3 border-t border-slate-200/60 dark:border-slate-700/60 grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                          ⚖️ Tara / Peso Vazio (g) *
+                        <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center mb-1">
+                          <span>⚖️ Tara / Peso Vazio (g)</span>
+                          <span className="text-red-500 font-bold ml-1">*</span>
                         </label>
                         <Input
                           type="number"
@@ -2430,8 +2433,9 @@ export default function CatalogAndModelsPage() {
 
             <form onSubmit={handleSaveService} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
               <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                  Nome do Serviço *
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center mb-1">
+                  <span>Nome do Serviço</span>
+                  <span className="text-red-500 font-bold ml-1">*</span>
                 </label>
                 <Input
                   value={serviceName}
@@ -2470,8 +2474,9 @@ export default function CatalogAndModelsPage() {
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                  Preço Padrão de Venda (R$) *
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center mb-1">
+                  <span>Preço Padrão de Venda (R$)</span>
+                  <span className="text-red-500 font-bold ml-1">*</span>
                 </label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">R$</span>
@@ -2589,8 +2594,9 @@ export default function CatalogAndModelsPage() {
                 <h4 className="text-xs font-bold uppercase text-slate-400 tracking-wider">1. Dados Básicos da Categoria</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                      Nome da Categoria *
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center mb-1">
+                      <span>Nome da Categoria</span>
+                      <span className="text-red-500 font-bold ml-1">*</span>
                     </label>
                     <Input
                       value={catName}
@@ -2697,8 +2703,9 @@ export default function CatalogAndModelsPage() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     <div className="sm:col-span-2">
-                      <label className="text-[10px] font-bold text-slate-700 dark:text-slate-300 block mb-0.5">
-                        Nome da Especificação / Opcional *
+                      <label className="text-[10px] font-bold text-slate-700 dark:text-slate-300 flex items-center mb-0.5">
+                        <span>Nome da Especificação / Opcional</span>
+                        <span className="text-red-500 font-bold ml-1">*</span>
                       </label>
                       <Input
                         value={newFieldName}
@@ -3123,8 +3130,9 @@ export default function CatalogAndModelsPage() {
 
             <form onSubmit={handleSaveBrand} className="p-6 space-y-4">
               <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                  Nome da Marca / Fabricante *
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center mb-1">
+                  <span>Nome da Marca / Fabricante</span>
+                  <span className="text-red-500 font-bold ml-1">*</span>
                 </label>
                 <Input
                   value={brandName}
@@ -3182,8 +3190,9 @@ export default function CatalogAndModelsPage() {
 
             <form onSubmit={handleSaveState} className="p-6 space-y-4">
               <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                  Nome da Etapa / Situação *
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center mb-1">
+                  <span>Nome da Etapa / Situação</span>
+                  <span className="text-red-500 font-bold ml-1">*</span>
                 </label>
                 <Input
                   value={stateName}

@@ -150,7 +150,7 @@ export function CategoryCombobox({
   return (
     <div ref={containerRef} className={`relative w-full ${className}`}>
       <div
-        className={`flex items-center w-full px-3 py-2 text-sm bg-white dark:bg-slate-900 border rounded-xl transition-all duration-200 shadow-sm ${
+        className={`flex items-center w-full h-10 px-3 text-xs md:text-sm bg-white dark:bg-slate-900 border rounded-xl transition-all duration-200 shadow-sm cursor-pointer ${
           disabled
             ? 'opacity-60 cursor-not-allowed bg-slate-100 dark:bg-slate-800/50 border-slate-200 dark:border-slate-800'
             : isOpen

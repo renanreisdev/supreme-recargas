@@ -487,7 +487,7 @@ function EntriesListContent() {
             placeholder="Buscar por OS, cliente, serial ou modelo..."
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            className="pl-9 h-9 text-xs rounded-xl"
+            className="pl-9 h-10 text-xs rounded-xl"
           />
         </div>
       </div>
@@ -518,6 +518,7 @@ function EntriesListContent() {
               ) : (
                 filteredOrders.map(order => {
                   const statusConfig = getStatusBadgeConfig(order.status);
+                  const isDelivered = order.status === 'ENTREGUE';
                   const finConfig = getPaymentStatusBadge(order.financial_status);
 
                   return (
@@ -588,7 +589,7 @@ function EntriesListContent() {
 
                       {/* Actions */}
                       <td className="py-3.5 px-4 text-right whitespace-nowrap space-x-1.5">
-                        {order.status !== 'ENTREGUE' && (
+                        {!isDelivered && (
                           <Button
                             size="sm"
                             onClick={() => handleOpenDeliveryModal(order)}
@@ -599,7 +600,7 @@ function EntriesListContent() {
                           </Button>
                         )}
 
-                        {order.status === 'ENTREGUE' && canReopenEntry && (
+                        {isDelivered && canReopenEntry && (
                           <Button
                             size="sm"
                             variant="outline"
@@ -611,12 +612,12 @@ function EntriesListContent() {
                           </Button>
                         )}
 
-                        <Link href={`/impressao?orderId=${order.id}&type=${order.status === 'ENTREGUE' ? 'delivery' : 'entry'}&copies=${order.status === 'ENTREGUE' ? (settings.print_delivery_copies || 1) : (settings.print_entry_copies || 2)}`}>
+                        <Link href={`/impressao?orderId=${order.id}&type=${isDelivered ? 'delivery' : 'entry'}&copies=${isDelivered ? (settings.print_delivery_copies || 1) : (settings.print_entry_copies || 2)}`}>
                           <Button
                             size="sm"
                             variant="outline"
                             className="text-xs h-8 rounded-xl px-2 text-slate-600 dark:text-slate-300 hover:text-emerald-600"
-                            title={order.status === 'ENTREGUE' ? 'Imprimir Comprovante de Entrega' : 'Imprimir Comanda'}
+                            title={isDelivered ? 'Imprimir Comprovante de Entrega' : 'Imprimir Comanda'}
                           >
                             <Printer className="w-3.5 h-3.5" />
                           </Button>
@@ -657,16 +658,16 @@ function EntriesListContent() {
       {/* Delivery Checkout Modal */}
       {selectedOrderForDelivery && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in-0 duration-150">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl max-w-lg w-full p-5 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
               <div>
                 <h3 className="font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
-                  <PackageCheck className="w-5 h-5 text-emerald-600" />
-                  Registro de Baixa & Entrega
+                  <CheckCircle className="w-5 h-5 text-emerald-600" />
+                  <span>Entrega & Baixa de Ordem de Serviço</span>
                 </h3>
-                <span className="text-xs text-slate-500 font-mono">
-                  Ordem nº {selectedOrderForDelivery.order_number}
-                </span>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  OS #{selectedOrderForDelivery.order_number} • Cliente: {selectedOrderForDelivery.customer?.name}
+                </p>
               </div>
               <button
                 type="button"
@@ -681,15 +682,16 @@ function EntriesListContent() {
               {/* Receiver Info */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                    Nome do Recebedor *
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center mb-1">
+                    <span>Nome do Recebedor</span>
+                    <span className="text-red-500 font-bold ml-1">*</span>
                   </label>
                   <Input
                     required
                     placeholder="Quem está retirando..."
                     value={receiverName}
                     onChange={e => setReceiverName(e.target.value)}
-                    className="h-9 text-xs rounded-xl"
+                    className="h-10 text-xs rounded-xl"
                   />
                 </div>
 
@@ -700,7 +702,7 @@ function EntriesListContent() {
                   <Select
                     value={receiverRelation}
                     onChange={e => setReceiverRelation(e.target.value)}
-                    className="h-9 text-xs rounded-xl"
+                    className="h-10 text-xs rounded-xl"
                   >
                     <option value="Próprio Cliente">Próprio Cliente</option>
                     <option value="Funcionário / Portador">Funcionário / Portador</option>
@@ -722,7 +724,7 @@ function EntriesListContent() {
                     <Select
                       value={p.method}
                       onChange={e => handleUpdatePaymentLine(p.id, 'method', e.target.value)}
-                      className="h-8 text-xs rounded-lg flex-1"
+                      className="h-10 text-xs rounded-xl flex-1"
                     >
                       <option value="PIX">PIX</option>
                       <option value="DINHEIRO">Dinheiro</option>
@@ -738,7 +740,7 @@ function EntriesListContent() {
                       placeholder="Valor"
                       value={p.amount || ''}
                       onChange={e => handleUpdatePaymentLine(p.id, 'amount', e.target.value)}
-                      className="h-8 text-xs rounded-lg w-28 text-right font-bold"
+                      className="h-10 text-xs rounded-xl w-28 text-right font-bold"
                     />
 
                     {payments.length > 1 && (

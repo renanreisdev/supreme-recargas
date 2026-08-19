@@ -261,14 +261,14 @@ export default function CustomersPage() {
               placeholder="Buscar por nome, fone, CPF/CNPJ ou código..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:border-emerald-500 text-slate-900 dark:text-slate-100 font-medium"
+              className="w-full pl-9 pr-3 h-10 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl outline-none focus:border-emerald-500 text-slate-900 dark:text-slate-100 font-medium"
             />
           </div>
 
           {canCreate && (
             <Button 
               onClick={handleOpenCreate} 
-              className="bg-emerald-600 hover:bg-emerald-700 font-bold text-xs gap-1.5 shadow-md shadow-emerald-950/30 text-white shrink-0 h-9 rounded-xl px-4"
+              className="bg-emerald-600 hover:bg-emerald-700 font-bold text-xs gap-1.5 shadow-md shadow-emerald-950/30 text-white shrink-0 h-10 rounded-xl px-4"
             >
               <PlusCircle className="w-4 h-4" />
               <span>+ Novo Cliente</span>
@@ -286,45 +286,48 @@ export default function CustomersPage() {
         </div>
 
         <div className="p-4 rounded-2xl bg-white dark:bg-[#0e1626] border border-slate-200 dark:border-slate-800 shadow-xs">
-          <span className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400">Com WhatsApp</span>
+          <span className="text-[10px] uppercase font-bold text-slate-400">Contatos com WhatsApp</span>
           <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">{whatsappCount}</p>
-          <p className="text-[10px] text-slate-500 mt-0.5">Habilitados para envio de comprovante</p>
+          <p className="text-[10px] text-slate-500 mt-0.5">Prontos para notificação</p>
         </div>
 
         <div className="p-4 rounded-2xl bg-white dark:bg-[#0e1626] border border-slate-200 dark:border-slate-800 shadow-xs">
-          <span className="text-[10px] uppercase font-bold text-blue-600 dark:text-blue-400">Empresas / Jurídicas</span>
+          <span className="text-[10px] uppercase font-bold text-slate-400">Pessoas Jurídicas / Empresas</span>
           <p className="text-2xl font-black text-blue-600 dark:text-blue-400 mt-1">{companiesCount}</p>
           <p className="text-[10px] text-slate-500 mt-0.5">Contas corporativas</p>
         </div>
       </div>
 
-      {/* Customer List */}
-      <div className="bg-white dark:bg-[#0e1626] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+      {/* Customers Table */}
+      <div className="bg-white dark:bg-[#0e1626] rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider text-[10px]">
-              <tr>
-                <th className="p-3.5">Cód.</th>
-                <th className="p-3.5">Cliente / Empresa</th>
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 font-bold text-slate-500">
+                <th className="p-3.5">Cód</th>
+                <th className="p-3.5">Nome / Razão Social</th>
                 <th className="p-3.5">CPF / CNPJ</th>
                 <th className="p-3.5">Telefones & WhatsApp</th>
                 <th className="p-3.5">E-mail</th>
-                <th className="p-3.5">Data Cadastro</th>
+                <th className="p-3.5">Cadastrado em</th>
                 <th className="p-3.5">Observações</th>
                 <th className="p-3.5 text-right">Ações</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
               {filteredCustomers.map(cust => (
-                <tr key={cust.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
-                  <td className="p-3.5 font-mono font-black text-slate-700 dark:text-slate-300">
-                    #{cust.internal_code}
-                  </td>
+                <tr key={cust.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-900/40 transition-colors">
+                  <td className="p-3.5 font-mono text-slate-400 font-bold">#{cust.internal_code}</td>
                   <td className="p-3.5">
                     <div className="font-bold text-slate-900 dark:text-slate-100">{cust.name}</div>
-                    {cust.company_name && <div className="text-[11px] text-slate-500 font-normal">{cust.company_name}</div>}
+                    {cust.company_name && (
+                      <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
+                        <Building2 className="w-3 h-3 text-slate-400" />
+                        <span>{cust.company_name}</span>
+                      </div>
+                    )}
                   </td>
-                  <td className="p-3.5 text-slate-600 dark:text-slate-400 font-mono">{cust.document || '-'}</td>
+                  <td className="p-3.5 font-mono text-slate-600 dark:text-slate-300">{cust.document || '-'}</td>
                   <td className="p-3.5">
                     <div className="flex items-center gap-1.5 font-bold text-slate-900 dark:text-slate-100">
                       <span>{cust.phone}</span>
@@ -412,16 +415,20 @@ export default function CustomersPage() {
 
             <form onSubmit={handleSaveCustomer} className="space-y-3 flex-1 overflow-y-auto pr-1">
               <div>
-                <label className="text-xs font-semibold mb-1 block text-slate-700 dark:text-slate-300">Nome Completo / Razão Social *</label>
-                <Input required value={name} onChange={e => setName(e.target.value)} placeholder="Nome do cliente" className="h-9 rounded-xl text-xs" />
+                <label className="text-xs font-bold mb-1.5 flex items-center text-slate-700 dark:text-slate-300">
+                  <span>Nome Completo / Razão Social</span>
+                  <span className="text-red-500 font-bold ml-1">*</span>
+                </label>
+                <Input required value={name} onChange={e => setName(e.target.value)} placeholder="Nome do cliente" className="h-10 rounded-xl text-xs" />
               </div>
 
               {/* Telefone Principal & Telefone Secundário com Checkboxes de WhatsApp */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                      Telefone Principal *
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center">
+                      <span>Telefone Principal</span>
+                      <span className="text-red-500 font-bold ml-1">*</span>
                     </label>
                     <label className="flex items-center gap-1.5 cursor-pointer text-[11px] font-bold text-emerald-600 dark:text-emerald-400 select-none hover:text-emerald-700">
                       <input
@@ -438,13 +445,13 @@ export default function CustomersPage() {
                     value={phone} 
                     onChange={e => setPhone(e.target.value)} 
                     placeholder="(11) 99999-9999" 
-                    className="h-9 rounded-xl text-xs"
+                    className="h-10 rounded-xl text-xs"
                   />
                 </div>
 
                 <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
                       Telefone Secundário
                     </label>
                     <label className="flex items-center gap-1.5 cursor-pointer text-[11px] font-bold text-emerald-600 dark:text-emerald-400 select-none hover:text-emerald-700">
@@ -461,39 +468,44 @@ export default function CustomersPage() {
                     value={secondaryPhone} 
                     onChange={e => setSecondaryPhone(e.target.value)} 
                     placeholder="(11) 98888-8888 (Opcional)" 
-                    className="h-9 rounded-xl text-xs"
+                    className="h-10 rounded-xl text-xs"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-semibold mb-1 block text-slate-700 dark:text-slate-300">
-                    CPF ou CNPJ {isDocRequired ? <span className="text-rose-600 font-bold">* (Obrigatório)</span> : <span className="text-slate-400 font-normal">(Opcional)</span>}
+                  <label className="text-xs font-bold mb-1.5 flex items-center text-slate-700 dark:text-slate-300">
+                    <span>CPF ou CNPJ</span>
+                    {isDocRequired ? (
+                      <span className="text-red-500 font-bold ml-1">* (Obrigatório)</span>
+                    ) : (
+                      <span className="text-slate-400 font-normal ml-1 text-[11px]">(Opcional)</span>
+                    )}
                   </label>
                   <Input 
                     required={isDocRequired}
                     value={document} 
                     onChange={e => setDocument(e.target.value)} 
                     placeholder={isDocRequired ? "000.000.000-00 (Obrigatório)" : "000.000.000-00 (Opcional)"} 
-                    className="h-9 rounded-xl text-xs"
+                    className="h-10 rounded-xl text-xs"
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold mb-1 block text-slate-700 dark:text-slate-300">Empresa / Nome Fantasia</label>
-                  <Input value={companyName} onChange={e => setCompanyName(e.target.value)} placeholder="Ex: Marmoraria Silva" className="h-9 rounded-xl text-xs" />
+                  <label className="text-xs font-bold mb-1.5 block text-slate-700 dark:text-slate-300">Empresa / Nome Fantasia</label>
+                  <Input value={companyName} onChange={e => setCompanyName(e.target.value)} placeholder="Ex: Marmoraria Silva" className="h-10 rounded-xl text-xs" />
                 </div>
               </div>
 
               <div>
-                <label className="text-xs font-semibold mb-1 block text-slate-700 dark:text-slate-300">E-mail</label>
-                <Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="cliente@email.com" className="h-9 rounded-xl text-xs" />
+                <label className="text-xs font-bold mb-1.5 block text-slate-700 dark:text-slate-300">E-mail</label>
+                <Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="cliente@email.com" className="h-10 rounded-xl text-xs" />
               </div>
 
               <div>
-                <label className="text-xs font-semibold mb-1 block text-slate-700 dark:text-slate-300">Observações Gerais</label>
+                <label className="text-xs font-bold mb-1.5 block text-slate-700 dark:text-slate-300">Observações Gerais</label>
                 <textarea
-                  className="w-full h-20 p-2 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:border-emerald-500 text-slate-900 dark:text-slate-100 font-medium"
+                  className="w-full h-20 p-3 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:border-emerald-500 text-slate-900 dark:text-slate-100 font-medium"
                   value={notes}
                   onChange={e => setNotes(e.target.value)}
                   placeholder="Informações adicionais, endereço ou restrições do cliente..."
@@ -501,10 +513,10 @@ export default function CustomersPage() {
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
-                <Button type="button" variant="outline" onClick={() => setShowModal(false)} className="rounded-xl">
+                <Button type="button" variant="outline" onClick={() => setShowModal(false)} className="rounded-xl h-10 px-4 text-xs">
                   Cancelar
                 </Button>
-                <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700 font-bold text-white rounded-xl shadow-xs">
+                <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700 font-bold text-white rounded-xl h-10 px-5 text-xs shadow-xs">
                   {editingCustomerId ? 'Salvar Alterações' : 'Cadastrar Cliente'}
                 </Button>
               </div>

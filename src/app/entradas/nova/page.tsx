@@ -537,9 +537,12 @@ export default function NovaEntradaPage() {
           <CardContent className="p-4 md:p-5">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="md:col-span-2 space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
-                  Cliente Solicitante <span className="text-rose-500">*</span>
-                </label>
+                <div className="flex items-center h-5 mb-1.5">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center">
+                    <span>Cliente Solicitante</span>
+                    <span className="text-red-500 font-bold ml-1">*</span>
+                  </label>
+                </div>
                 <CustomerCombobox
                   customers={customers}
                   selectedCustomerId={selectedCustomerId}
@@ -551,8 +554,8 @@ export default function NovaEntradaPage() {
               </div>
 
               <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                <div className="flex items-center justify-between h-5 mb-1.5">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
                     Técnico Responsável
                   </label>
                   <Badge className={settings.require_technician_on_entry ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 text-[10px]' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 text-[10px]'}>
@@ -656,9 +659,10 @@ export default function NovaEntradaPage() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {/* Category Combobox */}
                     <div>
-                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1.5 flex items-center gap-1">
-                        <Layers className="w-3.5 h-3.5 text-slate-400" />
-                        <span>Categoria do Equipamento *</span>
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5 h-5 mb-1.5">
+                        <Layers className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span>Categoria do Equipamento</span>
+                        <span className="text-red-500 font-bold ml-0.5">*</span>
                       </label>
                       <CategoryCombobox
                         categories={categories}
@@ -671,9 +675,10 @@ export default function NovaEntradaPage() {
 
                     {/* Model Combobox */}
                     <div>
-                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1.5 flex items-center gap-1">
-                        <Tag className="w-3.5 h-3.5 text-slate-400" />
-                        <span>Modelo / Equipamento *</span>
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5 h-5 mb-1.5">
+                        <Tag className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span>Modelo / Equipamento</span>
+                        <span className="text-red-500 font-bold ml-0.5">*</span>
                       </label>
                       <ModelCombobox
                         models={categoryModels.length > 0 ? categoryModels : models}
@@ -702,9 +707,10 @@ export default function NovaEntradaPage() {
 
                     {/* Serial / Identifier */}
                     <div>
-                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1.5 flex items-center gap-1">
-                        <Sparkles className="w-3.5 h-3.5 text-slate-400" />
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5 h-5 mb-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                         <span>{currentCat?.identifier_label || 'Nº de Série / Identificador'}</span>
+                        {settings.require_item_serial && <span className="text-red-500 font-bold ml-0.5">*</span>}
                       </label>
                       <Input
                         placeholder="Ex: A942, IMEI 849201, SN102"
@@ -738,7 +744,7 @@ export default function NovaEntradaPage() {
                             const val = e.target.value ? parseFloat(e.target.value) : undefined;
                             setItems(prev => prev.map(it => it.id === item.id ? { ...it, input_weight_grams: val } : it));
                           }}
-                          className="h-9 text-xs rounded-xl bg-white dark:bg-slate-900 text-right font-bold"
+                          className="h-10 text-xs rounded-xl bg-white dark:bg-slate-900 text-right font-bold"
                         />
                       </div>
                     </div>
@@ -747,8 +753,8 @@ export default function NovaEntradaPage() {
                   {/* Accessories & Reported Issue */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                        Defeito Relatado pelo Cliente / Sintoma
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center h-5 mb-1.5">
+                        <span>Defeito Relatado pelo Cliente / Sintoma</span>
                       </label>
                       <Input
                         placeholder="Ex: Tinta preta falhando, tela trincada, não liga..."
@@ -757,13 +763,13 @@ export default function NovaEntradaPage() {
                           const val = e.target.value;
                           setItems(prev => prev.map(it => it.id === item.id ? { ...it, reported_issue: val } : it));
                         }}
-                        className="h-9 text-xs rounded-xl"
+                        className="h-10 text-xs rounded-xl"
                       />
                     </div>
 
                     <div>
-                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                        Acessórios / Observações de Entrada
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center h-5 mb-1.5">
+                        <span>Acessórios / Observações de Entrada</span>
                       </label>
                       <Input
                         placeholder="Ex: Carregador original, capinha, maleta com brocas..."
@@ -772,7 +778,7 @@ export default function NovaEntradaPage() {
                           const val = e.target.value;
                           setItems(prev => prev.map(it => it.id === item.id ? { ...it, accessories: val } : it));
                         }}
-                        className="h-9 text-xs rounded-xl"
+                        className="h-10 text-xs rounded-xl"
                       />
                     </div>
                   </div>
@@ -889,8 +895,8 @@ export default function NovaEntradaPage() {
           <CardContent className="p-4 md:p-5 space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                  Observações Gerais da Ordem de Serviço
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center h-5 mb-1.5">
+                  <span>Observações Gerais da Ordem de Serviço</span>
                 </label>
                 <textarea
                   rows={3}
@@ -918,7 +924,7 @@ export default function NovaEntradaPage() {
                       placeholder="R$ 0,00"
                       value={generalDiscount || ''}
                       onChange={e => setGeneralDiscount(parseFloat(e.target.value) || 0)}
-                      className="h-8 text-xs rounded-lg text-right font-bold"
+                      className="h-10 text-xs rounded-xl text-right font-bold"
                     />
                   </div>
                 </div>
@@ -952,7 +958,7 @@ export default function NovaEntradaPage() {
                         <Select
                           value={initialPaymentMethod}
                           onChange={e => setInitialPaymentMethod(e.target.value as PaymentMethod)}
-                          className="h-8 text-xs rounded-lg"
+                          className="h-10 text-xs rounded-xl"
                         >
                           <option value="PIX">PIX</option>
                           <option value="DINHEIRO">Dinheiro</option>
@@ -969,7 +975,7 @@ export default function NovaEntradaPage() {
                           max={finalTotal}
                           value={initialPaymentAmount || ''}
                           onChange={e => setInitialPaymentAmount(parseFloat(e.target.value) || 0)}
-                          className="h-8 text-xs rounded-lg font-bold text-right"
+                          className="h-10 text-xs rounded-xl font-bold text-right"
                         />
                       </div>
                     </div>
@@ -1017,23 +1023,25 @@ export default function NovaEntradaPage() {
 
             <form onSubmit={handleCreateCustomerInline} className="space-y-3">
               <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                  Nome Completo / Razão Social *
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center mb-1.5">
+                  <span>Nome Completo / Razão Social</span>
+                  <span className="text-red-500 font-bold ml-1">*</span>
                 </label>
                 <Input
                   required
                   placeholder="Ex: João da Silva / Empresa LTDA"
                   value={newCustName}
                   onChange={e => setNewCustName(e.target.value)}
-                  className="h-9 text-xs rounded-xl"
+                  className="h-10 text-xs rounded-xl"
                   autoFocus
                 />
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                    Telefone Principal *
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center">
+                    <span>Telefone Principal</span>
+                    <span className="text-red-500 font-bold ml-1">*</span>
                   </label>
                   <label className="flex items-center gap-1 cursor-pointer text-[11px] text-emerald-600 font-semibold">
                     <input
@@ -1050,13 +1058,13 @@ export default function NovaEntradaPage() {
                   placeholder="(11) 98765-4321"
                   value={newCustPhone}
                   onChange={e => setNewCustPhone(e.target.value)}
-                  className="h-9 text-xs rounded-xl"
+                  className="h-10 text-xs rounded-xl"
                 />
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
                     Telefone Secundário (Opcional)
                   </label>
                   <label className="flex items-center gap-1 cursor-pointer text-[11px] text-emerald-600 font-semibold">
@@ -1073,19 +1081,24 @@ export default function NovaEntradaPage() {
                   placeholder="(11) 3344-5566"
                   value={newCustSecondaryPhone}
                   onChange={e => setNewCustSecondaryPhone(e.target.value)}
-                  className="h-9 text-xs rounded-xl"
+                  className="h-10 text-xs rounded-xl"
                 />
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1">
-                  CPF ou CNPJ {settings.require_customer_document ? '*' : '(Opcional)'}
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center mb-1.5">
+                  <span>CPF ou CNPJ</span>
+                  {settings.require_customer_document ? (
+                    <span className="text-red-500 font-bold ml-1">*</span>
+                  ) : (
+                    <span className="text-slate-400 font-normal ml-1 text-[11px]">(Opcional)</span>
+                  )}
                 </label>
                 <Input
                   placeholder="000.000.000-00"
                   value={newCustDoc}
                   onChange={e => setNewCustDoc(e.target.value)}
-                  className="h-9 text-xs rounded-xl"
+                  className="h-10 text-xs rounded-xl"
                 />
               </div>
 
@@ -1095,14 +1108,14 @@ export default function NovaEntradaPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => setShowQuickCustomerModal(false)}
-                  className="rounded-xl text-xs"
+                  className="rounded-xl text-xs h-10 px-4"
                 >
                   Cancelar
                 </Button>
                 <Button
                   type="submit"
                   size="sm"
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs h-10 px-4"
                 >
                   Cadastrar e Selecionar
                 </Button>
