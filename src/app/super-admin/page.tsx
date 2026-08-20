@@ -33,7 +33,9 @@ import {
   KeyRound,
   ExternalLink,
   Inbox,
-  Wrench
+  Wrench,
+  Smartphone,
+  LogOut
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { AppStore, SEGMENT_PRESETS, BUSINESS_PRESETS } from '@/lib/store';
@@ -486,6 +488,28 @@ export default function SuperAdminPage() {
     } catch (err: any) {
       showToast(err?.message || 'Erro ao redefinir senha.', 'error');
     }
+  };
+
+  const handleTerminateSessionSuperAdmin = (u: Profile) => {
+    setDialogModal({
+      isOpen: true,
+      title: 'Desconectar Usuário Remotamente',
+      message: `Deseja forçar o encerramento da sessão ativa do usuário "${u.full_name}" no dispositivo "${u.active_session_device || 'Web'}"?`,
+      confirmLabel: 'Sim, Desconectar',
+      cancelLabel: 'Cancelar',
+      type: 'danger',
+      onConfirm: () => {
+        try {
+          AppStore.terminateUserSession(u.id, currentUser?.full_name || 'Super Administrador');
+          loadPlatformData();
+          showToast(`Sessão do usuário "${u.full_name}" encerrada com sucesso!`);
+        } catch (err: any) {
+          showToast(err?.message || 'Erro ao encerrar sessão.', 'error');
+        } finally {
+          setDialogModal(null);
+        }
+      }
+    });
   };
 
   // Simulator Calculation
@@ -1028,6 +1052,7 @@ Incluso: Emissão de Comandas, Bancada Técnica Kanban, Rastreio e Impressão T�
                     <th className="p-3.5">E-mail de Login</th>
                     <th className="p-3.5">Empresa / Unidade</th>
                     <th className="p-3.5">Papel (Role)</th>
+                    <th className="p-3.5">Sessão / Dispositivo</th>
                     <th className="p-3.5">Data Cadastro</th>
                     <th className="p-3.5 text-right">Ação Super Admin</th>
                   </tr>
@@ -1036,6 +1061,7 @@ Incluso: Emissão de Comandas, Bancada Técnica Kanban, Rastreio e Impressão T�
                   {allUsers.map(u => {
                     const roleBadge = getRoleBadgeConfig(u.role);
                     const company = companies.find(c => c.id === u.tenant_id);
+                    const isOnline = Boolean(u.active_session_token);
 
                     return (
                       <tr key={u.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
@@ -1060,16 +1086,47 @@ Incluso: Emissão de Comandas, Bancada Técnica Kanban, Rastreio e Impressão T�
                             {roleBadge.label}
                           </Badge>
                         </td>
+                        <td className="p-3.5">
+                          {isOnline ? (
+                            <div className="flex items-center gap-2">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 animate-pulse">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                Online
+                              </span>
+                              <span className="text-[10px] text-slate-400 max-w-[120px] truncate" title={u.active_session_device}>
+                                {u.active_session_device || 'Web'}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                              Offline
+                            </span>
+                          )}
+                        </td>
                         <td className="p-3.5 text-slate-400">{formatDate(u.created_at)}</td>
                         <td className="p-3.5 text-right">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleOpenResetPass(u)}
-                            className="h-7 text-[11px] px-2.5 font-bold text-amber-600 border-amber-500/30 hover:bg-amber-50"
-                          >
-                            Redefinir Senha
-                          </Button>
+                          <div className="flex items-center justify-end gap-1.5">
+                            {isOnline && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleTerminateSessionSuperAdmin(u)}
+                                className="h-7 text-[11px] px-2 font-bold text-rose-600 border-rose-500/30 hover:bg-rose-50 dark:hover:bg-rose-950/40 gap-1"
+                                title="Desconectar sessão ativa remotamente"
+                              >
+                                <LogOut className="w-3 h-3" />
+                                <span>Desconectar</span>
+                              </Button>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleOpenResetPass(u)}
+                              className="h-7 text-[11px] px-2.5 font-bold text-amber-600 border-amber-500/30 hover:bg-amber-50"
+                            >
+                              Redefinir Senha
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     );

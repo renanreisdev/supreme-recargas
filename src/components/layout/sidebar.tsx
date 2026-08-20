@@ -325,7 +325,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
 
           <button
             type="button"
-            onClick={logout}
+            onClick={() => logout()}
             className="flex-1 flex items-center justify-center gap-1.5 text-xs font-bold text-rose-600 dark:text-rose-300 hover:text-rose-700 dark:hover:text-white hover:bg-rose-50 dark:hover:bg-rose-950/70 px-2 py-1.5 rounded-lg border border-rose-200 dark:border-rose-900/40 transition-all shadow-xs"
             title="Sair do Sistema e Encerrar Sessão"
           >

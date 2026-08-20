@@ -1,11 +1,35 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { Profile, Company, UserRole } from '@/types';
 import { MOCK_PROFILES, MOCK_COMPANY_SUPREME, AppStore } from '@/lib/store';
+import { toast } from '@/lib/toast';
 
 const AUTH_STORAGE_KEY = 'supreme_auth_user';
+const AUTH_SESSION_KEY = 'supreme_session_token';
+
+export function getBrowserDeviceDescription(): string {
+  if (typeof window === 'undefined') return 'Dispositivo Web';
+  const ua = window.navigator.userAgent;
+  let browser = 'Navegador Web';
+  let os = 'Desktop';
+
+  if (ua.includes('Win')) os = 'Windows';
+  else if (ua.includes('Mac')) os = 'macOS';
+  else if (ua.includes('Linux')) os = 'Linux';
+  else if (ua.includes('Android')) os = 'Android';
+  else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS (Apple)';
+
+  if (ua.includes('Edg/')) browser = 'Edge';
+  else if (ua.includes('Chrome/')) browser = 'Chrome';
+  else if (ua.includes('Safari/') && !ua.includes('Chrome')) browser = 'Safari';
+  else if (ua.includes('Firefox/')) browser = 'Firefox';
+
+  return `${os} • ${browser}`;
+}
+
+export type LogoutReason = 'manual' | 'concurrent_session' | 'inactivity';
 
 interface AuthContextType {
   currentUser: Profile | null;
@@ -13,7 +37,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => { success: boolean; user?: Profile; error?: string };
-  logout: () => void;
+  logout: (reason?: LogoutReason) => void;
   changePassword: (newPassword: string) => { success: boolean; error?: string };
   setCurrentUser: (user: Profile | null) => void;
   hasPermission: (permission: string) => boolean;
@@ -28,6 +52,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
+  const lastActivityRef = useRef<number>(Date.now());
+  const isLoggingOutRef = useRef<boolean>(false);
+
   const currentCompany: Company = React.useMemo(() => {
     if (currentUser?.tenant_id) {
       return AppStore.getCompany(currentUser.tenant_id);
@@ -35,16 +62,75 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return MOCK_COMPANY_SUPREME;
   }, [currentUser]);
 
+  const setCurrentUser = useCallback((user: Profile | null) => {
+    setCurrentUserState(user);
+    if (typeof window !== 'undefined') {
+      if (user) {
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
+        if (user.active_session_token) {
+          localStorage.setItem(AUTH_SESSION_KEY, user.active_session_token);
+        }
+        if (user.tenant_id) {
+          AppStore.initRealtime(user.tenant_id);
+        }
+      } else {
+        localStorage.removeItem(AUTH_STORAGE_KEY);
+        localStorage.removeItem(AUTH_SESSION_KEY);
+      }
+    }
+  }, []);
+
+  const logout = useCallback((reason: LogoutReason = 'manual') => {
+    if (isLoggingOutRef.current) return;
+    isLoggingOutRef.current = true;
+
+    if (currentUser && reason === 'manual') {
+      AppStore.logLogout(currentUser);
+    }
+
+    setCurrentUser(null);
+
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+      localStorage.removeItem(AUTH_SESSION_KEY);
+    }
+
+    if (reason === 'concurrent_session') {
+      toast.warning('Esta conta foi conectada em outro dispositivo. Sessão encerrada.');
+      router.push('/login?reason=concurrent_session');
+    } else if (reason === 'inactivity') {
+      toast.info('Sua sessão foi encerrada automaticamente por inatividade.');
+      router.push('/login?reason=inactivity');
+    } else {
+      router.push('/login');
+    }
+
+    setTimeout(() => {
+      isLoggingOutRef.current = false;
+    }, 1000);
+  }, [currentUser, router, setCurrentUser]);
+
   // Load session from localStorage on boot
   useEffect(() => {
     try {
       if (typeof window !== 'undefined') {
         const stored = localStorage.getItem(AUTH_STORAGE_KEY);
+        const storedToken = localStorage.getItem(AUTH_SESSION_KEY);
+
         if (stored) {
           const parsed: Profile = JSON.parse(stored);
           const all = AppStore.getAllProfiles();
           const fresh = all.find(u => u.id === parsed.id || u.email.toLowerCase() === parsed.email?.toLowerCase()) || parsed;
+
           if (fresh && fresh.is_active !== false) {
+            // Check if concurrent session invalidation occurred while offline
+            if (storedToken && fresh.active_session_token && fresh.active_session_token !== storedToken) {
+              localStorage.removeItem(AUTH_STORAGE_KEY);
+              localStorage.removeItem(AUTH_SESSION_KEY);
+              router.replace('/login?reason=concurrent_session');
+              return;
+            }
+
             setCurrentUserState(fresh);
             if (fresh.tenant_id) {
               AppStore.initRealtime(fresh.tenant_id);
@@ -54,6 +140,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
           } else {
             localStorage.removeItem(AUTH_STORAGE_KEY);
+            localStorage.removeItem(AUTH_SESSION_KEY);
           }
         }
       }
@@ -62,26 +149,66 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setIsLoading(false);
     }
+  }, [router]);
+
+  // User activity tracker for inactivity auto-logout
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const recordActivity = () => {
+      lastActivityRef.current = Date.now();
+    };
+
+    const events = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
+    events.forEach(evt => window.addEventListener(evt, recordActivity, { passive: true }));
+
+    return () => {
+      events.forEach(evt => window.removeEventListener(evt, recordActivity));
+    };
   }, []);
 
-  const setCurrentUser = (user: Profile | null) => {
-    setCurrentUserState(user);
-    if (typeof window !== 'undefined') {
-      if (user) {
-        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
-        if (user.tenant_id) {
-          AppStore.initRealtime(user.tenant_id);
+  // Periodic Watchdog: Single Active Session Enforcement & Inactivity Timeout
+  useEffect(() => {
+    if (!currentUser || typeof window === 'undefined') return;
+
+    const interval = setInterval(() => {
+      if (isLoggingOutRef.current) return;
+
+      // 1. Inactivity Timeout Check
+      const timeoutMinutes = AppStore.getUserInactivityTimeout(currentUser.id);
+      if (timeoutMinutes > 0) {
+        const idleMs = Date.now() - lastActivityRef.current;
+        const maxIdleMs = timeoutMinutes * 60 * 1000;
+        if (idleMs >= maxIdleMs) {
+          logout('inactivity');
+          return;
         }
-      } else {
-        localStorage.removeItem(AUTH_STORAGE_KEY);
       }
-    }
-  };
+
+      // 2. Single Active Session Check (Concurrent Login Detection)
+      const localToken = localStorage.getItem(AUTH_SESSION_KEY);
+      if (localToken) {
+        const all = AppStore.getAllProfiles();
+        const fresh = all.find(p => p.id === currentUser.id);
+        if (fresh && fresh.active_session_token && fresh.active_session_token !== localToken) {
+          logout('concurrent_session');
+          return;
+        }
+      }
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, [currentUser, logout]);
 
   const login = (email: string, password: string): { success: boolean; user?: Profile; error?: string } => {
     try {
-      const user = AppStore.authenticate(email, password);
+      const deviceInfo = {
+        device: getBrowserDeviceDescription()
+      };
+      const user = AppStore.authenticate(email, password, deviceInfo);
       setCurrentUser(user);
+      lastActivityRef.current = Date.now();
+
       if (user.tenant_id) {
         AppStore.syncFromSupabase(user.tenant_id);
       } else {
@@ -91,14 +218,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (err: any) {
       return { success: false, error: err?.message || 'Falha ao autenticar.' };
     }
-  };
-
-  const logout = () => {
-    if (currentUser) {
-      AppStore.logLogout(currentUser);
-    }
-    setCurrentUser(null);
-    router.push('/login');
   };
 
   const changePassword = (newPassword: string): { success: boolean; error?: string } => {
@@ -217,6 +336,3 @@ export function useAuth() {
   }
   return context;
 }
-
-
-

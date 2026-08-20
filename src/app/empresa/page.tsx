@@ -29,7 +29,12 @@ import {
   CheckSquare,
   Eye,
   Layers,
-  Scale
+  Scale,
+  Smartphone,
+  Timer,
+  LogOut,
+  Radio,
+  Laptop
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import Link from 'next/link';
@@ -98,6 +103,7 @@ function CompanySettingsContent() {
   const [showPermissionsModal, setShowPermissionsModal] = useState(false);
   const [userPermissions, setUserPermissions] = useState<Record<string, boolean>>({});
   const [userMaxDiscount, setUserMaxDiscount] = useState<number>(10);
+  const [userInactivityTimeout, setUserInactivityTimeout] = useState<number>(0);
 
   // Group Modal State
   const [showGroupModal, setShowGroupModal] = useState(false);
@@ -106,6 +112,7 @@ function CompanySettingsContent() {
   const [groupDescription, setGroupDescription] = useState('');
   const [groupDefaultRole, setGroupDefaultRole] = useState<UserRole>('ATENDENTE');
   const [groupMaxDiscount, setGroupMaxDiscount] = useState<number>(10);
+  const [groupInactivityTimeout, setGroupInactivityTimeout] = useState<number>(0);
   const [groupPermissions, setGroupPermissions] = useState<Record<string, boolean>>({});
 
   // Add User Form State
@@ -393,6 +400,7 @@ function CompanySettingsContent() {
     setGroupDescription('');
     setGroupDefaultRole('ATENDENTE');
     setGroupMaxDiscount(10);
+    setGroupInactivityTimeout(0);
     
     const initialPerms: Record<string, boolean> = {
       create_entry: true,
@@ -415,6 +423,7 @@ function CompanySettingsContent() {
     setGroupDescription(group.description || '');
     setGroupDefaultRole(group.default_role || 'ATENDENTE');
     setGroupMaxDiscount(group.default_max_discount_percent !== undefined ? group.default_max_discount_percent : (group.default_role === 'ADMINISTRADOR' ? 100 : 10));
+    setGroupInactivityTimeout(group.default_inactivity_timeout_minutes ?? 0);
     setGroupPermissions(group.permissions || {});
     setShowGroupModal(true);
   };
@@ -433,6 +442,7 @@ function CompanySettingsContent() {
           description: groupDescription.trim(),
           default_role: groupDefaultRole,
           default_max_discount_percent: Math.min(100, Math.max(0, Number(groupMaxDiscount) || 0)),
+          default_inactivity_timeout_minutes: Math.max(0, Number(groupInactivityTimeout) || 0),
           permissions: groupPermissions
         }, currentUser.full_name);
         toast.success(`Grupo "${groupName.trim()}" atualizado com sucesso!`);
@@ -443,6 +453,7 @@ function CompanySettingsContent() {
           description: groupDescription.trim(),
           default_role: groupDefaultRole,
           default_max_discount_percent: Math.min(100, Math.max(0, Number(groupMaxDiscount) || 0)),
+          default_inactivity_timeout_minutes: Math.max(0, Number(groupInactivityTimeout) || 0),
           permissions: groupPermissions
         }, currentUser.full_name);
         toast.success(`Grupo "${groupName.trim()}" criado com sucesso!`);
@@ -542,6 +553,11 @@ function CompanySettingsContent() {
         ? u.max_discount_percent
         : (userGroup?.default_max_discount_percent ?? (u.role === 'ADMINISTRADOR' ? 100 : 10))
     );
+    setUserInactivityTimeout(
+      u.inactivity_timeout_minutes !== undefined && u.inactivity_timeout_minutes !== null
+        ? u.inactivity_timeout_minutes
+        : (userGroup?.default_inactivity_timeout_minutes ?? 0)
+    );
     setShowPermissionsModal(true);
   };
 
@@ -552,7 +568,8 @@ function CompanySettingsContent() {
         editingUser.id,
         userPermissions,
         currentUser.full_name,
-        Math.min(100, Math.max(0, Number(userMaxDiscount) || 0))
+        Math.min(100, Math.max(0, Number(userMaxDiscount) || 0)),
+        Number(userInactivityTimeout) || 0
       );
       toast.success(`Permissões do usuário "${editingUser.full_name}" salvas com sucesso!`);
       loadData();
@@ -562,6 +579,31 @@ function CompanySettingsContent() {
     } catch (err: any) {
       toast.error(err?.message || 'Erro ao salvar permissões do usuário.');
     }
+  };
+
+  const handleTerminateSession = (u: Profile) => {
+    setDialogModal({
+      isOpen: true,
+      title: 'Encerrar Sessão Ativa',
+      message: `Tem certeza que deseja desconectar a sessão remota de "${u.full_name}" no dispositivo "${u.active_session_device || 'Navegador Web'}"? O usuário será deslogado imediatamente.`,
+      confirmLabel: 'Sim, Desconectar',
+      cancelLabel: 'Cancelar',
+      type: 'danger',
+      onConfirm: () => {
+        try {
+          AppStore.terminateUserSession(u.id, currentUser.full_name);
+          toast.success(`Sessão de "${u.full_name}" encerrada com sucesso!`);
+          loadData();
+          if (editingUser?.id === u.id) {
+            setEditingUser(prev => prev ? { ...prev, active_session_token: undefined, active_session_device: undefined, active_session_at: undefined } : null);
+          }
+        } catch (err: any) {
+          toast.error(err?.message || 'Erro ao encerrar sessão.');
+        } finally {
+          setDialogModal(null);
+        }
+      }
+    });
   };
 
   const togglePermission = (key: string) => {
@@ -750,6 +792,7 @@ function CompanySettingsContent() {
                   <th className="p-3.5">Função Base</th>
                   <th className="p-3.5">Grupo de Permissões</th>
                   <th className="p-3.5">Status</th>
+                  <th className="p-3.5">Sessão / Dispositivo</th>
                   {hasPermission('manage_company') && <th className="p-3.5 text-right">Ações</th>}
                 </tr>
               </thead>
@@ -758,6 +801,7 @@ function CompanySettingsContent() {
                   const roleConfig = getRoleBadgeConfig(u.role);
                   const isCurrent = u.id === currentUser.id;
                   const groupName = getGroupNameForUser(u);
+                  const isOnline = Boolean(u.active_session_token);
 
                   return (
                     <tr key={u.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/40 transition-colors">
@@ -801,6 +845,33 @@ function CompanySettingsContent() {
                         <Badge className={u.is_active ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 text-[10px]' : 'bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 text-[10px]'}>
                           {u.is_active ? 'Ativo' : 'Inativo'}
                         </Badge>
+                      </td>
+
+                      <td className="p-3.5">
+                        {isOnline ? (
+                          <div className="flex items-center gap-2">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 animate-pulse">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                              Online
+                            </span>
+                            <div className="text-[10px] text-slate-500 max-w-[160px] truncate" title={u.active_session_device}>
+                              {u.active_session_device || 'Web'}
+                            </div>
+                            {hasPermission('manage_company') && !isCurrent && (
+                              <button
+                                onClick={() => handleTerminateSession(u)}
+                                className="text-[10px] text-rose-600 hover:text-rose-800 dark:text-rose-400 dark:hover:text-rose-200 font-bold underline ml-1 cursor-pointer"
+                                title="Desconectar sessão remota deste usuário"
+                              >
+                                Desconectar
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                            Offline
+                          </span>
+                        )}
                       </td>
 
                       {hasPermission('manage_company') && (
@@ -2204,6 +2275,35 @@ function CompanySettingsContent() {
                 />
               </div>
 
+              {/* Timeout de Inatividade Padrão do Grupo */}
+              <div className="p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <Timer className="w-3.5 h-3.5 text-blue-500" />
+                    <span>Auto-Logout por Inatividade do Grupo</span>
+                  </label>
+                  <span className="text-xs font-mono font-bold text-blue-600 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded-lg border border-blue-200 dark:border-blue-800">
+                    {groupInactivityTimeout === 0 ? 'Desativado' : `${groupInactivityTimeout} min`}
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-400">
+                  Desconecta automaticamente usuários inativos após o tempo estipulado.
+                </p>
+                <select
+                  value={groupInactivityTimeout}
+                  onChange={e => setGroupInactivityTimeout(Number(e.target.value))}
+                  className="w-full h-8 text-xs font-medium rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-2 text-slate-800 dark:text-slate-200"
+                >
+                  <option value={0}>0 — Desativado (Permanecer conectado)</option>
+                  <option value={5}>5 minutos de inatividade</option>
+                  <option value={10}>10 minutos de inatividade</option>
+                  <option value={15}>15 minutos de inatividade</option>
+                  <option value={30}>30 minutos de inatividade</option>
+                  <option value={60}>60 minutos (1 hora)</option>
+                  <option value={120}>120 minutos (2 horas)</option>
+                </select>
+              </div>
+
               {/* Permissions Checklist */}
               <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800">
                 <div className="flex items-center justify-between">
@@ -2278,6 +2378,50 @@ function CompanySettingsContent() {
                 Você pode conceder ou revogar permissões e ajustar o limite de desconto deste colaborador:
               </p>
 
+              {/* Card de Sessão Ativa do Usuário */}
+              <div className="p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <Smartphone className="w-3.5 h-3.5 text-indigo-500" />
+                    <span>Sessão & Dispositivo Conectado</span>
+                  </span>
+                  {editingUser.active_session_token ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 animate-pulse">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                      Online
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                      Offline
+                    </span>
+                  )}
+                </div>
+                {editingUser.active_session_token ? (
+                  <div className="flex items-center justify-between pt-1 border-t border-slate-200 dark:border-slate-800 text-[11px]">
+                    <div className="text-slate-600 dark:text-slate-400 space-y-0.5">
+                      <div><strong>Dispositivo:</strong> {editingUser.active_session_device || 'Web'}</div>
+                      {editingUser.active_session_at && (
+                        <div className="text-[10px] text-slate-400">Ativo desde: {formatDateTime(editingUser.active_session_at)}</div>
+                      )}
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleTerminateSession(editingUser)}
+                      className="h-7 text-[11px] text-rose-600 border-rose-200 hover:bg-rose-50 dark:border-rose-800/60 dark:hover:bg-rose-950/40 rounded-lg gap-1"
+                    >
+                      <LogOut className="w-3 h-3" />
+                      <span>Desconectar</span>
+                    </Button>
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-slate-400">
+                    O usuário não possui nenhuma sessão ativa no momento.
+                  </p>
+                )}
+              </div>
+
               {/* Limite de Desconto Individual */}
               <div className="p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1.5">
                 <div className="flex items-center justify-between">
@@ -2300,6 +2444,35 @@ function CompanySettingsContent() {
                   className="h-8 text-xs font-bold rounded-lg"
                   placeholder="Ex: 15"
                 />
+              </div>
+
+              {/* Timeout de Inatividade Individual */}
+              <div className="p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <Timer className="w-3.5 h-3.5 text-blue-500" />
+                    <span>Auto-Logout por Inatividade deste Usuário</span>
+                  </label>
+                  <span className="text-xs font-mono font-bold text-blue-600 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded-lg border border-blue-200 dark:border-blue-800">
+                    {userInactivityTimeout === 0 ? 'Desativado' : `${userInactivityTimeout} min`}
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-400">
+                  Desconecta a sessão deste colaborador após o período de inatividade configurado.
+                </p>
+                <select
+                  value={userInactivityTimeout}
+                  onChange={e => setUserInactivityTimeout(Number(e.target.value))}
+                  className="w-full h-8 text-xs font-medium rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-2 text-slate-800 dark:text-slate-200"
+                >
+                  <option value={0}>0 — Desativado (Permanecer conectado)</option>
+                  <option value={5}>5 minutos de inatividade</option>
+                  <option value={10}>10 minutos de inatividade</option>
+                  <option value={15}>15 minutos de inatividade</option>
+                  <option value={30}>30 minutos de inatividade</option>
+                  <option value={60}>60 minutos (1 hora)</option>
+                  <option value={120}>120 minutos (2 horas)</option>
+                </select>
               </div>
 
               <div className="space-y-2">

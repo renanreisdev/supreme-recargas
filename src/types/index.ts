@@ -142,6 +142,7 @@ export interface PermissionGroup {
   is_system_default?: boolean;
   default_role: UserRole;
   default_max_discount_percent?: number; // Limite de desconto padrão do grupo (ex: 10%, 20%, 100%)
+  default_inactivity_timeout_minutes?: number; // Timeout de inatividade padrão do grupo em minutos (0 = desativado)
   permissions: Record<string, boolean>;
   created_at?: string;
   updated_at?: string;
@@ -161,6 +162,16 @@ export interface Profile {
   is_active: boolean;
   custom_permissions?: Record<string, boolean>;
   max_discount_percent?: number; // Limite de desconto personalizado do usuário (ex: 15%, 50%, 100%)
+  
+  // Single active session tracking per device
+  active_session_token?: string;
+  active_session_device?: string;
+  active_session_ip?: string;
+  active_session_at?: string;
+
+  // Auto-logout inactivity timeout in minutes (e.g. 5, 10, 15, 30, 60, 120, 0 = disabled)
+  inactivity_timeout_minutes?: number;
+
   created_at: string;
   company?: Company;
 }
@@ -661,6 +672,9 @@ export interface CompanySettings {
 
   // Grupos de Usuários autorizados a aparecer como Técnicos Responsáveis
   technician_group_ids?: string[]; // IDs dos PermissionGroups elegíveis como técnicos
+
+  // Política Geral de Desconexão por Inatividade (minutos, 0 = desativado)
+  default_inactivity_timeout_minutes?: number;
 
   // ==========================================================================
   // CONFIGURAÇÕES AVANÇADAS DE IMPRESSÃO & COMANDAS TÉRMICAS

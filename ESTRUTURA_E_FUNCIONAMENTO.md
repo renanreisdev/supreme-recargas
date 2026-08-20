@@ -157,6 +157,11 @@ erDiagram
 | `group_id` | String / UUID | ID do grupo de permissão atribuído |
 | `group_name`| VARCHAR(100) | Nome de exibição do grupo |
 | `custom_permissions`| JSONB | Ajustes e exceções de permissão individuais do colaborador |
+| `max_discount_percent`| INT | Limite individual de desconto na entrega |
+| `active_session_token`| TEXT | Token único da sessão ativa (controle de sessão única por dispositivo) |
+| `active_session_device`| TEXT | Informações de dispositivo e navegador da sessão ativa |
+| `active_session_at` | TIMESTAMPTZ | Data e hora de início da sessão ativa |
+| `inactivity_timeout_minutes`| INT | Minutos de inatividade para auto-logout (0 = desativado) |
 | `is_active` | BOOLEAN | Se o usuário está ativo ou desativado |
 
 ---

@@ -1224,6 +1224,9 @@ export class AppStore {
     if (updates.default_max_discount_percent !== undefined && updates.default_max_discount_percent !== old.default_max_discount_percent) {
       diffs.push(`Limite de desconto de ${old.default_max_discount_percent}% para ${updates.default_max_discount_percent}%`);
     }
+    if (updates.default_inactivity_timeout_minutes !== undefined && updates.default_inactivity_timeout_minutes !== old.default_inactivity_timeout_minutes) {
+      diffs.push(`Timeout de inatividade de ${old.default_inactivity_timeout_minutes ?? 0}min para ${updates.default_inactivity_timeout_minutes}min`);
+    }
     if (updates.permissions) {
       const activeCount = Object.values(updates.permissions).filter(Boolean).length;
       diffs.push(`Permissões atualizadas (${activeCount} ativas)`);
@@ -1308,6 +1311,9 @@ export class AppStore {
     if (updates.max_discount_percent !== undefined && updates.max_discount_percent !== old.max_discount_percent) {
       diffs.push(`Limite de desconto de ${old.max_discount_percent ?? 10}% para ${updates.max_discount_percent}%`);
     }
+    if (updates.inactivity_timeout_minutes !== undefined && updates.inactivity_timeout_minutes !== old.inactivity_timeout_minutes) {
+      diffs.push(`Timeout de inatividade de ${old.inactivity_timeout_minutes ?? 0}min para ${updates.inactivity_timeout_minutes}min`);
+    }
 
     this.logAudit({
       tenant_id: old.tenant_id,
@@ -1365,7 +1371,13 @@ export class AppStore {
     return user;
   }
 
-  static updateUserPermissions(id: string, permissions: Record<string, boolean>, performedByName?: string, maxDiscountPercent?: number): Profile {
+  static updateUserPermissions(
+    id: string, 
+    permissions: Record<string, boolean>, 
+    performedByName?: string, 
+    maxDiscountPercent?: number,
+    inactivityTimeoutMinutes?: number
+  ): Profile {
     const data = this.getStoreData();
     const idx = data.profiles.findIndex((p: Profile) => p.id === id);
     if (idx === -1) throw new Error('Usuário não encontrado');
@@ -1376,11 +1388,22 @@ export class AppStore {
     if (maxDiscountPercent !== undefined) {
       data.profiles[idx].max_discount_percent = maxDiscountPercent;
     }
+    if (inactivityTimeoutMinutes !== undefined) {
+      data.profiles[idx].inactivity_timeout_minutes = inactivityTimeoutMinutes;
+    }
     this.saveStoreData(data);
-    supabase.from('profiles').update({
-      custom_permissions: permissions,
-      max_discount_percent: maxDiscountPercent
-    }).eq('id', id).then();
+    
+    const dbUpdates: any = {
+      custom_permissions: permissions
+    };
+    if (maxDiscountPercent !== undefined) dbUpdates.max_discount_percent = maxDiscountPercent;
+    if (inactivityTimeoutMinutes !== undefined) dbUpdates.inactivity_timeout_minutes = inactivityTimeoutMinutes;
+    
+    supabase.from('profiles').update(dbUpdates).eq('id', id).then();
+
+    const extraNotes: string[] = [];
+    if (maxDiscountPercent !== undefined) extraNotes.push(`Limite Desconto: ${maxDiscountPercent}%`);
+    if (inactivityTimeoutMinutes !== undefined) extraNotes.push(`Timeout Inatividade: ${inactivityTimeoutMinutes === 0 ? 'Desativado' : `${inactivityTimeoutMinutes}min`}`);
 
     this.logAudit({
       tenant_id: oldUser.tenant_id,
@@ -1388,10 +1411,93 @@ export class AppStore {
       action: 'PERMISSOES_USUARIO',
       resource: 'profiles',
       resource_id: id,
-      details: `Atualizadas permissões personalizadas do usuário "${oldUser.full_name}" (${newPermCount} permissões concedidas${maxDiscountPercent !== undefined ? `, Limite Desconto: ${maxDiscountPercent}%` : ''})`
+      details: `Atualizadas permissões personalizadas do usuário "${oldUser.full_name}" (${newPermCount} permissões concedidas${extraNotes.length > 0 ? `, ${extraNotes.join(', ')}` : ''})`
     });
 
     return data.profiles[idx];
+  }
+
+  static terminateUserSession(userId: string, performedByName?: string): Profile {
+    const data = this.getStoreData();
+    const idx = (data.profiles || []).findIndex((p: Profile) => p.id === userId);
+    if (idx === -1) throw new Error('Usuário não encontrado');
+    const user = data.profiles[idx];
+    const prevDevice = user.active_session_device || 'Sessão Ativa';
+    
+    user.active_session_token = undefined;
+    user.active_session_device = undefined;
+    user.active_session_ip = undefined;
+    user.active_session_at = undefined;
+    data.profiles[idx] = { ...user };
+    this.saveStoreData(data);
+
+    supabase.from('profiles').update({
+      active_session_token: null,
+      active_session_device: null,
+      active_session_ip: null,
+      active_session_at: null
+    }).eq('id', userId).then();
+
+    this.logAudit({
+      tenant_id: user.tenant_id,
+      user_name: performedByName || 'Administrador',
+      action: 'ENCERRAR_SESSAO',
+      resource: 'profiles',
+      resource_id: userId,
+      details: `Encerramento forçado de sessão ativa do usuário "${user.full_name}" (${prevDevice})`
+    });
+
+    return data.profiles[idx];
+  }
+
+  static updateUserInactivityTimeout(userId: string, timeoutMinutes: number, performedByName?: string): Profile {
+    const data = this.getStoreData();
+    const idx = (data.profiles || []).findIndex((p: Profile) => p.id === userId);
+    if (idx === -1) throw new Error('Usuário não encontrado');
+    const user = data.profiles[idx];
+    const oldTimeout = user.inactivity_timeout_minutes ?? 0;
+    const cleanTimeout = Math.max(0, Number(timeoutMinutes) || 0);
+
+    user.inactivity_timeout_minutes = cleanTimeout;
+    data.profiles[idx] = { ...user };
+    this.saveStoreData(data);
+
+    supabase.from('profiles').update({
+      inactivity_timeout_minutes: cleanTimeout
+    }).eq('id', userId).then();
+
+    this.logAudit({
+      tenant_id: user.tenant_id,
+      user_name: performedByName || 'Administrador',
+      action: 'ALTERACAO_TIMEOUT_INATIVIDADE',
+      resource: 'profiles',
+      resource_id: userId,
+      details: `Alterado tempo de inatividade do usuário "${user.full_name}" de ${oldTimeout}min para ${cleanTimeout}min`
+    });
+
+    return data.profiles[idx];
+  }
+
+  static getUserInactivityTimeout(userId: string): number {
+    const data = this.getStoreData();
+    const user = (data.profiles || []).find((p: Profile) => p.id === userId);
+    if (!user) return 0;
+    if (user.inactivity_timeout_minutes !== undefined && user.inactivity_timeout_minutes !== null) {
+      return Number(user.inactivity_timeout_minutes);
+    }
+    if (user.group_id) {
+      const group = (data.permissionGroups || []).find((g: PermissionGroup) => g.id === user.group_id);
+      if (group && group.default_inactivity_timeout_minutes !== undefined && group.default_inactivity_timeout_minutes !== null) {
+        return Number(group.default_inactivity_timeout_minutes);
+      }
+    }
+    if (user.tenant_id) {
+      const settings = this.getSettings(user.tenant_id);
+      if (settings && settings.default_inactivity_timeout_minutes !== undefined && settings.default_inactivity_timeout_minutes !== null) {
+        return Number(settings.default_inactivity_timeout_minutes);
+      }
+    }
+    return 0;
   }
 
   static getUserMaxDiscountPercent(userId: string): number {
@@ -2350,7 +2456,7 @@ export class AppStore {
     }).then(() => {
       // Persist items
       for (const item of orderItems) {
-        const validStateId = isValidUUID(item.current_state_id) ? item.current_state_id : 'a4000000-0000-0000-0000-000000000001';
+        const validStateId = isValidUUID(item.current_state_id) && !item.current_state_id?.startsWith('a4000000') ? item.current_state_id : null;
         supabase.from('service_order_items').insert({
           id: item.id,
           tenant_id: item.tenant_id,
@@ -2819,12 +2925,16 @@ export class AppStore {
       active_templates: updated.active_templates,
       technician_group_ids: updated.technician_group_ids,
       item_description_display_mode: updated.item_description_display_mode,
+      default_inactivity_timeout_minutes: updated.default_inactivity_timeout_minutes,
       updated_at: new Date().toISOString()
     }, { onConflict: 'tenant_id' }).then(({ error }) => {
       if (error) console.error('Error updating company_settings in Supabase:', error);
     });
 
     const diffs: string[] = [];
+    if (updates.default_inactivity_timeout_minutes !== undefined && updates.default_inactivity_timeout_minutes !== old.default_inactivity_timeout_minutes) {
+      diffs.push(`Timeout de inatividade geral da empresa de ${old.default_inactivity_timeout_minutes ?? 0}min para ${updates.default_inactivity_timeout_minutes}min`);
+    }
     if (updates.thermal_paper_width_mm !== undefined && updates.thermal_paper_width_mm !== old.thermal_paper_width_mm) {
       diffs.push(`Largura da bobina de ${old.thermal_paper_width_mm}mm para ${updates.thermal_paper_width_mm}mm`);
     }
@@ -2941,7 +3051,7 @@ export class AppStore {
   // --------------------------------------------------------------------------
   // AUTHENTICATION & REALTIME HELPERS
   // --------------------------------------------------------------------------
-  static authenticate(email: string, pass: string): Profile {
+  static authenticate(email: string, pass: string, deviceInfo?: { device?: string; ip?: string }): Profile {
     const data = this.getStoreData();
     const profiles: Profile[] = data.profiles || MOCK_PROFILES;
     const user = profiles.find(p => p.email.toLowerCase().trim() === email.toLowerCase().trim());
@@ -2950,13 +3060,37 @@ export class AppStore {
     if (user.password && user.password !== pass) {
       throw new Error('Senha incorreta.');
     }
+
+    const sessionToken = generateUUID();
+    const sessionDevice = deviceInfo?.device || 'Navegador Web';
+    const sessionIp = deviceInfo?.ip || null;
+    const sessionAt = new Date().toISOString();
+
+    user.active_session_token = sessionToken;
+    user.active_session_device = sessionDevice;
+    user.active_session_ip = sessionIp || undefined;
+    user.active_session_at = sessionAt;
+
+    const idx = data.profiles.findIndex((p: Profile) => p.id === user.id);
+    if (idx !== -1) {
+      data.profiles[idx] = { ...user };
+      this.saveStoreData(data);
+    }
+
+    supabase.from('profiles').update({
+      active_session_token: sessionToken,
+      active_session_device: sessionDevice,
+      active_session_ip: sessionIp,
+      active_session_at: sessionAt
+    }).eq('id', user.id).then();
+
     this.logAudit({
       tenant_id: user.tenant_id,
       user_name: user.full_name,
       action: 'LOGIN_SUCESSO',
       resource: 'profiles',
       resource_id: user.id,
-      details: `Login realizado com sucesso: ${user.full_name} (${user.role})`
+      details: `Login realizado com sucesso: ${user.full_name} (${user.role}) em [${sessionDevice}]`
     });
     return user;
   }
@@ -3103,6 +3237,23 @@ export class AppStore {
   }
 
   static logLogout(user: Profile) {
+    const data = this.getStoreData();
+    const idx = (data.profiles || []).findIndex((p: Profile) => p.id === user.id);
+    if (idx !== -1) {
+      data.profiles[idx].active_session_token = undefined;
+      data.profiles[idx].active_session_device = undefined;
+      data.profiles[idx].active_session_ip = undefined;
+      data.profiles[idx].active_session_at = undefined;
+      this.saveStoreData(data);
+    }
+
+    supabase.from('profiles').update({
+      active_session_token: null,
+      active_session_device: null,
+      active_session_ip: null,
+      active_session_at: null
+    }).eq('id', user.id).then();
+
     this.logAudit({
       tenant_id: user.tenant_id,
       user_name: user.full_name,
