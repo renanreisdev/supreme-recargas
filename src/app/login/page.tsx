@@ -13,9 +13,12 @@ import {
   ShieldCheck, 
   AlertCircle,
   Smartphone,
-  Timer
+  Timer,
+  LogOut,
+  Loader2
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
+import { formatDateTime } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -33,6 +36,10 @@ function LoginForm() {
   const [errorMsg, setErrorMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
+  const [confirmModalData, setConfirmModalData] = useState<{
+    activeDevice?: string;
+    activeAt?: string;
+  } | null>(null);
 
   // If already authenticated, redirect to proper route
   useEffect(() => {
@@ -51,7 +58,16 @@ function LoginForm() {
     setIsSubmitting(true);
 
     try {
-      const res = await login(email, password);
+      const res = await login(email, password, false);
+      if (res.requiresConfirmation) {
+        setConfirmModalData({
+          activeDevice: res.activeDevice,
+          activeAt: res.activeAt
+        });
+        setIsSubmitting(false);
+        return;
+      }
+
       if (res.success) {
         if (res.user?.role === 'SUPER_ADMIN') {
           router.replace('/super-admin');
@@ -60,6 +76,28 @@ function LoginForm() {
         }
       } else {
         setErrorMsg(res.error || 'Credenciais inválidas.');
+        setIsSubmitting(false);
+      }
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Falha ao autenticar.');
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleForceLogin = async () => {
+    setIsSubmitting(true);
+    setErrorMsg('');
+    try {
+      const res = await login(email, password, true);
+      if (res.success) {
+        setConfirmModalData(null);
+        if (res.user?.role === 'SUPER_ADMIN') {
+          router.replace('/super-admin');
+        } else {
+          router.replace('/dashboard');
+        }
+      } else {
+        setErrorMsg(res.error || 'Falha ao autenticar.');
         setIsSubmitting(false);
       }
     } catch (err: any) {
@@ -205,6 +243,72 @@ function LoginForm() {
         <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
         <span>Ambiente Seguro Multi-Empresa com Controle de Sessão Única</span>
       </p>
+
+      {/* Confirmation Modal: Active Session Conflict */}
+      {confirmModalData && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 text-white rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center gap-3 border-b border-slate-800 pb-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                <Smartphone className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-sm text-white">Sessão Ativa Detectada</h3>
+                <p className="text-[11px] text-slate-400">Esta conta já está conectada em outro local</p>
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-slate-950/80 rounded-xl border border-slate-800 space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">Dispositivo Conectado:</span>
+                <strong className="text-emerald-400">{confirmModalData.activeDevice || 'Navegador Web'}</strong>
+              </div>
+              {confirmModalData.activeAt && (
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-slate-500">Conectado em:</span>
+                  <span className="text-slate-300 font-mono">{formatDateTime(confirmModalData.activeAt)}</span>
+                </div>
+              )}
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Deseja continuar com o login neste dispositivo? Ao confirmar, <strong>a sessão aberta no outro dispositivo será encerrada imediatamente</strong>.
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setConfirmModalData(null)}
+                disabled={isSubmitting}
+                className="text-xs border-slate-700 text-slate-300 hover:bg-slate-800"
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleForceLogin}
+                disabled={isSubmitting}
+                className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs gap-1.5 shadow-md shadow-amber-950/40"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Conectando...</span>
+                  </>
+                ) : (
+                  <>
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Sim, Desconectar Outro e Entrar</span>
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

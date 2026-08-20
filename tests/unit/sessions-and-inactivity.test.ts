@@ -110,14 +110,32 @@ describe('User Sessions, Inactivity Timeouts and Security Engine', () => {
   });
 
   it('authenticates asynchronously and generates unique session tokens', async () => {
-    const user = await AppStore.authenticateAsync('admin@supreme.com.br', 'admin123', {
+    // First login establishes session
+    const res1 = await AppStore.authenticateAsync('admin@supreme.com.br', 'admin123', {
       device: 'MacBook Pro • Safari'
-    });
+    }, true);
 
-    expect(user).toBeDefined();
-    expect(user.active_session_token).toBeDefined();
-    expect(user.active_session_device).toBe('MacBook Pro • Safari');
-  });
+    expect(res1.user).toBeDefined();
+    expect(res1.user.active_session_token).toBeDefined();
+    expect(res1.user.active_session_device).toBe('MacBook Pro • Safari');
+
+    // Second login without forceLogin returns requiresConfirmation
+    const res2 = await AppStore.authenticateAsync('admin@supreme.com.br', 'admin123', {
+      device: 'iPhone 15 • Safari'
+    }, false);
+
+    expect(res2.requiresConfirmation).toBe(true);
+    expect(res2.activeDevice).toBe('MacBook Pro • Safari');
+
+    // Second login with forceLogin = true succeeds and replaces session
+    const res3 = await AppStore.authenticateAsync('admin@supreme.com.br', 'admin123', {
+      device: 'iPhone 15 • Safari'
+    }, true);
+
+    expect(res3.requiresConfirmation).toBeUndefined();
+    expect(res3.user.active_session_device).toBe('iPhone 15 • Safari');
+    expect(res3.user.active_session_token).not.toBe(res1.user.active_session_token);
+  }, 15000);
 
   it('allows user self-service inactivity timeout update and retrieves updated value', () => {
     const tech = AppStore.getAllProfiles().find(p => p.email === 'tecnico1@supreme.com.br')!;

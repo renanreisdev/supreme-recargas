@@ -36,7 +36,14 @@ interface AuthContextType {
   currentCompany: Company;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<{ success: boolean; user?: Profile; error?: string }>;
+  login: (email: string, password: string, force?: boolean) => Promise<{
+    success: boolean;
+    user?: Profile;
+    error?: string;
+    requiresConfirmation?: boolean;
+    activeDevice?: string;
+    activeAt?: string;
+  }>;
   logout: (reason?: LogoutReason) => void;
   changePassword: (newPassword: string) => { success: boolean; error?: string };
   updateMyInactivityTimeout: (minutes: number) => boolean;
@@ -231,12 +238,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(interval);
   }, [currentUser, logout]);
 
-  const login = async (email: string, password: string): Promise<{ success: boolean; user?: Profile; error?: string }> => {
+  const login = async (
+    email: string,
+    password: string,
+    force: boolean = false
+  ): Promise<{
+    success: boolean;
+    user?: Profile;
+    error?: string;
+    requiresConfirmation?: boolean;
+    activeDevice?: string;
+    activeAt?: string;
+  }> => {
     try {
       const deviceInfo = {
         device: getBrowserDeviceDescription()
       };
-      const user = await AppStore.authenticateAsync(email, password, deviceInfo);
+      const res = await AppStore.authenticateAsync(email, password, deviceInfo, force);
+      
+      if (res.requiresConfirmation) {
+        return {
+          success: false,
+          requiresConfirmation: true,
+          user: res.user,
+          activeDevice: res.activeDevice,
+          activeAt: res.activeAt
+        };
+      }
+
+      const user = res.user;
       setCurrentUser(user);
       lastActivityRef.current = Date.now();
 

@@ -3095,28 +3095,63 @@ export class AppStore {
     return user;
   }
 
-  static async authenticateAsync(email: string, pass: string, deviceInfo?: { device?: string; ip?: string }): Promise<Profile> {
-    const user = this.authenticate(email, pass, deviceInfo);
+  static async authenticateAsync(
+    email: string,
+    pass: string,
+    deviceInfo?: { device?: string; ip?: string },
+    forceLogin: boolean = false
+  ): Promise<{ user: Profile; requiresConfirmation?: boolean; activeDevice?: string; activeAt?: string }> {
+    const data = this.getStoreData();
+    const profiles: Profile[] = data.profiles || MOCK_PROFILES;
+    const user = profiles.find(p => p.email.toLowerCase().trim() === email.toLowerCase().trim());
+    if (!user) throw new Error('Usuário não encontrado.');
+    if (user.is_active === false) throw new Error('Este usuário está desativado.');
+    if (user.password && user.password !== pass) {
+      throw new Error('Senha incorreta.');
+    }
+
+    // Check remote session on Supabase if not forcing login
+    if (!forceLogin) {
+      const remote = await this.fetchRemoteProfileSession(user.id);
+      const hasActiveSession = Boolean(remote?.active_session_token || user.active_session_token);
+      if (hasActiveSession) {
+        return {
+          user,
+          requiresConfirmation: true,
+          activeDevice: remote?.active_session_device || user.active_session_device || 'Outro Dispositivo/Navegador',
+          activeAt: remote?.active_session_at || user.active_session_at
+        };
+      }
+    }
+
+    const authenticatedUser = this.authenticate(email, pass, deviceInfo);
     try {
-      await supabase.from('profiles').update({
-        active_session_token: user.active_session_token,
-        active_session_device: user.active_session_device,
-        active_session_ip: user.active_session_ip,
-        active_session_at: user.active_session_at
-      }).eq('id', user.id);
+      const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 1200));
+      const updatePromise = supabase.from('profiles').update({
+        active_session_token: authenticatedUser.active_session_token,
+        active_session_device: authenticatedUser.active_session_device,
+        active_session_ip: authenticatedUser.active_session_ip,
+        active_session_at: authenticatedUser.active_session_at
+      }).eq('id', authenticatedUser.id);
+      await Promise.race([updatePromise, timeoutPromise]);
     } catch (e) {
       console.warn('Failed to sync session token immediately to Supabase:', e);
     }
-    return user;
+    return { user: authenticatedUser };
   }
 
-  static async fetchRemoteProfileSession(userId: string): Promise<{ active_session_token?: string | null; is_active?: boolean; inactivity_timeout_minutes?: number } | null> {
+  static async fetchRemoteProfileSession(userId: string): Promise<{ active_session_token?: string | null; is_active?: boolean; inactivity_timeout_minutes?: number; active_session_device?: string; active_session_at?: string } | null> {
     try {
-      const { data, error } = await supabase
+      const timeoutPromise = new Promise<{ data: null; error: any }>((resolve) => 
+        setTimeout(() => resolve({ data: null, error: new Error('timeout') }), 1200)
+      );
+      const queryPromise = supabase
         .from('profiles')
-        .select('active_session_token, is_active, inactivity_timeout_minutes')
+        .select('active_session_token, is_active, inactivity_timeout_minutes, active_session_device, active_session_at')
         .eq('id', userId)
         .maybeSingle();
+
+      const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
 
       if (!error && data) {
         const local = this.getStoreData();
@@ -3139,7 +3174,7 @@ export class AppStore {
             this.saveStoreData(local, true);
           }
         }
-        return data;
+        return data as any;
       }
     } catch (e) {
       // offline fallback
