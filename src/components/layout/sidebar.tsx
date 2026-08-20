@@ -24,10 +24,13 @@ import {
   ChevronRight,
   Shield,
   Layers,
-  ArrowUpRight
+  ArrowUpRight,
+  Timer,
+  Smartphone
 } from 'lucide-react';
-import { useAuth } from '@/lib/auth-context';
+import { useAuth, getBrowserDeviceDescription } from '@/lib/auth-context';
 import { cn, getRoleBadgeConfig } from '@/lib/utils';
+import { toast } from '@/lib/toast';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -53,8 +56,11 @@ interface SidebarProps {
 
 export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   const pathname = usePathname();
-  const { currentUser, currentCompany, logout, changePassword, hasPermission } = useAuth();
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const { currentUser, currentCompany, logout, changePassword, updateMyInactivityTimeout, hasPermission } = useAuth();
+  const [showAccountModal, setShowAccountModal] = useState(false);
+  const [accountTab, setAccountTab] = useState<'timeout' | 'password'>('timeout');
+  const [myTimeout, setMyTimeout] = useState<number>(0);
+  const [timeoutSaved, setTimeoutSaved] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passSuccess, setPassSuccess] = useState(false);
@@ -63,6 +69,31 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   if (!currentUser) return null;
 
   const roleConfig = getRoleBadgeConfig(currentUser.role);
+
+  const handleOpenAccountModal = (tab: 'timeout' | 'password' = 'timeout') => {
+    setAccountTab(tab);
+    setMyTimeout(currentUser?.inactivity_timeout_minutes ?? 0);
+    setPassError('');
+    setPassSuccess(false);
+    setNewPassword('');
+    setConfirmPassword('');
+    setShowAccountModal(true);
+  };
+
+  const handleSaveTimeout = (e: React.FormEvent) => {
+    e.preventDefault();
+    const success = updateMyInactivityTimeout(Number(myTimeout) || 0);
+    if (success) {
+      setTimeoutSaved(true);
+      toast.success('Configuração de logout automático salva com sucesso!');
+      setTimeout(() => {
+        setTimeoutSaved(false);
+        setShowAccountModal(false);
+      }, 1200);
+    } else {
+      toast.error('Erro ao salvar configuração.');
+    }
+  };
 
   const handleChangePassword = (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,9 +110,10 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
     const res = changePassword(newPassword);
     if (res.success) {
       setPassSuccess(true);
+      toast.success('Senha alterada com sucesso!');
       setTimeout(() => {
         setPassSuccess(false);
-        setShowPasswordModal(false);
+        setShowAccountModal(false);
         setNewPassword('');
         setConfirmPassword('');
       }, 1500);
@@ -315,12 +347,12 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
         <div className="flex items-center justify-between gap-2">
           <button
             type="button"
-            onClick={() => setShowPasswordModal(true)}
+            onClick={() => handleOpenAccountModal('timeout')}
             className="flex-1 flex items-center justify-center gap-1.5 text-xs text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 transition-all font-medium shadow-xs"
-            title="Alterar Minha Senha de Acesso"
+            title="Configurar Auto-Logout e Segurança"
           >
-            <KeyRound className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-            <span className="text-[11px]">Senha</span>
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+            <span className="text-[11px]">Segurança</span>
           </button>
 
           <button
@@ -360,64 +392,150 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
         </div>
       )}
 
-      {/* Change Password Modal */}
-      {showPasswordModal && (
+      {/* MODAL: MEU PERFIL & SEGURANÇA (Auto-Logout e Senha) */}
+      {showAccountModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 text-white rounded-2xl w-full max-w-sm p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
+          <div className="bg-slate-900 border border-slate-800 text-white rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
-                <KeyRound className="w-5 h-5 text-emerald-400" />
-                <h3 className="font-bold text-sm">Alterar Minha Senha</h3>
+                <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                <div>
+                  <h3 className="font-bold text-sm">Meu Perfil & Segurança</h3>
+                  <p className="text-[11px] text-slate-400">{currentUser.full_name} ({roleConfig.label})</p>
+                </div>
               </div>
-              <button onClick={() => setShowPasswordModal(false)} className="text-slate-400 hover:text-white">
+              <button onClick={() => setShowAccountModal(false)} className="text-slate-400 hover:text-white">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            {passSuccess ? (
-              <div className="p-3 bg-emerald-950/60 border border-emerald-800 text-emerald-300 rounded-xl text-xs text-center flex items-center justify-center gap-2 font-bold">
-                <Check className="w-4 h-4" /> Senha alterada com sucesso!
-              </div>
-            ) : (
-              <form onSubmit={handleChangePassword} className="space-y-3">
-                {passError && (
-                  <div className="p-2.5 bg-rose-950/60 border border-rose-800 text-rose-300 rounded-lg text-xs">
-                    {passError}
-                  </div>
+            {/* Navigation Tabs */}
+            <div className="flex rounded-xl bg-slate-950 p-1 border border-slate-800 text-xs">
+              <button
+                type="button"
+                onClick={() => setAccountTab('timeout')}
+                className={cn(
+                  "flex-1 py-1.5 rounded-lg font-bold transition-all flex items-center justify-center gap-1.5",
+                  accountTab === 'timeout' ? "bg-emerald-600 text-white shadow-xs" : "text-slate-400 hover:text-slate-200"
                 )}
+              >
+                <Timer className="w-3.5 h-3.5" />
+                <span>Auto-Logout & Sessão</span>
+              </button>
 
-                <div>
-                  <label className="text-xs text-slate-300 mb-1 block font-semibold">Nova Senha</label>
-                  <Input
-                    type="password"
-                    required
-                    placeholder="Mínimo 4 dígitos"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    className="text-xs bg-slate-950 border-slate-700 text-white"
-                  />
+              <button
+                type="button"
+                onClick={() => setAccountTab('password')}
+                className={cn(
+                  "flex-1 py-1.5 rounded-lg font-bold transition-all flex items-center justify-center gap-1.5",
+                  accountTab === 'password' ? "bg-emerald-600 text-white shadow-xs" : "text-slate-400 hover:text-slate-200"
+                )}
+              >
+                <KeyRound className="w-3.5 h-3.5" />
+                <span>Alterar Senha</span>
+              </button>
+            </div>
+
+            {accountTab === 'timeout' ? (
+              <form onSubmit={handleSaveTimeout} className="space-y-4">
+                {/* Active Device Info */}
+                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                      <Smartphone className="w-3.5 h-3.5 text-blue-400" />
+                      <span>Sessão Atual Neste Navegador</span>
+                    </span>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-800 animate-pulse">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                      Ativa Agora
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Dispositivo: <strong className="text-slate-200">{getBrowserDeviceDescription()}</strong>
+                  </p>
                 </div>
 
-                <div>
-                  <label className="text-xs text-slate-300 mb-1 block font-semibold">Confirmar Nova Senha</label>
-                  <Input
-                    type="password"
-                    required
-                    placeholder="Repita a nova senha"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="text-xs bg-slate-950 border-slate-700 text-white"
-                  />
+                {/* Inactivity Timeout Config */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                    <Timer className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Tempo Limite de Inatividade (Auto-Logout)</span>
+                  </label>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    Escolha após quanto tempo sem mexer no sistema a sua sessão deve ser encerrada por segurança:
+                  </p>
+                  <select
+                    value={myTimeout}
+                    onChange={(e) => setMyTimeout(Number(e.target.value))}
+                    className="w-full h-9 text-xs rounded-xl bg-slate-950 border border-slate-700 text-white px-3 font-semibold focus:border-emerald-500 focus:outline-none"
+                  >
+                    <option value={0}>0 — Desativado (Permanecer sempre conectado)</option>
+                    <option value={5}>5 minutos de inatividade</option>
+                    <option value={10}>10 minutos de inatividade</option>
+                    <option value={15}>15 minutos de inatividade</option>
+                    <option value={30}>30 minutos de inatividade</option>
+                    <option value={60}>60 minutos (1 hora)</option>
+                    <option value={120}>120 minutos (2 horas)</option>
+                  </select>
                 </div>
 
                 <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
-                  <Button type="button" variant="outline" size="sm" onClick={() => setShowPasswordModal(false)} className="text-xs border-slate-700 text-slate-300">
-                    Cancelar
+                  <Button type="button" variant="outline" size="sm" onClick={() => setShowAccountModal(false)} className="text-xs border-slate-700 text-slate-300">
+                    Fechar
                   </Button>
                   <Button type="submit" size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs">
-                    Salvar Nova Senha
+                    Salvar Preferência
                   </Button>
                 </div>
+              </form>
+            ) : (
+              <form onSubmit={handleChangePassword} className="space-y-3">
+                {passSuccess ? (
+                  <div className="p-3 bg-emerald-950/60 border border-emerald-800 text-emerald-300 rounded-xl text-xs text-center flex items-center justify-center gap-2 font-bold">
+                    <Check className="w-4 h-4" /> Senha alterada com sucesso!
+                  </div>
+                ) : (
+                  <>
+                    {passError && (
+                      <div className="p-2.5 bg-rose-950/60 border border-rose-800 text-rose-300 rounded-lg text-xs">
+                        {passError}
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="text-xs text-slate-300 mb-1 block font-semibold">Nova Senha</label>
+                      <Input
+                        type="password"
+                        required
+                        placeholder="Mínimo 4 dígitos"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        className="text-xs bg-slate-950 border-slate-700 text-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs text-slate-300 mb-1 block font-semibold">Confirmar Nova Senha</label>
+                      <Input
+                        type="password"
+                        required
+                        placeholder="Repita a nova senha"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        className="text-xs bg-slate-950 border-slate-700 text-white"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+                      <Button type="button" variant="outline" size="sm" onClick={() => setShowAccountModal(false)} className="text-xs border-slate-700 text-slate-300">
+                        Cancelar
+                      </Button>
+                      <Button type="submit" size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs">
+                        Salvar Nova Senha
+                      </Button>
+                    </div>
+                  </>
+                )}
               </form>
             )}
           </div>

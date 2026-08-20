@@ -3095,6 +3095,58 @@ export class AppStore {
     return user;
   }
 
+  static async authenticateAsync(email: string, pass: string, deviceInfo?: { device?: string; ip?: string }): Promise<Profile> {
+    const user = this.authenticate(email, pass, deviceInfo);
+    try {
+      await supabase.from('profiles').update({
+        active_session_token: user.active_session_token,
+        active_session_device: user.active_session_device,
+        active_session_ip: user.active_session_ip,
+        active_session_at: user.active_session_at
+      }).eq('id', user.id);
+    } catch (e) {
+      console.warn('Failed to sync session token immediately to Supabase:', e);
+    }
+    return user;
+  }
+
+  static async fetchRemoteProfileSession(userId: string): Promise<{ active_session_token?: string | null; is_active?: boolean; inactivity_timeout_minutes?: number } | null> {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('active_session_token, is_active, inactivity_timeout_minutes')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (!error && data) {
+        const local = this.getStoreData();
+        const idx = (local.profiles || []).findIndex((p: Profile) => p.id === userId);
+        if (idx !== -1) {
+          let modified = false;
+          if (local.profiles[idx].active_session_token !== (data.active_session_token || undefined)) {
+            local.profiles[idx].active_session_token = data.active_session_token || undefined;
+            modified = true;
+          }
+          if (data.is_active !== undefined && local.profiles[idx].is_active !== data.is_active) {
+            local.profiles[idx].is_active = data.is_active;
+            modified = true;
+          }
+          if (data.inactivity_timeout_minutes !== undefined && local.profiles[idx].inactivity_timeout_minutes !== data.inactivity_timeout_minutes) {
+            local.profiles[idx].inactivity_timeout_minutes = data.inactivity_timeout_minutes;
+            modified = true;
+          }
+          if (modified) {
+            this.saveStoreData(local, true);
+          }
+        }
+        return data;
+      }
+    } catch (e) {
+      // offline fallback
+    }
+    return null;
+  }
+
   private static realtimeChannel: any = null;
 
   static async syncFromSupabase(tenantId?: string) {
@@ -3301,6 +3353,17 @@ export class AppStore {
           this.syncFromSupabase(tenantId);
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'company_settings', filter: `tenant_id=eq.${tenantId}` }, () => {
+          this.syncFromSupabase(tenantId);
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, (payload: any) => {
+          if (payload.new && payload.new.id) {
+            const data = this.getStoreData();
+            const idx = (data.profiles || []).findIndex((p: Profile) => p.id === payload.new.id);
+            if (idx !== -1) {
+              data.profiles[idx] = { ...data.profiles[idx], ...payload.new };
+              this.saveStoreData(data, true);
+            }
+          }
           this.syncFromSupabase(tenantId);
         })
         .subscribe();

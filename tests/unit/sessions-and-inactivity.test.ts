@@ -108,4 +108,28 @@ describe('User Sessions, Inactivity Timeouts and Security Engine', () => {
     AppStore.updateUserPermissions(admin.id, admin.custom_permissions || {}, 'Admin', 100, 45);
     expect(AppStore.getUserInactivityTimeout(admin.id)).toBe(45);
   });
+
+  it('authenticates asynchronously and generates unique session tokens', async () => {
+    const user = await AppStore.authenticateAsync('admin@supreme.com.br', 'admin123', {
+      device: 'MacBook Pro • Safari'
+    });
+
+    expect(user).toBeDefined();
+    expect(user.active_session_token).toBeDefined();
+    expect(user.active_session_device).toBe('MacBook Pro • Safari');
+  });
+
+  it('allows user self-service inactivity timeout update and retrieves updated value', () => {
+    const tech = AppStore.getAllProfiles().find(p => p.email === 'tecnico1@supreme.com.br')!;
+    
+    // User updates their own timeout to 10 minutes
+    const updated = AppStore.updateUserInactivityTimeout(tech.id, 10, tech.full_name);
+    expect(updated.inactivity_timeout_minutes).toBe(10);
+    expect(AppStore.getUserInactivityTimeout(tech.id)).toBe(10);
+
+    // User disables auto-logout (0 minutes)
+    const disabled = AppStore.updateUserInactivityTimeout(tech.id, 0, tech.full_name);
+    expect(disabled.inactivity_timeout_minutes).toBe(0);
+    expect(AppStore.getUserInactivityTimeout(tech.id)).toBe(0);
+  });
 });

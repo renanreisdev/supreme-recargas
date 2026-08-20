@@ -36,9 +36,10 @@ interface AuthContextType {
   currentCompany: Company;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => { success: boolean; user?: Profile; error?: string };
+  login: (email: string, password: string) => Promise<{ success: boolean; user?: Profile; error?: string }>;
   logout: (reason?: LogoutReason) => void;
   changePassword: (newPassword: string) => { success: boolean; error?: string };
+  updateMyInactivityTimeout: (minutes: number) => boolean;
   setCurrentUser: (user: Profile | null) => void;
   hasPermission: (permission: string) => boolean;
   refreshUser: () => void;
@@ -131,6 +132,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               return;
             }
 
+            // Also check remote database session token immediately
+            AppStore.fetchRemoteProfileSession(fresh.id).then(remote => {
+              if (remote) {
+                if (remote.is_active === false) {
+                  localStorage.removeItem(AUTH_STORAGE_KEY);
+                  localStorage.removeItem(AUTH_SESSION_KEY);
+                  router.replace('/login');
+                  return;
+                }
+                if (storedToken && remote.active_session_token && remote.active_session_token !== storedToken) {
+                  localStorage.removeItem(AUTH_STORAGE_KEY);
+                  localStorage.removeItem(AUTH_SESSION_KEY);
+                  router.replace('/login?reason=concurrent_session');
+                }
+              }
+            }).catch(() => {});
+
             setCurrentUserState(fresh);
             if (fresh.tenant_id) {
               AppStore.initRealtime(fresh.tenant_id);
@@ -188,24 +206,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // 2. Single Active Session Check (Concurrent Login Detection)
       const localToken = localStorage.getItem(AUTH_SESSION_KEY);
       if (localToken) {
+        // Fast in-memory check
         const all = AppStore.getAllProfiles();
         const fresh = all.find(p => p.id === currentUser.id);
         if (fresh && fresh.active_session_token && fresh.active_session_token !== localToken) {
           logout('concurrent_session');
           return;
         }
+
+        // Direct real-time check against Supabase database
+        AppStore.fetchRemoteProfileSession(currentUser.id).then(remote => {
+          if (!remote) return;
+          if (remote.is_active === false) {
+            logout('manual');
+            return;
+          }
+          if (remote.active_session_token && remote.active_session_token !== localToken) {
+            logout('concurrent_session');
+          }
+        }).catch(() => {});
       }
-    }, 4000);
+    }, 2500);
 
     return () => clearInterval(interval);
   }, [currentUser, logout]);
 
-  const login = (email: string, password: string): { success: boolean; user?: Profile; error?: string } => {
+  const login = async (email: string, password: string): Promise<{ success: boolean; user?: Profile; error?: string }> => {
     try {
       const deviceInfo = {
         device: getBrowserDeviceDescription()
       };
-      const user = AppStore.authenticate(email, password, deviceInfo);
+      const user = await AppStore.authenticateAsync(email, password, deviceInfo);
       setCurrentUser(user);
       lastActivityRef.current = Date.now();
 
@@ -230,6 +261,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { success: false, error: err?.message || 'Erro ao alterar senha.' };
     }
   };
+
+  const updateMyInactivityTimeout = useCallback((minutes: number): boolean => {
+    if (!currentUser) return false;
+    try {
+      AppStore.updateUserInactivityTimeout(currentUser.id, minutes, currentUser.full_name);
+      setCurrentUserState(prev => prev ? { ...prev, inactivity_timeout_minutes: minutes } : null);
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem(AUTH_STORAGE_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          parsed.inactivity_timeout_minutes = minutes;
+          localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(parsed));
+        }
+      }
+      return true;
+    } catch (e) {
+      console.error('Error updating my inactivity timeout:', e);
+      return false;
+    }
+  }, [currentUser]);
 
   const refreshUser = () => {
     if (!currentUser) return;
@@ -319,6 +370,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login,
         logout,
         changePassword,
+        updateMyInactivityTimeout,
         setCurrentUser,
         hasPermission,
         refreshUser

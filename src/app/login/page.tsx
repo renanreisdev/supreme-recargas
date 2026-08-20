@@ -45,13 +45,13 @@ function LoginForm() {
     }
   }, [isAuthenticated, isLoading, currentUser, router]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
     setIsSubmitting(true);
 
-    setTimeout(() => {
-      const res = login(email, password);
+    try {
+      const res = await login(email, password);
       if (res.success) {
         if (res.user?.role === 'SUPER_ADMIN') {
           router.replace('/super-admin');
@@ -62,7 +62,10 @@ function LoginForm() {
         setErrorMsg(res.error || 'Credenciais inválidas.');
         setIsSubmitting(false);
       }
-    }, 250);
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Falha ao autenticar.');
+      setIsSubmitting(false);
+    }
   };
 
   return (
