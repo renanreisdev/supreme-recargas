@@ -34,7 +34,8 @@ import {
   Timer,
   LogOut,
   Radio,
-  Laptop
+  Laptop,
+  ShieldAlert
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import Link from 'next/link';
@@ -621,6 +622,32 @@ function CompanySettingsContent() {
     return u.group_name || (u.role === 'ADMINISTRADOR' ? 'Administradores' : u.role === 'TECNICO' ? 'Técnicos de Bancada' : 'Atendimento & Balcão');
   };
 
+  const canAccessEmpresa = currentUser?.role === 'SUPER_ADMIN' ||
+                           currentUser?.role === 'ADMINISTRADOR' ||
+                           hasPermission('manage_company') ||
+                           hasPermission('manage_users');
+
+  if (!canAccessEmpresa) {
+    return (
+      <div className="max-w-2xl mx-auto mt-16 p-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-xl text-center space-y-4">
+        <div className="w-16 h-16 rounded-2xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 flex items-center justify-center mx-auto border border-rose-200 dark:border-rose-900">
+          <ShieldAlert className="w-8 h-8" />
+        </div>
+        <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Acesso Restrito: Configurações da Empresa</h2>
+        <p className="text-sm text-slate-600 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
+          Você não possui permissão para gerenciar a equipe ou configurações cadastrais da empresa. Solicite acesso ao Administrador.
+        </p>
+        <div className="pt-4">
+          <Link href="/dashboard">
+            <Button className="bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-bold rounded-xl px-6">
+              Voltar ao Painel Principal
+            </Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 pb-20 max-w-7xl mx-auto">
       {/* Global Dialog Modal */}
@@ -968,7 +995,7 @@ function CompanySettingsContent() {
                         <div className="flex items-center gap-1">
                           <button
                             onClick={() => handleOpenEditGroup(g)}
-                            className="p-1 text-slate-400 hover:text-emerald-600 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors"
+                            className="p-1.5 text-slate-500 hover:text-emerald-600 rounded-lg hover:bg-slate-100 dark:text-slate-400 dark:hover:text-emerald-400 dark:hover:bg-slate-800 transition-colors"
                             title="Editar Grupo"
                           >
                             <Edit className="w-3.5 h-3.5" />
@@ -976,7 +1003,7 @@ function CompanySettingsContent() {
                           {!g.is_system_default && (
                             <button
                               onClick={() => handleDeleteGroup(g.id)}
-                              className="p-1 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
+                              className="p-1.5 text-slate-500 hover:text-rose-600 rounded-lg hover:bg-slate-100 dark:text-slate-400 dark:hover:text-rose-400 dark:hover:bg-slate-800 transition-colors"
                               title="Excluir Grupo"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -1227,7 +1254,7 @@ function CompanySettingsContent() {
                 <div>
                   <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
                     <Wrench className="w-4 h-4 text-emerald-600" />
-                    <span>Grupos de Usuários Elegíveis como "Técnicos Responsáveis"</span>
+                    <span>Grupos de Usuários Elegíveis como &ldquo;Técnicos Responsáveis&rdquo;</span>
                   </h4>
                   <p className="text-[11px] text-slate-500 mt-0.5">
                     Defina quais grupos de usuários aparecerão na seleção de técnico da comanda e da bancada técnica.

@@ -5,47 +5,28 @@ import { useSearchParams } from 'next/navigation';
 import { 
   ClipboardList, 
   Search, 
-  Eye, 
   Printer, 
   PackageCheck, 
-  User, 
-  Calendar, 
-  CheckCircle2,
-  Clock,
-  PlusCircle,
-  FileText,
-  DollarSign,
-  CreditCard,
-  Banknote,
-  Sparkles,
-  Info,
-  CheckCircle,
-  XCircle,
-  Receipt,
-  Trash2,
-  Split,
-  Plus,
-  RotateCcw,
-  AlertTriangle,
-  Percent,
-  Lock,
-  X,
-  Phone,
-  MessageSquare,
-  QrCode
+  PlusCircle, 
+  RotateCcw, 
+  Trash2, 
+  X, 
+  Phone, 
+  QrCode 
 } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { AppStore } from '@/lib/store';
-import { ServiceOrder, PaymentMethod, PaymentStatus, PaymentSplit, CompanySettings } from '@/types';
-import { formatCurrency, formatDateTime, getPaymentMethodLabel, getPaymentStatusBadge, getStatusBadgeConfig } from '@/lib/utils';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { ServiceOrder, CompanySettings } from '@/types';
+import { formatCurrency, formatDateTime, getPaymentStatusBadge, getStatusBadgeConfig } from '@/lib/utils';
+import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { DialogModal, DialogModalProps } from '@/components/ui/dialog-modal';
-import { toast } from '@/lib/toast';
+import { DeliveryCheckoutModal } from '@/components/entradas/DeliveryCheckoutModal';
+import { ReopenOrderModal } from '@/components/entradas/ReopenOrderModal';
+import { DeleteOrderModal } from '@/components/entradas/DeleteOrderModal';
 
 function EntriesListContent() {
   const searchParams = useSearchParams();
@@ -57,35 +38,15 @@ function EntriesListContent() {
   const [searchTerm, setSearchTerm] = useState(initialSearch);
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'READY' | 'DELIVERED' | 'PROCESSING'>('ALL');
   
-  // Delivery Checkout Modal State
+  // Modal selection states
   const [selectedOrderForDelivery, setSelectedOrderForDelivery] = useState<ServiceOrder | null>(null);
-  const [receiverName, setReceiverName] = useState('');
-  const [receiverDoc, setReceiverDoc] = useState('');
-  const [receiverRelation, setReceiverRelation] = useState('Próprio Cliente');
-  const [payments, setPayments] = useState<Array<{ id: string; method: PaymentMethod; amount: number }>>([]);
-  const [deliveryNotes, setDeliveryNotes] = useState('');
-  const [discountOption, setDiscountOption] = useState<'SALDO_PENDENTE' | 'CONCEDER_DESCONTO'>('SALDO_PENDENTE');
-
-  // Zero Value Delivery Justification Modal State
-  const [showZeroValueModal, setShowZeroValueModal] = useState(false);
-  const [zeroValueReason, setZeroValueReason] = useState('');
-
-  // Reopen Modal State
   const [orderToReopen, setOrderToReopen] = useState<ServiceOrder | null>(null);
-  const [reopenReason, setReopenReason] = useState('Cliente solicitou reteste/retrabalho');
-  const [showReopenModal, setShowReopenModal] = useState(false);
-
-  // Delete Modal State
   const [orderToDelete, setOrderToDelete] = useState<ServiceOrder | null>(null);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
-  // Notification
+  // Notification and Dialog Modals
   const [actionAlert, setActionAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-
-  // Global Dialog Modal (Replaces browser alert)
   const [dialogModal, setDialogModal] = useState<DialogModalProps | null>(null);
 
-  const canRegisterDelivery = hasPermission('register_delivery') || hasPermission('orders_deliver') || currentUser?.role === 'ADMINISTRADOR';
   const canApplyDiscount = hasPermission('apply_discount_on_delivery') || hasPermission('orders_discount') || currentUser?.role === 'ADMINISTRADOR';
   const canAllowZeroValue = hasPermission('allow_zero_value_delivery') || currentUser?.role === 'ADMINISTRADOR';
   const canReopenEntry = hasPermission('reopen_entry') || hasPermission('orders_reopen') || currentUser?.role === 'ADMINISTRADOR';
@@ -131,253 +92,6 @@ function EntriesListContent() {
       </div>
     );
   }
-
-  // Open Delivery Checkout Modal
-  const handleOpenDeliveryModal = (order: ServiceOrder) => {
-    setSelectedOrderForDelivery(order);
-    setReceiverName(order.customer?.name || '');
-    setReceiverDoc(order.customer?.document || '');
-    setReceiverRelation('Próprio Cliente');
-    setDeliveryNotes('');
-    setDiscountOption('SALDO_PENDENTE');
-
-    const remainingToPay = Math.max(0, order.total_amount - (order.paid_amount || 0));
-
-    setPayments([
-      {
-        id: `pay-${Date.now()}-1`,
-        method: 'PIX',
-        amount: remainingToPay
-      }
-    ]);
-  };
-
-  const handleAddPaymentLine = () => {
-    if (!selectedOrderForDelivery) return;
-    const currentPaidSum = payments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
-    const orderRemaining = Math.max(0, selectedOrderForDelivery.total_amount - (selectedOrderForDelivery.paid_amount || 0));
-    const stillDue = Math.max(0, orderRemaining - currentPaidSum);
-
-    setPayments([
-      ...payments,
-      {
-        id: `pay-${Date.now()}-${payments.length + 1}`,
-        method: 'DINHEIRO',
-        amount: stillDue
-      }
-    ]);
-  };
-
-  const handleRemovePaymentLine = (id: string) => {
-    if (payments.length <= 1) return;
-    setPayments(payments.filter(p => p.id !== id));
-  };
-
-  const handleUpdatePaymentLine = (id: string, field: 'method' | 'amount', value: any) => {
-    setPayments(payments.map(p => {
-      if (p.id === id) {
-        return {
-          ...p,
-          [field]: field === 'amount' ? (Number(value) || 0) : value
-        };
-      }
-      return p;
-    }));
-  };
-
-  const modalRemainingToPay = selectedOrderForDelivery 
-    ? Math.max(0, selectedOrderForDelivery.total_amount - (selectedOrderForDelivery.paid_amount || 0))
-    : 0;
-  const totalPaidSum = payments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
-  const diff = totalPaidSum - modalRemainingToPay;
-  const liveChange = diff > 0 ? diff : 0;
-  const liveRemaining = diff < 0 ? Math.abs(diff) : 0;
-
-  const executeDelivery = (options: { applyDiscount: number; isZeroValue?: boolean; customNotes?: string }) => {
-    if (!selectedOrderForDelivery) return;
-
-    try {
-      const deliveredId = selectedOrderForDelivery.id;
-      const orderNum = selectedOrderForDelivery.order_number;
-
-      AppStore.deliverServiceOrder(deliveredId, {
-        receiver_name: receiverName.trim(),
-        receiver_document: receiverDoc.trim(),
-        receiver_relation: receiverRelation,
-        notes: options.customNotes || deliveryNotes,
-        payments: options.isZeroValue ? [] : payments.filter(p => Number(p.amount) > 0).map(p => ({ payment_method: p.method, amount: Number(p.amount) })),
-        apply_discount: options.applyDiscount,
-        is_zero_value: options.isZeroValue
-      }, currentUser?.full_name || 'Atendente');
-
-      loadData();
-      setSelectedOrderForDelivery(null);
-      setShowZeroValueModal(false);
-      setZeroValueReason('');
-      toast.success(`Baixa e entrega da OS #${orderNum} concluída com sucesso!`);
-
-      if (settings.auto_print_on_delivery && settings.print_delivery_copies !== 0) {
-        window.open(`/impressao?orderId=${deliveredId}&type=delivery&copies=${settings.print_delivery_copies || 1}`, '_blank');
-      }
-    } catch (err: any) {
-      toast.error(err?.message || 'Ocorreu um erro inesperado ao salvar a entrega.');
-    }
-  };
-
-  const handleRegisterDelivery = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedOrderForDelivery) return;
-
-    // Cenário 1: Valor Zerado (totalPaidSum === 0) e ainda existe saldo a pagar
-    if (modalRemainingToPay > 0 && totalPaidSum === 0) {
-      if (!canAllowZeroValue) {
-        setDialogModal({
-          isOpen: true,
-          type: 'warning',
-          title: 'Permissão Insuficiente',
-          subtitle: 'Baixa com valor zerado não autorizada',
-          message: 'Seu perfil de usuário não possui a permissão "Dar Baixa com Valor Zerado" (cortesia/isenção total). Solicite autorização a um administrador do sistema.',
-          isAlertOnly: true,
-          confirmLabel: 'Entendido',
-          onConfirm: () => setDialogModal(null)
-        });
-        return;
-      }
-
-      // Exigir motivo escrito com no mínimo 10 caracteres
-      setZeroValueReason('');
-      setShowZeroValueModal(true);
-      return;
-    }
-
-    // Cenário 2: Valor Pago Menor que o Total (0 < totalPaidSum < modalRemainingToPay)
-    if (modalRemainingToPay > 0 && totalPaidSum > 0 && totalPaidSum < modalRemainingToPay) {
-      const discountAmount = modalRemainingToPay - totalPaidSum;
-      const discountPercent = (discountAmount / modalRemainingToPay) * 100;
-      const userMaxDiscountPercent = currentUser ? AppStore.getUserMaxDiscountPercent(currentUser.id) : 0;
-
-      if (!canApplyDiscount) {
-        setDialogModal({
-          isOpen: true,
-          type: 'warning',
-          title: 'Permissão Insuficiente',
-          subtitle: 'Concessão de desconto não autorizada',
-          message: `O valor pago (${formatCurrency(totalPaidSum)}) é menor que o saldo (${formatCurrency(modalRemainingToPay)}). Seu perfil não possui permissão para conceder descontos na baixa.`,
-          isAlertOnly: true,
-          confirmLabel: 'Entendido',
-          onConfirm: () => setDialogModal(null)
-        });
-        return;
-      }
-
-      if (discountPercent > userMaxDiscountPercent) {
-        setDialogModal({
-          isOpen: true,
-          type: 'warning',
-          title: 'Limite de Desconto Excedido',
-          subtitle: `Limite autorizado: ${userMaxDiscountPercent}% • Solicitado: ${discountPercent.toFixed(1)}%`,
-          message: `O desconto de ${formatCurrency(discountAmount)} (${discountPercent.toFixed(1)}%) ultrapassa o limite máximo permitido de ${userMaxDiscountPercent}% para o seu usuário. Solicite autorização de um administrador.`,
-          isAlertOnly: true,
-          confirmLabel: 'Entendido',
-          onConfirm: () => setDialogModal(null)
-        });
-        return;
-      }
-
-      // Perguntar se deseja conceder o desconto
-      setDialogModal({
-        isOpen: true,
-        type: 'warning',
-        title: `Conceder Desconto de ${formatCurrency(discountAmount)}?`,
-        subtitle: `Valor pago: ${formatCurrency(totalPaidSum)} • Saldo: ${formatCurrency(modalRemainingToPay)} (${discountPercent.toFixed(1)}% de desconto)`,
-        message: `O valor pago (${formatCurrency(totalPaidSum)}) é menor que o total da comanda (${formatCurrency(modalRemainingToPay)}). Deseja aplicar a diferença de ${formatCurrency(discountAmount)} como desconto financeiro e liquidar a comanda?`,
-        confirmLabel: 'Sim, Conceder Desconto e Liquidar',
-        cancelLabel: 'Cancelar',
-        onCancel: () => setDialogModal(null),
-        onConfirm: () => {
-          setDialogModal(null);
-          executeDelivery({
-            applyDiscount: discountAmount,
-            customNotes: deliveryNotes
-          });
-        }
-      });
-      return;
-    }
-
-    // Cenário 3: Pagamento integral ou superior
-    executeDelivery({
-      applyDiscount: 0,
-      customNotes: deliveryNotes
-    });
-  };
-
-  const handleConfirmZeroValueDelivery = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedOrderForDelivery) return;
-
-    if (zeroValueReason.trim().length < 10) {
-      setDialogModal({
-        isOpen: true,
-        type: 'warning',
-        title: 'Motivo Insuficiente',
-        subtitle: 'Mínimo de 10 caracteres obrigatório',
-        message: 'Por favor, escreva uma justificativa com no mínimo 10 caracteres explicando o motivo da baixa com valor zerado.',
-        isAlertOnly: true,
-        confirmLabel: 'Entendido',
-        onConfirm: () => setDialogModal(null)
-      });
-      return;
-    }
-
-    const combinedNotes = `[BAIXA ZERADA / CORTESIA]: ${zeroValueReason.trim()}${deliveryNotes.trim() ? ` | ${deliveryNotes.trim()}` : ''}`;
-    executeDelivery({
-      applyDiscount: modalRemainingToPay,
-      isZeroValue: true,
-      customNotes: combinedNotes
-    });
-  };
-
-  const handleOpenReopenModal = (order: ServiceOrder) => {
-    setOrderToReopen(order);
-    setReopenReason('Cliente solicitou reteste/retrabalho na bancada');
-    setShowReopenModal(true);
-  };
-
-  const handleConfirmReopen = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!orderToReopen) return;
-
-    try {
-      const orderNum = orderToReopen.order_number;
-      AppStore.reopenServiceOrder(orderToReopen.id, reopenReason, currentUser.full_name);
-      loadData();
-      setShowReopenModal(false);
-      setOrderToReopen(null);
-      toast.info(`Ordem de serviço #${orderNum} reaberta e enviada à bancada!`);
-    } catch (err: any) {
-      toast.error(err?.message || 'Não foi possível reabrir a ordem de serviço.');
-    }
-  };
-
-  const handleOpenDeleteModal = (order: ServiceOrder) => {
-    setOrderToDelete(order);
-    setShowDeleteModal(true);
-  };
-
-  const handleConfirmDelete = () => {
-    if (!orderToDelete) return;
-    try {
-      const orderNum = orderToDelete.order_number;
-      AppStore.deleteServiceOrder(orderToDelete.id, currentUser.full_name);
-      loadData();
-      setShowDeleteModal(false);
-      setOrderToDelete(null);
-      toast.info(`Ordem de serviço #${orderNum} excluída com sucesso.`);
-    } catch (err: any) {
-      toast.error(err?.message || 'Não foi possível excluir a ordem de serviço.');
-    }
-  };
 
   // Filter Orders
   const filteredOrders = orders.filter(o => {
@@ -592,7 +306,7 @@ function EntriesListContent() {
                         {!isDelivered && (
                           <Button
                             size="sm"
-                            onClick={() => handleOpenDeliveryModal(order)}
+                            onClick={() => setSelectedOrderForDelivery(order)}
                             className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-8 rounded-xl px-2.5 shadow-sm"
                           >
                             <PackageCheck className="w-3.5 h-3.5 mr-1" />
@@ -604,7 +318,7 @@ function EntriesListContent() {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => handleOpenReopenModal(order)}
+                            onClick={() => setOrderToReopen(order)}
                             className="text-amber-600 border-amber-300 dark:border-amber-900/50 hover:bg-amber-50 dark:hover:bg-amber-950/40 text-xs h-8 rounded-xl px-2"
                             title="Reabrir Ordem"
                           >
@@ -638,7 +352,7 @@ function EntriesListContent() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => handleOpenDeleteModal(order)}
+                            onClick={() => setOrderToDelete(order)}
                             className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/50 text-xs h-8 rounded-xl px-2"
                             title="Excluir Ordem"
                           >
@@ -655,292 +369,36 @@ function EntriesListContent() {
         </div>
       </Card>
 
-      {/* Delivery Checkout Modal */}
-      {selectedOrderForDelivery && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in-0 duration-150">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl max-w-lg w-full p-5 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-              <div>
-                <h3 className="font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
-                  <CheckCircle className="w-5 h-5 text-emerald-600" />
-                  <span>Entrega & Baixa de Ordem de Serviço</span>
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  OS #{selectedOrderForDelivery.order_number} • Cliente: {selectedOrderForDelivery.customer?.name}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedOrderForDelivery(null)}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      {/* Modular Delivery Checkout Modal */}
+      <DeliveryCheckoutModal
+        isOpen={!!selectedOrderForDelivery}
+        order={selectedOrderForDelivery}
+        onClose={() => setSelectedOrderForDelivery(null)}
+        onSuccess={loadData}
+        currentUser={currentUser}
+        canAllowZeroValue={canAllowZeroValue}
+        canApplyDiscount={canApplyDiscount}
+        autoPrintOnDelivery={settings.auto_print_on_delivery}
+        printDeliveryCopies={settings.print_delivery_copies}
+      />
 
-            <form onSubmit={handleRegisterDelivery} className="space-y-4">
-              {/* Receiver Info */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center mb-1">
-                    <span>Nome do Recebedor</span>
-                    <span className="text-red-500 font-bold ml-1">*</span>
-                  </label>
-                  <Input
-                    required
-                    placeholder="Quem está retirando..."
-                    value={receiverName}
-                    onChange={e => setReceiverName(e.target.value)}
-                    className="h-10 text-xs rounded-xl"
-                  />
-                </div>
+      {/* Modular Reopen Order Modal */}
+      <ReopenOrderModal
+        isOpen={!!orderToReopen}
+        order={orderToReopen}
+        onClose={() => setOrderToReopen(null)}
+        onSuccess={loadData}
+        userName={currentUser?.full_name}
+      />
 
-                <div>
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                    Relação c/ Cliente:
-                  </label>
-                  <Select
-                    value={receiverRelation}
-                    onChange={e => setReceiverRelation(e.target.value)}
-                    className="h-10 text-xs rounded-xl"
-                  >
-                    <option value="Próprio Cliente">Próprio Cliente</option>
-                    <option value="Funcionário / Portador">Funcionário / Portador</option>
-                    <option value="Familiar">Familiar</option>
-                    <option value="Outro">Outro</option>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Payments Split Box */}
-              <div className="p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-slate-900 dark:text-white">Pagamentos & Baixa Financeira</span>
-                  <span className="font-bold text-emerald-600">Saldo a Pagar: {formatCurrency(modalRemainingToPay)}</span>
-                </div>
-
-                {payments.map((p, pIdx) => (
-                  <div key={p.id} className="flex items-center gap-2">
-                    <Select
-                      value={p.method}
-                      onChange={e => handleUpdatePaymentLine(p.id, 'method', e.target.value)}
-                      className="h-10 text-xs rounded-xl flex-1"
-                    >
-                      <option value="PIX">PIX</option>
-                      <option value="DINHEIRO">Dinheiro</option>
-                      <option value="CARTAO_DEBITO">Cartão de Débito</option>
-                      <option value="CARTAO_CREDITO">Cartão de Crédito</option>
-                      <option value="A_PRAZO">A Prazo / Faturado</option>
-                      <option value="ISENTO">Isento / Garantia</option>
-                    </Select>
-
-                    <Input
-                      type="number"
-                      step="0.01"
-                      placeholder="Valor"
-                      value={p.amount || ''}
-                      onChange={e => handleUpdatePaymentLine(p.id, 'amount', e.target.value)}
-                      className="h-10 text-xs rounded-xl w-28 text-right font-bold"
-                    />
-
-                    {payments.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => handleRemovePaymentLine(p.id)}
-                        className="text-rose-500 hover:text-rose-700 p-1"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-
-                <div className="flex justify-between items-center pt-2 border-t border-slate-200 dark:border-slate-800">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleAddPaymentLine}
-                    className="text-xs text-emerald-600 h-7 px-2"
-                  >
-                    + Dividir em Outra Forma (Split)
-                  </Button>
-
-                  <div className="text-right text-xs">
-                    {liveChange > 0 && <span className="text-emerald-600 font-bold">Troco: {formatCurrency(liveChange)}</span>}
-                    {liveRemaining > 0 && <span className="text-amber-600 font-bold">Faltante: {formatCurrency(liveRemaining)}</span>}
-                  </div>
-                </div>
-              </div>
-
-              {/* Delivery Notes */}
-              <div>
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                  Observações de Entrega (Opcional)
-                </label>
-                <Input
-                  placeholder="Ex: Entregue testado na frente do cliente..."
-                  value={deliveryNotes}
-                  onChange={e => setDeliveryNotes(e.target.value)}
-                  className="h-9 text-xs rounded-xl"
-                />
-              </div>
-
-              {/* Actions */}
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSelectedOrderForDelivery(null)}
-                  className="rounded-xl text-xs h-9"
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  type="submit"
-                  size="sm"
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs h-9 px-4"
-                >
-                  Confirmar Baixa & Entregar
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Zero Value Delivery Justification Modal (Mínimo 10 caracteres) */}
-      {showZeroValueModal && selectedOrderForDelivery && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in-0 duration-150">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-md w-full p-6 space-y-4 animate-in zoom-in-95">
-            <div className="flex items-start gap-3">
-              <div className="p-2.5 rounded-2xl bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 shrink-0">
-                <AlertTriangle className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="font-extrabold text-base text-slate-900 dark:text-white">
-                  Baixa com Valor Zerado
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Ordem nº <strong className="font-mono">{selectedOrderForDelivery.order_number}</strong> • Saldo a liquidar: <strong className="text-amber-600">{formatCurrency(modalRemainingToPay)}</strong>
-                </p>
-              </div>
-            </div>
-
-            <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 rounded-2xl text-[11px] text-amber-800 dark:text-amber-300 leading-relaxed">
-              Você está concluindo a entrega sem nenhum pagamento informado. É obrigatório registrar o motivo formal (cortesia, garantia de serviço, retrabalho ou acordo comercial).
-            </div>
-
-            <form onSubmit={handleConfirmZeroValueDelivery} className="space-y-4">
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                    Motivo da Baixa Sem Cobrança *
-                  </label>
-                  <span className={`text-[10px] font-bold ${
-                    zeroValueReason.trim().length >= 10 ? 'text-emerald-600' : 'text-rose-500'
-                  }`}>
-                    {zeroValueReason.trim().length}/10 caracteres (mínimo 10)
-                  </span>
-                </div>
-                <textarea
-                  required
-                  rows={3}
-                  placeholder="Descreva detalhadamente o motivo (ex: Cortesia concedida pela gerência, retrabalho em garantia...)"
-                  value={zeroValueReason}
-                  onChange={e => setZeroValueReason(e.target.value)}
-                  className="w-full text-xs p-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 resize-none font-medium"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowZeroValueModal(false)}
-                  className="rounded-xl text-xs h-9"
-                >
-                  Voltar
-                </Button>
-                <Button
-                  type="submit"
-                  size="sm"
-                  disabled={zeroValueReason.trim().length < 10}
-                  className="bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs h-9 px-4 gap-1.5 shadow-md shadow-amber-600/20"
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Confirmar Baixa Zerada</span>
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Reopen Modal */}
-      {showReopenModal && orderToReopen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in-0 duration-150">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-md w-full p-6 space-y-4">
-            <h3 className="font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
-              <RotateCcw className="w-5 h-5 text-amber-600" />
-              Reabertura de Ordem de Serviço
-            </h3>
-            <p className="text-xs text-slate-500">
-              A ordem <strong>{orderToReopen.order_number}</strong> voltará ao status "Em Andamento" e seus itens retornarão à bancada técnica.
-            </p>
-
-            <form onSubmit={handleConfirmReopen} className="space-y-3">
-              <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                  Motivo da Reabertura *
-                </label>
-                <Input
-                  required
-                  value={reopenReason}
-                  onChange={e => setReopenReason(e.target.value)}
-                  className="h-9 text-xs rounded-xl"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <Button type="button" variant="outline" size="sm" onClick={() => setShowReopenModal(false)} className="rounded-xl text-xs">
-                  Cancelar
-                </Button>
-                <Button type="submit" size="sm" className="bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs">
-                  Confirmar Reabertura
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Delete Modal */}
-      {showDeleteModal && orderToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in-0 duration-150">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-md w-full p-6 text-center space-y-4">
-            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
-              <Trash2 className="w-6 h-6" />
-            </div>
-            <h3 className="font-bold text-base text-slate-900 dark:text-white">
-              Excluir Ordem de Serviço {orderToDelete.order_number}?
-            </h3>
-            <p className="text-xs text-slate-500">
-              Esta ação removerá permanentemente a comanda e todos os itens vinculados.
-            </p>
-            <div className="flex justify-center gap-2 pt-2">
-              <Button variant="outline" size="sm" onClick={() => setShowDeleteModal(false)} className="rounded-xl text-xs">
-                Cancelar
-              </Button>
-              <Button size="sm" onClick={handleConfirmDelete} className="bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs">
-                Sim, Excluir Permanentemente
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Modular Delete Order Modal */}
+      <DeleteOrderModal
+        isOpen={!!orderToDelete}
+        order={orderToDelete}
+        onClose={() => setOrderToDelete(null)}
+        onSuccess={loadData}
+        userName={currentUser?.full_name}
+      />
     </div>
   );
 }

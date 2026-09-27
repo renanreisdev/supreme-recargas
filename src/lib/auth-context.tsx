@@ -74,7 +74,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setCurrentUserState(user);
     if (typeof window !== 'undefined') {
       if (user) {
-        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
+        const safeUser = { ...user };
+        delete safeUser.password;
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(safeUser));
         if (user.active_session_token) {
           localStorage.setItem(AUTH_SESSION_KEY, user.active_session_token);
         }

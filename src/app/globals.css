@@ -8,6 +8,15 @@
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 
+  ::selection {
+    background-color: #059669;
+    color: #ffffff;
+  }
+
+  * {
+    caret-color: #059669;
+  }
+
   /* Custom Clean Scrollbar */
   ::-webkit-scrollbar {
     width: 6px;

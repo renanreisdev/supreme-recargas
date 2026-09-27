@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, Clock, User, FileText, Lock, Search, Filter, RefreshCw, FileSpreadsheet, Printer } from 'lucide-react';
+import Link from 'next/link';
+import { ShieldCheck, ShieldAlert, Clock, User, FileText, Lock, Search, Filter, RefreshCw, FileSpreadsheet, Printer } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { AppStore } from '@/lib/store';
 import { AuditLog } from '@/types';
@@ -13,10 +14,14 @@ import { Select } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 
 export default function AuditLogsPage() {
-  const { currentCompany } = useAuth();
+  const { currentCompany, currentUser, hasPermission } = useAuth();
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAction, setSelectedAction] = useState('');
+
+  const canViewAudit = currentUser?.role === 'SUPER_ADMIN' || 
+                       currentUser?.role === 'ADMINISTRADOR' || 
+                       hasPermission('view_audit_logs');
 
   const loadData = () => {
     const data = AppStore.getAuditLogs(currentCompany.id);
@@ -75,6 +80,27 @@ export default function AuditLogsPage() {
     if (action.includes('LOGIN')) return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border-emerald-200';
     return 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-300';
   };
+
+  if (!canViewAudit) {
+    return (
+      <div className="max-w-2xl mx-auto mt-16 p-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-xl text-center space-y-4">
+        <div className="w-16 h-16 rounded-2xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 flex items-center justify-center mx-auto border border-rose-200 dark:border-rose-900">
+          <ShieldAlert className="w-8 h-8" />
+        </div>
+        <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Acesso Restrito: Auditoria</h2>
+        <p className="text-sm text-slate-600 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
+          Os registros de auditoria e trilha de conformidade LGPD são confidenciais e restritos a Administradores.
+        </p>
+        <div className="pt-4">
+          <Link href="/dashboard">
+            <Button className="bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-bold rounded-xl px-6">
+              Voltar ao Painel Principal
+            </Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 print:space-y-4 print:p-0 print:m-0">

@@ -29,6 +29,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
+function maskCustomerName(name?: string): string {
+  if (!name) return 'Cliente';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0];
+  return `${parts[0]} ${parts.slice(1).map(p => p[0] ? p[0].toUpperCase() + '.' : '').join(' ')}`;
+}
+
 export default function PublicTrackingPage() {
   const params = useParams();
   const rawToken = params?.token as string;
@@ -121,12 +128,13 @@ export default function PublicTrackingPage() {
   }
 
   const paymentBadge = getPaymentStatusBadge(order.financial_status);
+  const maskedName = maskCustomerName(order.customer?.name);
 
   // WhatsApp formatted link
   const cleanPhone = (company.whatsapp || company.phone || '').replace(/\D/g, '');
   const waNumber = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
   const waMessage = encodeURIComponent(
-    `Olá ${company.trade_name}! Gostaria de informações sobre minha OS #${order.order_number} (Cliente: ${order.customer?.name}).`
+    `Olá ${company.trade_name}! Gostaria de informações sobre minha OS #${order.order_number} (Cliente: ${maskedName}).`
   );
   const whatsappUrl = `https://wa.me/${waNumber}?text=${waMessage}`;
 
@@ -186,7 +194,7 @@ export default function PublicTrackingPage() {
               </div>
 
               <p className="text-xs text-slate-400 pt-1">
-                Cliente: <strong className="text-white">{order.customer?.name}</strong> | Abertura: {formatDateTime(order.opened_at)}
+                Cliente: <strong className="text-white">{maskedName}</strong> | Abertura: {formatDateTime(order.opened_at)}
               </p>
             </div>
 

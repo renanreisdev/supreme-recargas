@@ -141,7 +141,7 @@ export function Header({ onToggleMobileMenu }: HeaderProps) {
             <button
               type="button"
               onClick={() => logout()}
-              className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-rose-50 dark:bg-slate-800/80 dark:hover:bg-rose-950/60 text-slate-500 hover:text-rose-600 dark:text-slate-400 dark:hover:text-rose-400 border border-slate-200 dark:border-slate-700/80 flex items-center justify-center transition-all shadow-xs"
+              className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-700 text-slate-600 hover:text-rose-600 dark:text-slate-300 dark:hover:text-rose-400 border border-slate-200 dark:border-slate-700/80 flex items-center justify-center transition-colors shadow-xs"
               title="Sair do Sistema (Logout)"
             >
               <LogOut className="w-4 h-4" />

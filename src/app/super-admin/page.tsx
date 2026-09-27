@@ -167,6 +167,27 @@ export default function SuperAdminPage() {
     }
   };
 
+  // Simulator Calculation (Declared before early return to follow React Rules of Hooks)
+  const selectedCalcPlan = useMemo(() => {
+    return plans.find(p => p.id === calcPlanId) || plans[0] || null;
+  }, [plans, calcPlanId]);
+
+  const calcResults = useMemo(() => {
+    if (!selectedCalcPlan) return { base: 0, extraUsersCost: 0, subtotal: 0, total: 0, totalUsers: 0 };
+    const base = selectedCalcPlan.monthly_price;
+    const extraUsersCost = calcExtraUsers * (selectedCalcPlan.extra_user_price || 15);
+    const subtotal = base + extraUsersCost;
+    const total = Math.max(0, subtotal - Number(calcDiscount || 0));
+
+    return {
+      base,
+      extraUsersCost,
+      subtotal,
+      total,
+      totalUsers: (selectedCalcPlan.max_users || 5) + calcExtraUsers
+    };
+  }, [selectedCalcPlan, calcExtraUsers, calcDiscount]);
+
   // Auth Guard
   if (!currentUser || currentUser.role !== 'SUPER_ADMIN') {
     return (
@@ -512,27 +533,6 @@ export default function SuperAdminPage() {
     });
   };
 
-  // Simulator Calculation
-  const selectedCalcPlan = useMemo(() => {
-    return plans.find(p => p.id === calcPlanId) || plans[0] || null;
-  }, [plans, calcPlanId]);
-
-  const calcResults = useMemo(() => {
-    if (!selectedCalcPlan) return { base: 0, extraUsersCost: 0, subtotal: 0, total: 0, totalUsers: 0 };
-    const base = selectedCalcPlan.monthly_price;
-    const extraUsersCost = calcExtraUsers * (selectedCalcPlan.extra_user_price || 15);
-    const subtotal = base + extraUsersCost;
-    const total = Math.max(0, subtotal - Number(calcDiscount || 0));
-
-    return {
-      base,
-      extraUsersCost,
-      subtotal,
-      total,
-      totalUsers: (selectedCalcPlan.max_users || 5) + calcExtraUsers
-    };
-  }, [selectedCalcPlan, calcExtraUsers, calcDiscount]);
-
   const copyProposalToClipboard = () => {
     if (!selectedCalcPlan) return;
     const text = `*PROPOSTA SUPREME RECARGAS - SISTEMA OPERACIONAL*
@@ -551,26 +551,47 @@ Incluso: Emissão de Comandas, Bancada Técnica Kanban, Rastreio e Impressão T�
     setTimeout(() => setCalcCopied(false), 2500);
   };
 
+  if (currentUser?.role !== 'SUPER_ADMIN') {
+    return (
+      <div className="max-w-2xl mx-auto mt-16 p-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-xl text-center space-y-4">
+        <div className="w-16 h-16 rounded-2xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 flex items-center justify-center mx-auto border border-rose-200 dark:border-rose-900">
+          <ShieldAlert className="w-8 h-8" />
+        </div>
+        <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Acesso Restrito: Super Administrador</h2>
+        <p className="text-sm text-slate-600 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
+          Esta área é de acesso exclusivo para a gestão da infraestrutura SaaS da plataforma. Seu usuário ({currentUser?.full_name || 'Desconhecido'}) possui o papel <strong>{currentUser?.role || 'Não Autenticado'}</strong> e não tem permissão para acessar esta página.
+        </p>
+        <div className="pt-4">
+          <Link href="/dashboard">
+            <Button className="bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-bold rounded-xl px-6">
+              Voltar ao Painel Principal
+            </Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
       {/* Global Dialog Modal */}
       {dialogModal && <DialogModal {...dialogModal} />}
 
       {/* Hero Banner */}
-      <div className="relative overflow-hidden bg-gradient-to-r from-purple-950 via-slate-900 to-indigo-950 p-6 md:p-8 rounded-3xl text-white shadow-2xl border border-purple-800/40">
+      <div className="relative overflow-hidden bg-slate-900 dark:bg-[#0c121e] p-6 md:p-8 rounded-3xl text-white shadow-sm border border-slate-800">
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <span className="bg-amber-400/20 text-amber-300 border border-amber-400/30 text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full flex items-center gap-1">
+              <span className="bg-amber-400/10 text-amber-300 border border-amber-400/20 text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full flex items-center gap-1">
                 <Crown className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
                 Painel Master da Plataforma
               </span>
-              <span className="text-[10px] text-purple-300 font-mono">SaaS Multi-Tenant v2.0</span>
+              <span className="text-[10px] text-slate-400 font-mono">SaaS Multi-Tenant v2.0</span>
             </div>
             <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white flex items-center gap-2.5">
               <span>Central do Super Administrador</span>
             </h1>
-            <p className="text-xs md:text-sm text-purple-200/90 mt-1 max-w-2xl leading-relaxed">
+            <p className="text-xs md:text-sm text-slate-300 mt-1 max-w-2xl leading-relaxed">
               Gerencie empresas clientes (tenants), planos de assinatura, limites de operadores e técnicos, precificação de adicionais e faturamento recorrente.
             </p>
           </div>
@@ -1209,27 +1230,27 @@ Incluso: Emissão de Comandas, Bancada Técnica Kanban, Rastreio e Impressão T�
 
           {/* Proposal Summary & WhatsApp Card */}
           <div className="lg:col-span-5 space-y-4">
-            <Card className="bg-gradient-to-br from-slate-900 to-purple-950 text-white border-purple-800/40 shadow-xl overflow-hidden">
-              <CardHeader className="pb-3 border-b border-purple-800/30">
+            <Card className="bg-slate-900 text-white border-slate-800 shadow-sm overflow-hidden">
+              <CardHeader className="pb-3 border-b border-slate-800">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-base font-extrabold text-white flex items-center gap-2">
                     <Award className="w-5 h-5 text-amber-400" />
                     <span>Resumo da Proposta</span>
                   </CardTitle>
-                  <Badge className="bg-amber-400 text-slate-950 font-bold text-[10px]">
+                  <Badge className="bg-amber-400 text-amber-950 font-bold text-[10px]">
                     100% Margem de Lucro
                   </Badge>
                 </div>
               </CardHeader>
               <CardContent className="p-5 space-y-4">
                 <div className="space-y-2 text-xs">
-                  <div className="flex justify-between text-purple-200">
+                  <div className="flex justify-between text-slate-300">
                     <span>Plano Base ({selectedCalcPlan?.name}):</span>
                     <span className="font-bold text-white">{formatCurrency(calcResults.base)}</span>
                   </div>
 
                   {calcResults.extraUsersCost > 0 && (
-                    <div className="flex justify-between text-purple-200">
+                    <div className="flex justify-between text-slate-300">
                       <span>{calcExtraUsers} Usuário(s) Adicional(is):</span>
                       <span className="font-bold text-emerald-400">+{formatCurrency(calcResults.extraUsersCost)}</span>
                     </div>

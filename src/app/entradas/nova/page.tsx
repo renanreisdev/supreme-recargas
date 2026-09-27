@@ -887,7 +887,7 @@ export default function NovaEntradaPage() {
                 3
               </div>
               <CardTitle className="text-sm md:text-base font-bold text-slate-900 dark:text-white">
-                Resumo Financeiro & Conclusão
+                Resumo Financeiro &amp; Conclusão
               </CardTitle>
             </div>
           </CardHeader>
