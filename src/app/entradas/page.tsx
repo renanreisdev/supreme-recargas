@@ -12,7 +12,8 @@ import {
   Trash2, 
   X, 
   Phone, 
-  QrCode 
+  QrCode,
+  MessageCircle 
 } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
@@ -92,6 +93,38 @@ function EntriesListContent() {
       </div>
     );
   }
+
+  const handleSendWhatsAppOrder = (order: ServiceOrder) => {
+    const rawPhone = order.customer?.phone || '';
+    const cleanPhone = rawPhone.replace(/\D/g, '');
+    if (!cleanPhone) {
+      return;
+    }
+    const waNumber = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://supremerecargas.com.br';
+    const trackingUrl = `${origin}/acompanhar/${order.tracking_token || order.id}`;
+    const custName = order.customer?.name || 'Cliente';
+
+    const isDelivered = order.status === 'ENTREGUE';
+    const isCompleted = order.status === 'PRONTA';
+
+    let message = '';
+    if (isDelivered) {
+      message = `Olá, *${custName}*!\n\nConfirmamos a entrega da sua OS *#${order.order_number}* na *${currentCompany.trade_name}*.\n\n` +
+        `Agradecemos a confiança e preferência! Caso precise de suprimentos ou novos serviços, estamos à disposição.`;
+    } else if (isCompleted) {
+      message = `Olá, *${custName}*!\n\nSua Ordem de Serviço *#${order.order_number}* está *PRONTA PARA RETIRADA* na *${currentCompany.trade_name}*!\n\n` +
+        `💰 *Valor Total:* ${formatCurrency(order.total_amount)}\n` +
+        `🔍 *Acompanhe pelo link:*\n${trackingUrl}\n\n` +
+        `Aguardamos você para a retirada!`;
+    } else {
+      message = `Olá, *${custName}*!\n\nAtualização sobre sua Ordem de Serviço *#${order.order_number}* na *${currentCompany.trade_name}*.\n\n` +
+        `🔍 *Acompanhe o andamento em tempo real:*\n${trackingUrl}\n\n` +
+        `Qualquer dúvida, estamos à disposição!`;
+    }
+
+    window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`, '_blank');
+  };
 
   // Filter Orders
   const filteredOrders = orders.filter(o => {
@@ -347,6 +380,18 @@ function EntriesListContent() {
                             <QrCode className="w-3.5 h-3.5" />
                           </Button>
                         </Link>
+
+                        {order.customer?.phone && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleSendWhatsAppOrder(order)}
+                            className="text-xs h-8 rounded-xl px-2 text-emerald-600 border-emerald-300 dark:border-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                            title="Enviar atualização no WhatsApp do cliente"
+                          >
+                            <MessageCircle className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
 
                         {canDeleteEntry && (
                           <Button

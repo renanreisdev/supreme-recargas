@@ -1,5 +1,5 @@
 # 📖 Documentação de Estrutura e Funcionamento do Sistema
-## Supreme Recargas 2 — Plataforma SaaS Multi-Tenant para Gestão de Recargas, Oficinas e Assistências Técnicas
+## Agilis OS — Plataforma SaaS Multi-Tenant para Gestão de Balcão Ágil, Bancada Técnica e Assistências
 
 ---
 
@@ -18,7 +18,7 @@
 
 ## 1. Visão Geral e Arquitetura
 
-O **Supreme Recargas 2** é um sistema completo de gestão operacional e financeira projetado especificamente para centros de recarga de cartuchos/toners, assistências técnicas de informática/celulares, oficinas de motores e prestadores de serviços de manutenção em geral.
+O **Agilis OS** é um sistema completo de gestão operacional e financeira projetado especificamente para centros de atendimento ágil, assistências técnicas, oficinas e bancadas técnicas em geral.
 
 ### 🛠️ Stack Tecnológica:
 - **Framework Front-End:** Next.js 16 (App Router com Turbopack e React 19).

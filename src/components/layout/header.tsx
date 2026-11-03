@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Search, PlusCircle, ExternalLink, QrCode, LogOut, Menu, Zap, Cloud, Sparkles, Sun, Moon } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, PlusCircle, ExternalLink, QrCode, LogOut, Menu, Zap, Cloud, Sparkles, Sun, Moon, CloudOff, RefreshCw } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
 import { AppStore } from '@/lib/store';
+import { toast } from '@/lib/toast';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { getRoleBadgeConfig } from '@/lib/utils';
@@ -17,9 +18,28 @@ interface HeaderProps {
 export function Header({ onToggleMobileMenu }: HeaderProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
+  const [syncState, setSyncState] = useState(() => AppStore.getSyncStatus());
   const router = useRouter();
   const { currentUser, currentCompany, logout, hasPermission } = useAuth();
   const { theme, toggleTheme } = useTheme();
+
+  useEffect(() => {
+    const handleStatus = (e: any) => {
+      if (e?.detail) {
+        setSyncState(e.detail);
+      } else {
+        setSyncState(AppStore.getSyncStatus());
+      }
+    };
+    window.addEventListener('supreme_sync_status_updated', handleStatus);
+    window.addEventListener('online', handleStatus);
+    window.addEventListener('offline', handleStatus);
+    return () => {
+      window.removeEventListener('supreme_sync_status_updated', handleStatus);
+      window.removeEventListener('online', handleStatus);
+      window.removeEventListener('offline', handleStatus);
+    };
+  }, []);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,9 +48,24 @@ export function Header({ onToggleMobileMenu }: HeaderProps) {
   };
 
   const handleManualSync = async () => {
+    if (isSyncing) return;
     setIsSyncing(true);
-    await AppStore.syncFromSupabase(currentCompany.id);
-    setTimeout(() => setIsSyncing(false), 800);
+    try {
+      const res = await AppStore.flushOfflineQueue();
+      if (currentCompany?.id) {
+        await AppStore.syncFromSupabase(currentCompany.id);
+      }
+      setSyncState(AppStore.getSyncStatus());
+      if (res.processed > 0) {
+        toast.success(`Sincronização concluída! ${res.processed} alteração(ões) enviada(s) à nuvem.`);
+      } else {
+        toast.success('Dados sincronizados com o servidor!');
+      }
+    } catch (err) {
+      toast.error('Não foi possível sincronizar no momento. Os dados seguem salvos localmente.');
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const roleConfig = currentUser ? getRoleBadgeConfig(currentUser.role) : null;
@@ -92,11 +127,47 @@ export function Header({ onToggleMobileMenu }: HeaderProps) {
         <button
           type="button"
           onClick={handleManualSync}
-          className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition-all shadow-xs"
-          title="Sincronização em nuvem ativa. Clique para atualizar agora."
+          disabled={isSyncing}
+          className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all shadow-xs ${
+            !syncState.isOnline
+              ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/20'
+              : (syncState.isSyncing || isSyncing)
+              ? 'bg-sky-500/10 text-sky-700 dark:text-sky-300 border border-sky-500/30'
+              : syncState.pendingCount > 0
+              ? 'bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800/60 hover:bg-amber-100'
+              : 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/60 hover:bg-emerald-100'
+          }`}
+          title={
+            !syncState.isOnline
+              ? `Sem internet externa. ${syncState.pendingCount} mutações salvas localmente. Clique para tentar reconectar.`
+              : (syncState.isSyncing || isSyncing)
+              ? 'Transmitindo alterações para a nuvem...'
+              : syncState.pendingCount > 0
+              ? `${syncState.pendingCount} operações pendentes para subir. Clique para sincronizar agora.`
+              : 'Nuvem conectada e sincronizada. Clique para forçar atualização imediata.'
+          }
         >
-          <span className={`w-2 h-2 rounded-full bg-emerald-500 ${isSyncing ? 'animate-spin' : 'animate-pulse'} shadow-sm shadow-emerald-500/50`} />
-          <span>{isSyncing ? 'Sincronizando...' : 'Nuvem Online'}</span>
+          {!syncState.isOnline ? (
+            <>
+              <CloudOff className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+              <span>Offline ({syncState.pendingCount})</span>
+            </>
+          ) : (syncState.isSyncing || isSyncing) ? (
+            <>
+              <RefreshCw className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400 animate-spin" />
+              <span>Sincronizando...</span>
+            </>
+          ) : syncState.pendingCount > 0 ? (
+            <>
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shadow-sm" />
+              <span>{syncState.pendingCount} Pendente{syncState.pendingCount > 1 ? 's' : ''}</span>
+            </>
+          ) : (
+            <>
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-sm shadow-emerald-500/50" />
+              <span>Nuvem Online</span>
+            </>
+          )}
         </button>
 
         {/* Public Tracking Link */}

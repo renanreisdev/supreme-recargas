@@ -20,7 +20,7 @@ Oferecer um sistema SaaS operacional de alto padrão e velocidade para recepçã
 
 ## Positioning
 
-Diferente de sistemas genéricos de ordem de serviço, o Supreme Recargas possui arquitetura técnica orientada à bancada de precisão (pesagem em gramas, teste de circuito integrado, histórico por serial individual dentro do mesmo atendimento e geração nativa de comandas térmicas ESC/POS e etiquetas adesivas).
+Diferente de sistemas genéricos de ordem de serviço, o Agilis OS possui arquitetura técnica orientada à bancada de precisão (pesagem em gramas, teste de circuito integrado, histórico por serial individual dentro do mesmo atendimento e geração nativa de comandas térmicas ESC/POS e etiquetas adesivas).
 
 ## Operating Context
 
@@ -35,7 +35,7 @@ Balcões de lojas de recarga rápida e oficinas de assistência técnica com imp
 
 ## Brand Commitments
 
-- **Identidade Visual:** "Supreme Recargas" — paleta profunda slate (`#0b0f19` / `#0f172a`) com acento profissional Emerald (`#059669` / `#10b981`), tipografia nítida (Inter / Outfit) e leitura numérica tabular.
+- **Identidade Visual:** "Agilis OS" — paleta profunda slate (`#0b0f19` / `#0f172a`) com acento profissional Emerald (`#059669` / `#10b981`), tipografia nítida (Inter / Outfit) e leitura numérica tabular.
 - **Tom de Voz:** Confiável, ágil, técnico e transparente.
 
 ## Product Principles

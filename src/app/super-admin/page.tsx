@@ -96,7 +96,7 @@ export default function SuperAdminPage() {
   const [newBusinessSegment, setNewBusinessSegment] = useState<BusinessSegment>('RECARGA_CARTUCHOS');
   const [newPlanId, setNewPlanId] = useState('');
   const [newAdminEmail, setNewAdminEmail] = useState('');
-  const [newAdminPass, setNewAdminPass] = useState('123456');
+  const [newAdminPass, setNewAdminPass] = useState('Mudar@123');
 
   // Edit Company Form State
   const [editCorpName, setEditCorpName] = useState('');
@@ -246,7 +246,7 @@ export default function SuperAdminPage() {
         newAdminEmail ? {
           fullName: newResponsible || `Admin ${newTradeName}`,
           email: newAdminEmail,
-          password: newAdminPass || '123456',
+          password: newAdminPass || 'Mudar@123',
           phone: newPhone || newWhatsapp
         } : undefined,
         newPlanId,
@@ -269,7 +269,7 @@ export default function SuperAdminPage() {
       setNewResponsible('');
       setNewBusinessSegment('RECARGA_CARTUCHOS');
       setNewAdminEmail('');
-      setNewAdminPass('123456');
+      setNewAdminPass('Mudar@123');
     } catch (err: any) {
       showToast(err?.message || 'Erro ao cadastrar empresa.', 'error');
     }
@@ -535,7 +535,7 @@ export default function SuperAdminPage() {
 
   const copyProposalToClipboard = () => {
     if (!selectedCalcPlan) return;
-    const text = `*PROPOSTA SUPREME RECARGAS - SISTEMA OPERACIONAL*
+    const text = `*PROPOSTA AGILIS OS - SISTEMA OPERACIONAL*
 Plano Escolhido: ${selectedCalcPlan.name}
 ----------------------------------------
 • Mensalidade Base: ${formatCurrency(calcResults.base)}

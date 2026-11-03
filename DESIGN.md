@@ -1,6 +1,6 @@
 ---
-name: Supreme Recargas
-description: Sistema SaaS Profissional de Gestão Operacional de Cartuchos e Assistência Técnica
+name: Agilis OS
+description: Sistema SaaS Profissional de Gestão Operacional de Bancada e Atendimento Ágil
 colors:
   primary: "#059669"
   primary-hover: "#047857"
@@ -100,7 +100,7 @@ components:
 
 ## Overview
 
-O **Supreme Recargas** é projetado para operar no modo **Operate**: foco em alta legibilidade, agilidade de inserção de dados, fluxo contínuo de bancada técnica (kanban de diagnóstico e pesagem de precisão) e baixa fadiga visual. A interface suporta alternância suave entre modo claro e escuro.
+O **Agilis OS** é projetado para operar no modo **Operate**: foco em alta legibilidade, agilidade de inserção de dados, fluxo contínuo de bancada técnica (kanban de diagnóstico e pesagem de precisão) e baixa fadiga visual. A interface suporta alternância suave entre modo claro e escuro.
 
 ## Colors
 

@@ -45,7 +45,7 @@ interface AuthContextType {
     activeAt?: string;
   }>;
   logout: (reason?: LogoutReason) => void;
-  changePassword: (newPassword: string) => { success: boolean; error?: string };
+  changePassword: (newPassword: string, resetMustChange?: boolean) => { success: boolean; error?: string };
   updateMyInactivityTimeout: (minutes: number) => boolean;
   setCurrentUser: (user: Profile | null) => void;
   hasPermission: (permission: string) => boolean;
@@ -283,10 +283,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const changePassword = (newPassword: string): { success: boolean; error?: string } => {
+  const changePassword = (newPassword: string, resetMustChange: boolean = false): { success: boolean; error?: string } => {
     if (!currentUser) return { success: false, error: 'Usuário não autenticado.' };
     try {
-      const updated = AppStore.changeUserPassword(currentUser.id, newPassword, currentUser.full_name);
+      const updated = AppStore.changeUserPassword(currentUser.id, newPassword, currentUser.full_name, resetMustChange);
       setCurrentUser(updated);
       return { success: true };
     } catch (err: any) {
@@ -368,6 +368,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       case 'change_assigned_technician':
       case 'transfer_assigned_tech_order':
       case 'edit_other_technician_orders':
+      case 'orders_cancel':
+      case 'orders_reopen':
+      case 'orders_discount':
+      case 'catalog_manage':
+      case 'allow_zero_value_delivery':
         return currentUser.role === 'ADMINISTRADOR';
 
       // Attendant & Admin permissions (Balcão de Atendimento)
@@ -378,6 +383,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       case 'view_customers':
       case 'create_customer':
       case 'edit_customer':
+      case 'orders_view':
+      case 'orders_create':
+      case 'orders_print':
         return ['ADMINISTRADOR', 'ATENDENTE'].includes(currentUser.role);
 
       // Technician & Admin permissions (Bancada Técnica)
@@ -385,10 +393,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       case 'register_weight':
       case 'register_diagnosis':
       case 'update_tech_status':
+      case 'technical_update':
         return ['ADMINISTRADOR', 'TECNICO'].includes(currentUser.role);
 
       default:
-        return true;
+        // SECURITY: deny unknown permissions by default.
+        return false;
     }
   };
 

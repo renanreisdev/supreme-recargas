@@ -23,7 +23,8 @@ import {
   ArrowDown,
   Kanban,
   GripVertical,
-  Eye
+  Eye,
+  MessageCircle
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { AppStore } from '@/lib/store';
@@ -388,6 +389,33 @@ export default function TechnicianWorkbenchPage() {
     } catch (err: any) {
       toast.error(err?.message || 'Erro ao aprovar item.');
     }
+  };
+
+  const handleSendWhatsAppNotification = (item: ServiceOrderItem) => {
+    const allOrders = AppStore.getServiceOrders(currentCompany.id);
+    const order = allOrders.find(o => o.id === item.service_order_id);
+    const phone = order?.customer?.phone || item.customer?.phone || '';
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (!cleanPhone) {
+      toast.warning('Este item não possui telefone do cliente para envio.');
+      return;
+    }
+    const waNumber = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
+    const custName = item.customer_name || order?.customer?.name || 'Cliente';
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://supremerecargas.com.br';
+    const trackingUrl = order ? `${origin}/acompanhar/${order.tracking_token || order.id}` : '';
+    const modelName = item.model?.name || item.internal_identifier;
+
+    const isReady = item.status === 'FINALIZADO';
+    const message = isReady
+      ? `Olá, *${custName}*!\n\nSeu item *${modelName}* (OS *#${item.order_number}*) está *PRONTO PARA RETIRADA* na *${currentCompany.trade_name}*!\n\n` +
+        (trackingUrl ? `🔍 *Ver laudo e comprovante:*\n${trackingUrl}\n\n` : '') +
+        `Aguardamos você para a retirada!`
+      : `Olá, *${custName}*!\n\nAtualização sobre seu item *${modelName}* (OS *#${item.order_number}*) na *${currentCompany.trade_name}*: o status atual é *${item.status}*.\n\n` +
+        (trackingUrl ? `🔍 *Acompanhe pelo link:*\n${trackingUrl}\n\n` : '') +
+        `Qualquer dúvida, estamos à disposição!`;
+
+    window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`, '_blank');
   };
 
   // ==========================================
@@ -1060,22 +1088,35 @@ export default function TechnicianWorkbenchPage() {
                 </div>
 
                 {/* Actions */}
-                <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800">
-                  {!isReadOnlyMode ? (
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {!isReadOnlyMode ? (
+                      <Button
+                        type="button"
+                        onClick={handleQuickApprove}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5"
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                        Aprovação Rápida (100% OK)
+                      </Button>
+                    ) : (
+                      <span className="text-xs text-slate-400 flex items-center gap-1.5 font-medium">
+                        <Eye className="w-3.5 h-3.5" />
+                        Visualização de OS de outro técnico
+                      </span>
+                    )}
+
                     <Button
                       type="button"
-                      onClick={handleQuickApprove}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5"
+                      variant="outline"
+                      onClick={() => handleSendWhatsAppNotification(selectedItem)}
+                      className="border-emerald-600/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 text-xs font-bold gap-1.5"
+                      title="Enviar atualização de status no WhatsApp do cliente"
                     >
-                      <CheckCircle2 className="w-4 h-4" />
-                      Aprovação Rápida (100% OK)
+                      <MessageCircle className="w-3.5 h-3.5" />
+                      <span>Avisar no WhatsApp</span>
                     </Button>
-                  ) : (
-                    <span className="text-xs text-slate-400 flex items-center gap-1.5 font-medium">
-                      <Eye className="w-3.5 h-3.5" />
-                      Visualização de OS de outro técnico
-                    </span>
-                  )}
+                  </div>
 
                   <div className="flex gap-2">
                     <Button type="button" variant="outline" onClick={() => setSelectedItem(null)} className="text-xs">

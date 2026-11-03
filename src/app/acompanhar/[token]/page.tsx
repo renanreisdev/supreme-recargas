@@ -45,7 +45,7 @@ export default function PublicTrackingPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const loadData = (forceRefresh = false) => {
+  const loadData = async (forceRefresh = false) => {
     if (!token) {
       setIsLoading(false);
       return;
@@ -54,7 +54,7 @@ export default function PublicTrackingPage() {
       setIsLoading(true);
     }
     try {
-      const found = AppStore.getServiceOrderByTrackingToken(token) || AppStore.getServiceOrderById(token);
+      const found = await AppStore.getEntryByTokenAsync(token);
       if (found) {
         setOrder(found);
         const comp = AppStore.getCompany(found.tenant_id);

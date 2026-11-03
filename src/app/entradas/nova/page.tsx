@@ -14,6 +14,7 @@ import {
   X, 
   Phone, 
   MessageSquare,
+  MessageCircle,
   Sparkles,
   AlertCircle,
   HelpCircle,
@@ -1161,17 +1162,50 @@ export default function NovaEntradaPage() {
               <Link href={`/impressao?orderId=${createdOrder.id}&type=entry&copies=${settings.print_entry_copies || 2}`}>
                 <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs h-10 gap-2 shadow-md shadow-emerald-600/20">
                   <Printer className="w-4 h-4" />
-                  <span>Imprimir Comanda ({settings.print_entry_copies || 2} Vias)</span>
+                  <span>Imprimir ({settings.print_entry_copies || 2} Vias)</span>
                 </Button>
               </Link>
 
               <Link href={`/acompanhar/${createdOrder.tracking_token}`} target="_blank">
                 <Button variant="outline" className="w-full font-bold rounded-xl text-xs h-10 gap-2">
                   <QrCode className="w-4 h-4 text-purple-600" />
-                  <span>Ver Rastreio Online</span>
+                  <span>Rastreio Online</span>
                 </Button>
               </Link>
             </div>
+
+            {createdOrder.customer?.phone && (
+              <div className="pt-2">
+                <Button
+                  type="button"
+                  onClick={() => {
+                    const rawPhone = createdOrder.customer?.phone || '';
+                    const cleanPhone = rawPhone.replace(/\D/g, '');
+                    if (!cleanPhone) {
+                      toast.warning('O cliente não possui telefone válido para envio.');
+                      return;
+                    }
+                    const waNumber = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
+                    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://supremerecargas.com.br';
+                    const trackingUrl = `${origin}/acompanhar/${createdOrder.tracking_token || createdOrder.id}`;
+                    const itemsList = (createdOrder.items || []).map(it => `• ${it.model?.name || 'Item'} (${it.internal_identifier})`).join('\n');
+                    const message = 
+                      `Olá, *${createdOrder.customer?.name}*!\n\n` +
+                      `Seu atendimento foi aberto com sucesso na *${currentCompany.trade_name}*.\n` +
+                      `📋 *OS:* #${createdOrder.order_number}\n\n` +
+                      `*Itens recebidos:*\n${itemsList}\n\n` +
+                      `💰 *Valor:* ${formatCurrency(createdOrder.total_amount)}\n\n` +
+                      `🔍 *Acompanhe em tempo real pelo link:*\n${trackingUrl}\n\n` +
+                      `Obrigado pela preferência!`;
+                    window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`, '_blank');
+                  }}
+                  className="w-full bg-[#25D366] hover:bg-[#20ba5a] text-white font-bold rounded-xl text-xs h-10 gap-2 shadow-md shadow-emerald-950/20"
+                >
+                  <MessageCircle className="w-4 h-4 fill-white" />
+                  <span>Enviar Comprovante via WhatsApp</span>
+                </Button>
+              </div>
+            )}
 
             <div className="pt-2">
               <Button

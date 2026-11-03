@@ -1,7 +1,15 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://dmtdzdwrwjyjircccyfw.supabase.co';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRtdGR6ZHdyd2p5amlyY2NjeWZ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY3OTQxMzAsImV4cCI6MjEwMjM3MDEzMH0.VAuvsPmO_mej0a0UodaC9elLVDZbvC5UuDOyPTos9aw';
+// SECURITY: no hardcoded fallback. A deploy without env vars must fail loudly
+// instead of silently pointing at a real project.
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error(
+    'Missing NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY. Configure them in .env.local or in the hosting provider.'
+  );
+}
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
