@@ -212,7 +212,7 @@ export function ModelCombobox({
           <ul className="overflow-y-auto py-1 divide-y divide-slate-100 dark:divide-slate-800/40 flex-1">
             {filteredModels.length === 0 ? (
               <li className="px-4 py-4 text-center text-xs text-slate-400 dark:text-slate-500">
-                Nenhum modelo encontrado para "{searchQuery}".
+                Nenhum modelo encontrado para &ldquo;{searchQuery}&rdquo;.
               </li>
             ) : (
               filteredModels.map((model, idx) => {

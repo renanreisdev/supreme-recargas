@@ -8,8 +8,8 @@ import { AppShell } from "@/components/layout/app-shell";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Supreme Recargas - Sistema Profissional de Controle de Cartuchos",
-  description: "Sistema SaaS Multi-tenant para recepção, verificação, bancada técnica, pesagem, testes e entrega de cartuchos de impressora.",
+  title: "Agilis OS - Sistema Operacional de Balcão e Bancada Técnica",
+  description: "Plataforma SaaS Multi-tenant para recepção ágil, ordens de serviço, bancada técnica de precisão, diagnóstico e rastreamento em tempo real.",
 };
 
 import { ToastContainer } from "@/components/ui/toast-container";

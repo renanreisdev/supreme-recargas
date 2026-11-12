@@ -7,6 +7,7 @@ import { AppStore } from '@/lib/store';
 import { Sidebar } from './sidebar';
 import { Header } from './header';
 import { BottomNav } from './bottom-nav';
+import { MustChangePasswordModal } from '@/components/auth/MustChangePasswordModal';
 import { Zap } from 'lucide-react';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -15,8 +16,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading, currentCompany } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const isPublicPage = pathname?.startsWith('/acompanhar') || 
-                       pathname === '/login';
+  const isPublicPage = pathname === '/' ||
+                       pathname === '/login' ||
+                       pathname === '/cadastro' ||
+                       pathname?.startsWith('/acompanhar');
 
   // Automatically close mobile menu when navigating to a new route
   useEffect(() => {
@@ -46,7 +49,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="w-12 h-12 rounded-2xl bg-emerald-600 flex items-center justify-center animate-pulse shadow-lg shadow-emerald-900/50">
           <Zap className="w-6 h-6 fill-white" />
         </div>
-        <p className="text-xs text-slate-400 font-mono tracking-wider">Carregando Supreme Recargas...</p>
+        <p className="text-xs text-slate-400 font-mono tracking-wider">Carregando Agilis...</p>
       </div>
     );
   }
@@ -79,6 +82,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           onToggleMenu={() => setMobileMenuOpen(!mobileMenuOpen)} 
         />
       </div>
+
+      {/* Mandatory Password Reset Modal on first login or after admin reset */}
+      <MustChangePasswordModal />
     </div>
   );
 }

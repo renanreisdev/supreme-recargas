@@ -15,13 +15,19 @@ import {
   Smartphone,
   Timer,
   LogOut,
-  Loader2
+  Loader2,
+  CheckCircle2,
+  X,
+  MessageCircle,
+  KeyRound
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
+import { AppStore } from '@/lib/store';
 import { formatDateTime } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
+import { toast } from '@/lib/toast';
 
 function LoginForm() {
   const router = useRouter();
@@ -40,6 +46,28 @@ function LoginForm() {
     activeDevice?: string;
     activeAt?: string;
   } | null>(null);
+
+  // Password Recovery State
+  // SECURITY: never reveal whether an e-mail exists nor reset a password without
+  // an out-of-band proof of ownership. Until e-mail based reset (Supabase Auth)
+  // is in place, recovery is performed by the company administrator.
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotFeedback, setForgotFeedback] = useState<{
+    type: 'info';
+    title: string;
+    message: string;
+  } | null>(null);
+
+  const handleVerifyForgotEmail = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotEmail.trim()) return;
+    setForgotFeedback({
+      type: 'info',
+      title: 'Solicite a redefinição ao administrador',
+      message: 'Por segurança, a senha deve ser redefinida pelo administrador da sua empresa (menu "Empresa > Equipe"). Administradores devem contatar o suporte da plataforma.'
+    });
+  };
 
   // If already authenticated, redirect to proper route
   useEffect(() => {
@@ -182,9 +210,17 @@ function LoginForm() {
                 <label className="text-xs font-semibold text-slate-300 block">
                   Senha
                 </label>
-                <span className="text-[11px] text-slate-400 cursor-not-allowed">
-                  Esqueceu? Contate seu Administrador
-                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowForgotModal(true);
+                    setForgotEmail(email);
+                    setForgotFeedback(null);
+                  }}
+                  className="text-[11px] text-emerald-400 hover:text-emerald-300 underline underline-offset-2 transition-colors cursor-pointer"
+                >
+                  Esqueceu a senha?
+                </button>
               </div>
               <div className="relative">
                 <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
@@ -238,11 +274,98 @@ function LoginForm() {
         </CardContent>
       </Card>
 
+      {/* Sign Up / Free Trial Link */}
+      <div className="text-center pt-2">
+        <p className="text-xs text-slate-400">
+          Sua loja ainda não usa o Supreme Recargas?{' '}
+          <Link href="/cadastro" className="font-bold text-emerald-400 hover:text-emerald-300 underline underline-offset-4 transition-colors">
+            Comece 14 dias grátis
+          </Link>
+        </p>
+      </div>
+
       {/* Footer Security Notice */}
       <p className="text-center text-[11px] text-slate-400 flex items-center justify-center gap-1.5">
         <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
         <span>Ambiente Seguro Multi-Empresa com Controle de Sessão Única</span>
       </p>
+
+      {/* Password Recovery Modal */}
+      {showForgotModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 text-white rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                  <KeyRound className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-white">Recuperação de Acesso</h3>
+                  <p className="text-[11px] text-slate-400">Identificação de credencial segura</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowForgotModal(false);
+                  setForgotFeedback(null);
+                }}
+                className="p-1 rounded-lg text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleVerifyForgotEmail} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-300 block">
+                    Digite o e-mail da sua conta
+                  </label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                    <Input
+                      type="email"
+                      required
+                      placeholder="seu.email@empresa.com"
+                      value={forgotEmail}
+                      onChange={(e) => setForgotEmail(e.target.value)}
+                      className="pl-9 text-xs bg-slate-950/80 border-slate-700 text-white placeholder:text-slate-500 focus:border-emerald-500 h-10"
+                    />
+                  </div>
+                </div>
+
+                {forgotFeedback && (
+                  <div className="p-3.5 rounded-xl border text-xs leading-relaxed space-y-1 bg-blue-950/40 border-blue-800 text-blue-300">
+                    <div className="font-bold">{forgotFeedback.title}</div>
+                    <div>{forgotFeedback.message}</div>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setShowForgotModal(false);
+                      setForgotFeedback(null);
+                    }}
+                    className="text-xs border-slate-700 text-slate-300 hover:bg-slate-800"
+                  >
+                    Fechar
+                  </Button>
+                  <Button
+                    type="submit"
+                    size="sm"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-9 px-4 gap-1.5 shadow-md shadow-emerald-950/40"
+                  >
+                    Continuar
+                  </Button>
+                </div>
+              </form>
+          </div>
+        </div>
+      )}
 
       {/* Confirmation Modal: Active Session Conflict */}
       {confirmModalData && (

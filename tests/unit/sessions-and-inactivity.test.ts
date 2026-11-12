@@ -1,12 +1,32 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { AppStore, MOCK_COMPANY_SUPREME } from '@/lib/store';
 import { Profile } from '@/types';
 
 describe('User Sessions, Inactivity Timeouts and Security Engine', () => {
   beforeEach(() => {
-    // Reset local data store
+    // Reset local data store and clear active sessions
     const store = (AppStore as any).getStoreData();
+    if (store.profiles) {
+      store.profiles.forEach((p: Profile) => {
+        delete p.active_session_token;
+        delete p.active_session_device;
+        delete p.active_session_ip;
+        delete p.active_session_at;
+      });
+    }
     (AppStore as any).saveStoreData(store, true);
+
+    // Mock remote session sync to reflect current store state for deterministic unit testing
+    vi.spyOn(AppStore, 'fetchRemoteProfileSession').mockImplementation(async (userId: string) => {
+      const profile = AppStore.getAllProfiles().find(p => p.id === userId);
+      return profile ? {
+        active_session_token: profile.active_session_token,
+        active_session_device: profile.active_session_device,
+        active_session_at: profile.active_session_at,
+        is_active: profile.is_active,
+        inactivity_timeout_minutes: profile.inactivity_timeout_minutes
+      } : null;
+    });
   });
 
   it('generates a unique active session token and records device info upon authentication', () => {

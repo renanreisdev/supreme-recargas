@@ -1,6 +1,6 @@
-# ROADMAP DE DESENVOLVIMENTO - Supreme Recargas 2
+# ROADMAP DE DESENVOLVIMENTO - Agilis OS
 
-Este documento estabelece as 13 fases de execução para o desenvolvimento e homologação da plataforma **Supreme Recargas 2**.
+Este documento estabelece as 13 fases de execução para o desenvolvimento e homologação da plataforma **Agilis OS**.
 
 ---
 

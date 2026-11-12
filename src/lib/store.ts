@@ -37,12 +37,44 @@ import {
   BusinessTemplate,
   OrderStatus,
   FinancialStatus,
-  PaymentMethod
+  PaymentMethod,
+  CashRegisterSession,
+  CashRegisterMovement
 } from '@/types';
 import { supabase } from './supabase';
+import { hashPassword, verifyPassword, isPasswordHashed, buildLgpdAnonymizedCustomer } from '@/lib/security';
 
 const LOCAL_STORAGE_KEY = 'supreme_recargas_v4_clean';
+const OFFLINE_QUEUE_KEY = 'supreme_recargas_offline_queue_v1';
 
+export interface OfflineMutation {
+  id: string;
+  table: string;
+  action: 'INSERT' | 'UPDATE' | 'DELETE' | 'UPSERT';
+  payload: any;
+  matchField?: string;
+  matchValue?: any;
+  onConflict?: string;
+  tenant_id?: string;
+  created_at: string;
+  retry_count: number;
+}
+
+let syncBroadcastChannel: BroadcastChannel | null = null;
+if (typeof window !== 'undefined' && typeof BroadcastChannel !== 'undefined') {
+  try {
+    syncBroadcastChannel = new BroadcastChannel('supreme_recargas_sync_channel');
+    syncBroadcastChannel.onmessage = (event) => {
+      if (event.data?.type === 'STORE_UPDATED') {
+        window.dispatchEvent(new CustomEvent('supreme_store_updated', { detail: event.data.detail }));
+      } else if (event.data?.type === 'SYNC_STATUS_CHANGED') {
+        window.dispatchEvent(new CustomEvent('supreme_sync_status_updated', { detail: event.data.detail }));
+      }
+    };
+  } catch (e) {
+    console.warn('BroadcastChannel setup ignored:', e);
+  }
+}
 
 function generateUUID(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -567,13 +599,18 @@ export const DEFAULT_PERMISSION_GROUPS: PermissionGroup[] = [
   }
 ];
 
+// SECURITY: demo credentials are only available outside production builds.
+// In production, profiles must come from the database with hashed passwords.
+const demoPassword = (pwd: string): string | undefined =>
+  process.env.NODE_ENV === 'production' ? undefined : pwd;
+
 export const MOCK_PROFILES: Profile[] = [
   {
     id: 'd4000000-0000-0000-0000-000000000099',
     tenant_id: MOCK_COMPANY_SUPREME.id,
     full_name: 'Super Administrador',
     email: 'super@supreme.com.br',
-    password: 'super123',
+    password: demoPassword('super123'),
     phone: '(11) 99999-0000',
     role: 'SUPER_ADMIN',
     max_discount_percent: 100,
@@ -585,7 +622,7 @@ export const MOCK_PROFILES: Profile[] = [
     tenant_id: MOCK_COMPANY_SUPREME.id,
     full_name: 'Carlos Oliveira (Admin)',
     email: 'admin@supreme.com.br',
-    password: 'admin123',
+    password: demoPassword('admin123'),
     phone: '(11) 98765-1001',
     role: 'ADMINISTRADOR',
     group_id: 'default-admin-group',
@@ -599,7 +636,7 @@ export const MOCK_PROFILES: Profile[] = [
     tenant_id: MOCK_COMPANY_SUPREME.id,
     full_name: 'Mariana Santos (Atendente 1)',
     email: 'atendente1@supreme.com.br',
-    password: 'atendente123',
+    password: demoPassword('atendente123'),
     phone: '(11) 98765-2001',
     role: 'ATENDENTE',
     group_id: 'default-attendant-group',
@@ -613,7 +650,7 @@ export const MOCK_PROFILES: Profile[] = [
     tenant_id: MOCK_COMPANY_SUPREME.id,
     full_name: 'Lucas Lima (Atendente 2)',
     email: 'atendente2@supreme.com.br',
-    password: 'atendente123',
+    password: demoPassword('atendente123'),
     phone: '(11) 98765-2002',
     role: 'ATENDENTE',
     group_id: 'default-attendant-group',
@@ -627,7 +664,7 @@ export const MOCK_PROFILES: Profile[] = [
     tenant_id: MOCK_COMPANY_SUPREME.id,
     full_name: 'Rafael Souza (Técnico 1)',
     email: 'tecnico1@supreme.com.br',
-    password: 'tecnico123',
+    password: demoPassword('tecnico123'),
     phone: '(11) 98765-3001',
     role: 'TECNICO',
     group_id: 'default-tech-group',
@@ -641,7 +678,7 @@ export const MOCK_PROFILES: Profile[] = [
     tenant_id: MOCK_COMPANY_SUPREME.id,
     full_name: 'Marcos Rocha (Técnico 2)',
     email: 'tecnico2@supreme.com.br',
-    password: 'tecnico123',
+    password: demoPassword('tecnico123'),
     phone: '(11) 98765-3002',
     role: 'TECNICO',
     group_id: 'default-tech-group',
@@ -750,6 +787,7 @@ export class AppStore {
           serviceOrders: [...INITIAL_SERVICE_ORDERS],
           payments: [...INITIAL_PAYMENTS],
           auditLogs: [...INITIAL_AUDIT_LOGS],
+          cashRegisters: [],
           settings: { ...MOCK_COMPANY_SETTINGS },
           company: { ...MOCK_COMPANY_SUPREME }
         };
@@ -775,6 +813,7 @@ export class AppStore {
         serviceOrders: INITIAL_SERVICE_ORDERS,
         payments: INITIAL_PAYMENTS,
         auditLogs: INITIAL_AUDIT_LOGS,
+        cashRegisters: [],
         settings: MOCK_COMPANY_SETTINGS,
         company: MOCK_COMPANY_SUPREME
       };
@@ -809,6 +848,7 @@ export class AppStore {
       if (!Array.isArray(parsed.serviceOrders)) parsed.serviceOrders = [];
       if (!Array.isArray(parsed.payments)) parsed.payments = [];
       if (!Array.isArray(parsed.auditLogs)) parsed.auditLogs = [];
+      if (!Array.isArray(parsed.cashRegisters)) parsed.cashRegisters = [];
       if (!parsed.settings) parsed.settings = MOCK_COMPANY_SETTINGS;
       if (!parsed.company) parsed.company = MOCK_COMPANY_SUPREME;
 
@@ -833,6 +873,7 @@ export class AppStore {
         serviceOrders: INITIAL_SERVICE_ORDERS,
         payments: INITIAL_PAYMENTS,
         auditLogs: INITIAL_AUDIT_LOGS,
+        cashRegisters: [],
         settings: MOCK_COMPANY_SETTINGS,
         company: MOCK_COMPANY_SUPREME
       };
@@ -844,11 +885,182 @@ export class AppStore {
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
       if (emitEvent) {
         window.dispatchEvent(new CustomEvent('supreme_store_updated', { detail: data }));
+        if (syncBroadcastChannel) {
+          try {
+            syncBroadcastChannel.postMessage({ type: 'STORE_UPDATED', detail: data });
+          } catch {}
+        }
       }
     } else {
       this.memoryStore = data;
     }
   }
+
+  // --------------------------------------------------------------------------
+  // OFFLINE RESILIENCE & QUEUE MANAGEMENT
+  // --------------------------------------------------------------------------
+  static getOfflineQueue(): OfflineMutation[] {
+    if (typeof window === 'undefined') return [];
+    try {
+      const raw = localStorage.getItem(OFFLINE_QUEUE_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  static saveOfflineQueue(queue: OfflineMutation[]) {
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
+      this.notifySyncStatus();
+    } catch (e) {
+      console.error('Error saving offline queue:', e);
+    }
+  }
+
+  private static isFlushingQueue = false;
+
+  static getSyncStatus(): { isOnline: boolean; pendingCount: number; isSyncing: boolean } {
+    const isOnline = typeof navigator !== 'undefined' && navigator.onLine !== undefined ? navigator.onLine : true;
+    const pendingCount = this.getOfflineQueue().length;
+    return {
+      isOnline,
+      pendingCount,
+      isSyncing: this.isFlushingQueue
+    };
+  }
+
+  static notifySyncStatus(isSyncing?: boolean) {
+    if (typeof window === 'undefined') return;
+    const status = {
+      isOnline: typeof navigator !== 'undefined' && navigator.onLine !== undefined ? navigator.onLine : true,
+      pendingCount: this.getOfflineQueue().length,
+      isSyncing: isSyncing !== undefined ? isSyncing : this.isFlushingQueue
+    };
+    window.dispatchEvent(new CustomEvent('supreme_sync_status_updated', { detail: status }));
+    if (syncBroadcastChannel) {
+      try {
+        syncBroadcastChannel.postMessage({ type: 'SYNC_STATUS_CHANGED', detail: status });
+      } catch {}
+    }
+  }
+
+  private static mutationExecutionChain: Promise<any> = Promise.resolve();
+
+  static async enqueueOrExecuteMutation(mutation: Omit<OfflineMutation, 'id' | 'created_at' | 'retry_count'>) {
+    const fullMutation: OfflineMutation = {
+      ...mutation,
+      id: generateUUID(),
+      created_at: new Date().toISOString(),
+      retry_count: 0
+    };
+
+    // If browser is explicitly offline, queue immediately
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      const queue = this.getOfflineQueue();
+      queue.push(fullMutation);
+      this.saveOfflineQueue(queue);
+      return;
+    }
+
+    // Chain execution sequentially to prevent race conditions with foreign keys (e.g. order -> items -> services)
+    this.mutationExecutionChain = this.mutationExecutionChain.then(async () => {
+      try {
+        let query: any;
+        if (fullMutation.action === 'INSERT') {
+          query = supabase.from(fullMutation.table).insert(fullMutation.payload);
+        } else if (fullMutation.action === 'UPSERT') {
+          const conflict = fullMutation.onConflict || (fullMutation.table === 'company_settings' ? 'tenant_id' : undefined);
+          query = supabase.from(fullMutation.table).upsert(fullMutation.payload, conflict ? { onConflict: conflict } : undefined);
+        } else if (fullMutation.action === 'UPDATE') {
+          const field = fullMutation.matchField || 'id';
+          query = supabase.from(fullMutation.table).update(fullMutation.payload).eq(field, fullMutation.matchValue);
+        } else if (fullMutation.action === 'DELETE') {
+          const field = fullMutation.matchField || 'id';
+          query = supabase.from(fullMutation.table).delete().eq(field, fullMutation.matchValue);
+        }
+
+        const res = await query;
+        if (res?.error) {
+          console.warn(`Mutation to ${fullMutation.table} failed, enqueueing offline:`, res.error);
+          const queue = this.getOfflineQueue();
+          queue.push(fullMutation);
+          this.saveOfflineQueue(queue);
+        }
+      } catch (err) {
+        console.warn(`Network error mutating ${fullMutation.table}, enqueueing offline:`, err);
+        const queue = this.getOfflineQueue();
+        queue.push(fullMutation);
+        this.saveOfflineQueue(queue);
+      }
+    });
+
+    return this.mutationExecutionChain;
+  }
+
+  static async waitForPendingMutations(): Promise<void> {
+    await this.mutationExecutionChain;
+  }
+
+  static async flushOfflineQueue(): Promise<{ processed: number; failed: number }> {
+    if (this.isFlushingQueue) return { processed: 0, failed: 0 };
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      return { processed: 0, failed: 0 };
+    }
+
+    const queue = this.getOfflineQueue();
+    if (queue.length === 0) return { processed: 0, failed: 0 };
+
+    this.isFlushingQueue = true;
+    this.notifySyncStatus(true);
+
+    const remaining: OfflineMutation[] = [];
+    let processed = 0;
+    let failed = 0;
+
+    for (const item of queue) {
+      try {
+        let res: any;
+        if (item.action === 'INSERT') {
+          res = await supabase.from(item.table).insert(item.payload);
+        } else if (item.action === 'UPSERT') {
+          const conflict = item.onConflict || (item.table === 'company_settings' ? 'tenant_id' : undefined);
+          res = await supabase.from(item.table).upsert(item.payload, conflict ? { onConflict: conflict } : undefined);
+        } else if (item.action === 'UPDATE') {
+          const field = item.matchField || 'id';
+          res = await supabase.from(item.table).update(item.payload).eq(field, item.matchValue);
+        } else if (item.action === 'DELETE') {
+          const field = item.matchField || 'id';
+          res = await supabase.from(item.table).delete().eq(field, item.matchValue);
+        }
+
+        if (res?.error) {
+          item.retry_count += 1;
+          if (item.retry_count < 10) {
+            remaining.push(item);
+          } else {
+            console.error('Dropping failed mutation after 10 retries:', item, res.error);
+          }
+          failed++;
+        } else {
+          processed++;
+        }
+      } catch (err) {
+        item.retry_count += 1;
+        remaining.push(item);
+        failed++;
+        break; // Network still disconnected
+      }
+    }
+
+    this.saveOfflineQueue(remaining);
+    this.isFlushingQueue = false;
+    this.notifySyncStatus(false);
+
+    return { processed, failed };
+  }
+
 
   // --------------------------------------------------------------------------
   // COMPANIES & TENANTS
@@ -893,18 +1105,20 @@ export class AppStore {
     if (!Array.isArray(data.companies)) data.companies = [];
     data.companies.push(newCompany);
 
-    if (planId) {
-      this.assignPlanToCompany(companyId, planId, undefined, performedByName);
-    }
-
+    let adminProfile: Profile | null = null;
     if (initialAdmin && initialAdmin.email) {
-      const adminProfile: Profile = {
+      adminProfile = {
         id: generateUUID(),
         tenant_id: companyId,
         full_name: initialAdmin.fullName,
         email: initialAdmin.email,
         phone: initialAdmin.phone,
-        password: initialAdmin.password || '123456',
+        password: (() => {
+          if (!initialAdmin.password || initialAdmin.password.length < 8) {
+            throw new Error('A senha inicial do administrador deve ter no mínimo 8 caracteres.');
+          }
+          return hashPassword(initialAdmin.password);
+        })(),
         role: 'ADMINISTRADOR',
         is_active: true,
         created_at: new Date().toISOString()
@@ -914,7 +1128,16 @@ export class AppStore {
     }
 
     this.saveStoreData(data);
-    supabase.from('companies').insert(newCompany).then();
+    this.enqueueOrExecuteMutation({ table: 'companies', action: 'INSERT', payload: newCompany });
+
+    if (planId) {
+      this.assignPlanToCompany(companyId, planId, undefined, performedByName);
+    }
+
+    if (adminProfile) {
+      this.enqueueOrExecuteMutation({ table: 'profiles', action: 'INSERT', payload: adminProfile, tenant_id: companyId });
+    }
+
     return newCompany;
   }
 
@@ -926,7 +1149,7 @@ export class AppStore {
     const updated = { ...old, ...updates, updated_at: new Date().toISOString() };
     data.companies[idx] = updated;
     this.saveStoreData(data);
-    supabase.from('companies').update(updates).eq('id', id).then();
+    this.enqueueOrExecuteMutation({ table: 'companies', action: 'UPDATE', payload: updates, matchField: 'id', matchValue: id });
 
     const diffs: string[] = [];
     if (updates.trade_name !== undefined && updates.trade_name !== old.trade_name) diffs.push(`Nome Fantasia de "${old.trade_name}" para "${updates.trade_name}"`);
@@ -962,6 +1185,13 @@ export class AppStore {
     comp.active_template_keys = [segment];
     comp.business_segment = segment;
     this.saveStoreData(data);
+    this.enqueueOrExecuteMutation({
+      table: 'companies',
+      action: 'UPDATE',
+      payload: { active_template_keys: [segment], business_segment: segment },
+      matchField: 'id',
+      matchValue: companyId
+    });
 
     this.logAudit({
       tenant_id: companyId,
@@ -975,12 +1205,89 @@ export class AppStore {
     return comp;
   }
 
+  static acceptCompanyTerms(companyId: string, performedByName: string, version: string = '2026.1'): Company {
+    const data = this.getStoreData();
+    const idx = data.companies.findIndex((c: Company) => c.id === companyId);
+    if (idx === -1) throw new Error('Empresa não encontrada');
+    const old = data.companies[idx];
+    const acceptedAt = new Date().toISOString();
+    const updated: Company = {
+      ...old,
+      terms_accepted_at: acceptedAt,
+      terms_accepted_by: performedByName,
+      terms_version: version,
+      updated_at: acceptedAt
+    };
+    data.companies[idx] = updated;
+    this.saveStoreData(data);
+    this.enqueueOrExecuteMutation({
+      table: 'companies',
+      action: 'UPDATE',
+      payload: {
+        terms_accepted_at: acceptedAt,
+        terms_accepted_by: performedByName,
+        terms_version: version
+      },
+      matchField: 'id',
+      matchValue: companyId
+    });
+
+    this.logAudit({
+      tenant_id: companyId,
+      user_name: performedByName,
+      action: 'ACEITE_TERMOS_USO',
+      resource: 'companies',
+      resource_id: companyId,
+      details: `Termos de Uso e Licença de Software (versão ${version}) aceitos digitalmente por ${performedByName}`
+    });
+
+    return updated;
+  }
+
+  static getTenantBackupData(tenantId: string) {
+    const data = this.getStoreData();
+    const company = (data.companies || []).find((c: Company) => c.id === tenantId);
+    const settings = data.settings || {};
+    const customers = (data.customers || []).filter((c: Customer) => c.tenant_id === tenantId);
+    const categories = (data.categories || []).filter((c: ItemCategory) => !c.tenant_id || c.tenant_id === tenantId);
+    const brands = (data.brands || []).filter((b: Brand) => !b.tenant_id || b.tenant_id === tenantId);
+    const models = (data.models || []).filter((m: ItemModel) => !m.tenant_id || m.tenant_id === tenantId);
+    const services = (data.services || []).filter((s: Service) => !s.tenant_id || s.tenant_id === tenantId);
+    const orders = (data.serviceOrders || []).filter((o: ServiceOrder) => o.tenant_id === tenantId);
+    const payments = (data.payments || []).filter((p: Payment) => p.tenant_id === tenantId);
+    const users = (data.profiles || []).filter((p: Profile) => p.tenant_id === tenantId);
+
+    return {
+      exported_at: new Date().toISOString(),
+      platform: 'Agilis OS v2',
+      tenant_id: tenantId,
+      company,
+      settings,
+      stats: {
+        total_customers: customers.length,
+        total_models: models.length,
+        total_services: services.length,
+        total_orders: orders.length,
+        total_payments: payments.length,
+        total_users: users.length
+      },
+      customers,
+      categories,
+      brands,
+      models,
+      services,
+      orders,
+      payments,
+      users
+    };
+  }
+
   static deleteCompany(id: string, performedByName?: string): boolean {
     const data = this.getStoreData();
     const old = (data.companies || []).find((c: Company) => c.id === id);
     data.companies = (data.companies || []).filter((c: Company) => c.id !== id);
     this.saveStoreData(data);
-    supabase.from('companies').delete().eq('id', id).then();
+    this.enqueueOrExecuteMutation({ table: 'companies', action: 'DELETE', payload: null, matchField: 'id', matchValue: id });
 
     if (old) {
       this.logAudit({
@@ -1009,6 +1316,7 @@ export class AppStore {
     const newPlan: Plan = { ...plan, id: generateUUID(), created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
     data.plans.push(newPlan);
     this.saveStoreData(data);
+    this.enqueueOrExecuteMutation({ table: 'plans', action: 'INSERT', payload: newPlan });
 
     this.logAudit({
       user_name: performedByName || 'Super Administrador',
@@ -1029,6 +1337,7 @@ export class AppStore {
     const updated = { ...old, ...updates, updated_at: new Date().toISOString() };
     data.plans[idx] = updated;
     this.saveStoreData(data);
+    this.enqueueOrExecuteMutation({ table: 'plans', action: 'UPDATE', payload: updates, matchField: 'id', matchValue: id });
 
     this.logAudit({
       user_name: performedByName || 'Super Administrador',
@@ -1046,6 +1355,7 @@ export class AppStore {
     const old = data.plans.find((p: Plan) => p.id === id);
     data.plans = data.plans.filter((p: Plan) => p.id !== id);
     this.saveStoreData(data);
+    this.enqueueOrExecuteMutation({ table: 'plans', action: 'DELETE', payload: null, matchField: 'id', matchValue: id });
 
     if (old) {
       this.logAudit({
@@ -1082,6 +1392,9 @@ export class AppStore {
         status: extras?.status || data.subscriptions[idx].status || 'ACTIVE'
       };
       data.subscriptions[idx] = sub;
+      const { plan: _planObj, ...dbSubUpdates } = sub as any;
+      this.saveStoreData(data);
+      this.enqueueOrExecuteMutation({ table: 'subscriptions', action: 'UPDATE', payload: dbSubUpdates, matchField: 'id', matchValue: sub.id, tenant_id: tenantId });
     } else {
       sub = {
         id: generateUUID(),
@@ -1096,8 +1409,10 @@ export class AppStore {
         billing_cycle: 'MONTHLY'
       };
       data.subscriptions.unshift(sub);
+      const { plan: _planObj, ...dbSubInsert } = sub as any;
+      this.saveStoreData(data);
+      this.enqueueOrExecuteMutation({ table: 'subscriptions', action: 'INSERT', payload: dbSubInsert, tenant_id: tenantId });
     }
-    this.saveStoreData(data);
     return sub;
   }
 
@@ -1193,7 +1508,8 @@ export class AppStore {
     const newGroup: PermissionGroup = { ...group, id: generateUUID(), is_system_default: false, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
     data.permissionGroups.push(newGroup);
     this.saveStoreData(data);
-    supabase.from('permission_groups').insert(newGroup).then();
+    const { default_inactivity_timeout_minutes, ...dbGroup } = newGroup as any;
+    this.enqueueOrExecuteMutation({ table: 'permission_groups', action: 'INSERT', payload: dbGroup, tenant_id: newGroup.tenant_id });
 
     this.logAudit({
       tenant_id: newGroup.tenant_id,
@@ -1215,7 +1531,10 @@ export class AppStore {
     const updated = { ...old, ...updates, updated_at: new Date().toISOString() };
     data.permissionGroups[idx] = updated;
     this.saveStoreData(data);
-    supabase.from('permission_groups').update(updates).eq('id', id).then();
+    const { default_inactivity_timeout_minutes, ...dbUpdates } = updates as any;
+    if (Object.keys(dbUpdates).length > 0) {
+      this.enqueueOrExecuteMutation({ table: 'permission_groups', action: 'UPDATE', payload: dbUpdates, matchField: 'id', matchValue: id });
+    }
 
     const diffs: string[] = [];
     if (updates.name !== undefined && updates.name !== old.name) diffs.push(`Nome de "${old.name}" para "${updates.name}"`);
@@ -1252,7 +1571,7 @@ export class AppStore {
     if (group?.is_system_default) throw new Error('Grupos padrão do sistema não podem ser excluídos.');
     data.permissionGroups = data.permissionGroups.filter((g: PermissionGroup) => g.id !== id);
     this.saveStoreData(data);
-    supabase.from('permission_groups').delete().eq('id', id).then();
+    this.enqueueOrExecuteMutation({ table: 'permission_groups', action: 'DELETE', payload: null, matchField: 'id', matchValue: id });
 
     if (group) {
       this.logAudit({
@@ -1274,10 +1593,21 @@ export class AppStore {
       const limits = this.getEffectiveLimits(user.tenant_id);
       if (!limits.canAddUser) throw new Error(`Limite máximo de usuários atingido (${limits.maxUsers} usuários). Adquira usuários extras.`);
     }
-    const newUser: Profile = { ...user, id: generateUUID(), created_at: new Date().toISOString() };
+    const finalPassword = user.password
+      ? (isPasswordHashed(user.password) ? user.password : hashPassword(user.password))
+      : undefined;
+    const mustChange = user.must_change_password !== undefined ? user.must_change_password : true;
+
+    const newUser: Profile = {
+      ...user,
+      id: generateUUID(),
+      password: finalPassword,
+      must_change_password: mustChange,
+      created_at: new Date().toISOString()
+    };
     data.profiles.push(newUser);
     this.saveStoreData(data);
-    supabase.from('profiles').insert(newUser).then();
+    this.enqueueOrExecuteMutation({ table: 'profiles', action: 'INSERT', payload: newUser, tenant_id: newUser.tenant_id });
 
     this.logAudit({
       tenant_id: newUser.tenant_id,
@@ -1296,10 +1626,14 @@ export class AppStore {
     const idx = data.profiles.findIndex((p: Profile) => p.id === id);
     if (idx === -1) throw new Error('Usuário não encontrado');
     const old = data.profiles[idx];
-    const updated = { ...old, ...updates };
+    const sanitizedUpdates = { ...updates };
+    if (sanitizedUpdates.password && !isPasswordHashed(sanitizedUpdates.password)) {
+      sanitizedUpdates.password = hashPassword(sanitizedUpdates.password);
+    }
+    const updated = { ...old, ...sanitizedUpdates };
     data.profiles[idx] = updated;
     this.saveStoreData(data);
-    supabase.from('profiles').update(updates).eq('id', id).then();
+    this.enqueueOrExecuteMutation({ table: 'profiles', action: 'UPDATE', payload: sanitizedUpdates, matchField: 'id', matchValue: id, tenant_id: old.tenant_id });
 
     const diffs: string[] = [];
     if (updates.full_name !== undefined && updates.full_name !== old.full_name) diffs.push(`Nome de "${old.full_name}" para "${updates.full_name}"`);
@@ -1334,7 +1668,7 @@ export class AppStore {
     const old = (data.profiles || []).find((p: Profile) => p.id === id);
     data.profiles = (data.profiles || []).filter((p: Profile) => p.id !== id);
     this.saveStoreData(data);
-    supabase.from('profiles').delete().eq('id', id).then();
+    this.enqueueOrExecuteMutation({ table: 'profiles', action: 'DELETE', payload: null, matchField: 'id', matchValue: id, tenant_id: old?.tenant_id });
 
     if (old) {
       this.logAudit({
@@ -1350,14 +1684,28 @@ export class AppStore {
     return true;
   }
 
-  static changeUserPassword(id: string, newPass: string, performedByName?: string): Profile {
+  static changeUserPassword(id: string, newPass: string, performedByName?: string, resetMustChange: boolean = false): Profile {
     const data = this.getStoreData();
     const idx = data.profiles.findIndex((p: Profile) => p.id === id);
     if (idx === -1) throw new Error('Usuário não encontrado');
     const user = data.profiles[idx];
-    user.password = newPass;
+    const hashedPassword = isPasswordHashed(newPass) ? newPass : hashPassword(newPass);
+    user.password = hashedPassword;
+    if (resetMustChange) {
+      user.must_change_password = false;
+    }
     this.saveStoreData(data);
-    supabase.from('profiles').update({ password: newPass }).eq('id', id).then();
+    this.enqueueOrExecuteMutation({
+      table: 'profiles',
+      action: 'UPDATE',
+      payload: {
+        password: hashedPassword,
+        ...(resetMustChange ? { must_change_password: false } : {})
+      },
+      matchField: 'id',
+      matchValue: id,
+      tenant_id: user.tenant_id
+    });
 
     this.logAudit({
       tenant_id: user.tenant_id,
@@ -1399,7 +1747,7 @@ export class AppStore {
     if (maxDiscountPercent !== undefined) dbUpdates.max_discount_percent = maxDiscountPercent;
     if (inactivityTimeoutMinutes !== undefined) dbUpdates.inactivity_timeout_minutes = inactivityTimeoutMinutes;
     
-    supabase.from('profiles').update(dbUpdates).eq('id', id).then();
+    this.enqueueOrExecuteMutation({ table: 'profiles', action: 'UPDATE', payload: dbUpdates, matchField: 'id', matchValue: id, tenant_id: oldUser.tenant_id });
 
     const extraNotes: string[] = [];
     if (maxDiscountPercent !== undefined) extraNotes.push(`Limite Desconto: ${maxDiscountPercent}%`);
@@ -1431,12 +1779,19 @@ export class AppStore {
     data.profiles[idx] = { ...user };
     this.saveStoreData(data);
 
-    supabase.from('profiles').update({
-      active_session_token: null,
-      active_session_device: null,
-      active_session_ip: null,
-      active_session_at: null
-    }).eq('id', userId).then();
+    this.enqueueOrExecuteMutation({
+      table: 'profiles',
+      action: 'UPDATE',
+      payload: {
+        active_session_token: null,
+        active_session_device: null,
+        active_session_ip: null,
+        active_session_at: null
+      },
+      matchField: 'id',
+      matchValue: userId,
+      tenant_id: user.tenant_id
+    });
 
     this.logAudit({
       tenant_id: user.tenant_id,
@@ -1462,9 +1817,16 @@ export class AppStore {
     data.profiles[idx] = { ...user };
     this.saveStoreData(data);
 
-    supabase.from('profiles').update({
-      inactivity_timeout_minutes: cleanTimeout
-    }).eq('id', userId).then();
+    this.enqueueOrExecuteMutation({
+      table: 'profiles',
+      action: 'UPDATE',
+      payload: {
+        inactivity_timeout_minutes: cleanTimeout
+      },
+      matchField: 'id',
+      matchValue: userId,
+      tenant_id: user.tenant_id
+    });
 
     this.logAudit({
       tenant_id: user.tenant_id,
@@ -1538,21 +1900,26 @@ export class AppStore {
     };
     data.customers.push(newCustomer);
     this.saveStoreData(data);
-    supabase.from('customers').insert({
-      id: newCustomer.id,
-      tenant_id: newCustomer.tenant_id,
-      internal_code: newCustomer.internal_code,
-      name: newCustomer.name,
-      document: newCustomer.document || null,
-      phone: newCustomer.phone,
-      whatsapp: newCustomer.whatsapp || null,
-      email: newCustomer.email || null,
-      company_name: newCustomer.company_name || null,
-      notes: newCustomer.notes || null,
-      phone_is_whatsapp: newCustomer.phone_is_whatsapp || false,
-      secondary_phone: newCustomer.secondary_phone || null,
-      secondary_phone_is_whatsapp: newCustomer.secondary_phone_is_whatsapp || false
-    }).then();
+    this.enqueueOrExecuteMutation({
+      table: 'customers',
+      action: 'INSERT',
+      payload: {
+        id: newCustomer.id,
+        tenant_id: newCustomer.tenant_id,
+        internal_code: newCustomer.internal_code,
+        name: newCustomer.name,
+        document: newCustomer.document || null,
+        phone: newCustomer.phone,
+        whatsapp: newCustomer.whatsapp || null,
+        email: newCustomer.email || null,
+        company_name: newCustomer.company_name || null,
+        notes: newCustomer.notes || null,
+        phone_is_whatsapp: newCustomer.phone_is_whatsapp || false,
+        secondary_phone: newCustomer.secondary_phone || null,
+        secondary_phone_is_whatsapp: newCustomer.secondary_phone_is_whatsapp || false
+      },
+      tenant_id: newCustomer.tenant_id
+    });
 
     this.logAudit({
       tenant_id: newCustomer.tenant_id,
@@ -1574,7 +1941,7 @@ export class AppStore {
     const updated = { ...old, ...updates, updated_at: new Date().toISOString() };
     data.customers[idx] = updated;
     this.saveStoreData(data);
-    supabase.from('customers').update(updates).eq('id', id).then();
+    this.enqueueOrExecuteMutation({ table: 'customers', action: 'UPDATE', payload: updates, matchField: 'id', matchValue: id, tenant_id: old.tenant_id });
 
     const diffs: string[] = [];
     if (updates.name !== undefined && updates.name !== old.name) diffs.push(`Nome de "${old.name}" para "${updates.name}"`);
@@ -1605,7 +1972,7 @@ export class AppStore {
     const old = (data.customers || []).find((c: Customer) => c.id === id);
     data.customers = (data.customers || []).filter((c: Customer) => c.id !== id);
     this.saveStoreData(data);
-    supabase.from('customers').update({ deleted_at: new Date().toISOString() }).eq('id', id).then();
+    this.enqueueOrExecuteMutation({ table: 'customers', action: 'UPDATE', payload: { deleted_at: new Date().toISOString() }, matchField: 'id', matchValue: id, tenant_id: old?.tenant_id });
 
     if (old) {
       this.logAudit({
@@ -1619,6 +1986,50 @@ export class AppStore {
     }
 
     return true;
+  }
+
+  static anonymizeCustomer(id: string, performedByName?: string): Customer {
+    const data = this.getStoreData();
+    const idx = (data.customers || []).findIndex((c: Customer) => c.id === id);
+    if (idx === -1) throw new Error('Cliente não encontrado');
+    const old = data.customers[idx];
+    const anonData = buildLgpdAnonymizedCustomer(id);
+    const updated: Customer = {
+      ...old,
+      ...anonData,
+      updated_at: new Date().toISOString()
+    };
+    data.customers[idx] = updated;
+
+    // Update customer reference in linked service orders
+    if (Array.isArray(data.serviceOrders)) {
+      data.serviceOrders.forEach((so: ServiceOrder) => {
+        if (so.customer_id === id) {
+          so.customer = updated;
+        }
+      });
+    }
+
+    this.saveStoreData(data);
+    this.enqueueOrExecuteMutation({
+      table: 'customers',
+      action: 'UPDATE',
+      payload: anonData,
+      matchField: 'id',
+      matchValue: id,
+      tenant_id: old.tenant_id
+    });
+
+    this.logAudit({
+      tenant_id: old.tenant_id,
+      user_name: performedByName || 'Encarregado DPO / Admin',
+      action: 'ANONIMIZACAO_LGPD',
+      resource: 'customers',
+      resource_id: id,
+      details: `Anonimização irrevogável executada para o titular Cód. #${old.internal_code} com base no Art. 18 da LGPD.`
+    });
+
+    return updated;
   }
 
   // --------------------------------------------------------------------------
@@ -1643,17 +2054,22 @@ export class AppStore {
     if (!Array.isArray(data.categories)) data.categories = [...INITIAL_CATEGORIES];
     data.categories.push(newCategory);
     this.saveStoreData(data);
-    supabase.from('item_categories').insert({
-      id: newCategory.id,
-      tenant_id: newCategory.tenant_id || null,
-      name: newCategory.name,
-      slug: newCategory.slug,
-      description: newCategory.description || null,
-      icon: newCategory.icon || 'Layers',
-      identifier_label: newCategory.identifier_label || 'Nº de Série',
-      is_system: newCategory.is_system || false,
-      is_active: newCategory.is_active !== false
-    }).then();
+    this.enqueueOrExecuteMutation({
+      table: 'item_categories',
+      action: 'INSERT',
+      payload: {
+        id: newCategory.id,
+        tenant_id: newCategory.tenant_id || null,
+        name: newCategory.name,
+        slug: newCategory.slug,
+        description: newCategory.description || null,
+        icon: newCategory.icon || 'Layers',
+        identifier_label: newCategory.identifier_label || 'Nº de Série',
+        is_system: newCategory.is_system || false,
+        is_active: newCategory.is_active !== false
+      },
+      tenant_id: newCategory.tenant_id
+    });
 
     this.logAudit({
       tenant_id: newCategory.tenant_id,
@@ -1676,7 +2092,7 @@ export class AppStore {
     const updated = { ...old, ...updates, updated_at: new Date().toISOString() };
     data.categories[idx] = updated;
     this.saveStoreData(data);
-    supabase.from('item_categories').update(updates).eq('id', id).then();
+    this.enqueueOrExecuteMutation({ table: 'item_categories', action: 'UPDATE', payload: updates, matchField: 'id', matchValue: id, tenant_id: old.tenant_id });
 
     const diffs: string[] = [];
     if (updates.name !== undefined && updates.name !== old.name) diffs.push(`Nome de "${old.name}" para "${updates.name}"`);
@@ -1705,7 +2121,7 @@ export class AppStore {
     const old = data.categories.find((c: ItemCategory) => c.id === id);
     data.categories = data.categories.filter((c: ItemCategory) => c.id !== id);
     this.saveStoreData(data);
-    supabase.from('item_categories').delete().eq('id', id).then();
+    this.enqueueOrExecuteMutation({ table: 'item_categories', action: 'DELETE', payload: null, matchField: 'id', matchValue: id, tenant_id: old?.tenant_id });
 
     if (old) {
       this.logAudit({
@@ -1740,14 +2156,19 @@ export class AppStore {
     if (!Array.isArray(data.brands)) data.brands = [...INITIAL_BRANDS];
     data.brands.push(newBrand);
     this.saveStoreData(data);
-    supabase.from('brands').insert({
-      id: newBrand.id,
-      tenant_id: newBrand.tenant_id || null,
-      name: newBrand.name,
-      slug: newBrand.slug,
-      is_system: newBrand.is_system || false,
-      is_active: newBrand.is_active !== false
-    }).then();
+    this.enqueueOrExecuteMutation({
+      table: 'brands',
+      action: 'INSERT',
+      payload: {
+        id: newBrand.id,
+        tenant_id: newBrand.tenant_id || null,
+        name: newBrand.name,
+        slug: newBrand.slug,
+        is_system: newBrand.is_system || false,
+        is_active: newBrand.is_active !== false
+      },
+      tenant_id: newBrand.tenant_id
+    });
 
     this.logAudit({
       tenant_id: newBrand.tenant_id,
@@ -1770,7 +2191,7 @@ export class AppStore {
     const updated = { ...old, ...updates, updated_at: new Date().toISOString() };
     data.brands[idx] = updated;
     this.saveStoreData(data);
-    supabase.from('brands').update(updates).eq('id', id).then();
+    this.enqueueOrExecuteMutation({ table: 'brands', action: 'UPDATE', payload: updates, matchField: 'id', matchValue: id, tenant_id: old.tenant_id });
 
     this.logAudit({
       tenant_id: old.tenant_id,
@@ -1790,7 +2211,7 @@ export class AppStore {
     const old = data.brands.find((b: Brand) => b.id === id);
     data.brands = data.brands.filter((b: Brand) => b.id !== id);
     this.saveStoreData(data);
-    supabase.from('brands').delete().eq('id', id).then();
+    this.enqueueOrExecuteMutation({ table: 'brands', action: 'DELETE', payload: null, matchField: 'id', matchValue: id, tenant_id: old?.tenant_id });
 
     if (old) {
       this.logAudit({
@@ -1875,18 +2296,23 @@ export class AppStore {
     if (!Array.isArray(data.models)) data.models = [];
     data.models.push(newModel);
     this.saveStoreData(data);
-    supabase.from('item_models').insert({
-      id: newModel.id,
-      tenant_id: newModel.tenant_id,
-      category_id: newModel.category_id,
-      brand_id: newModel.brand_id || null,
-      name: newModel.name,
-      internal_code: newModel.internal_code || null,
-      description: newModel.description || null,
-      technical_notes: newModel.technical_notes || null,
-      attributes: newModel.attributes || {},
-      is_active: newModel.is_active !== false
-    }).then();
+    this.enqueueOrExecuteMutation({
+      table: 'item_models',
+      action: 'INSERT',
+      payload: {
+        id: newModel.id,
+        tenant_id: newModel.tenant_id,
+        category_id: newModel.category_id,
+        brand_id: newModel.brand_id || null,
+        name: newModel.name,
+        internal_code: newModel.internal_code || null,
+        description: newModel.description || null,
+        technical_notes: newModel.technical_notes || null,
+        attributes: newModel.attributes || {},
+        is_active: newModel.is_active !== false
+      },
+      tenant_id: newModel.tenant_id
+    });
 
     const cat = (data.categories || INITIAL_CATEGORIES).find((c: ItemCategory) => c.id === model.category_id);
     this.logAudit({
@@ -1909,7 +2335,7 @@ export class AppStore {
     const updated = { ...old, ...updates, updated_at: new Date().toISOString() };
     data.models[idx] = updated;
     this.saveStoreData(data);
-    supabase.from('item_models').update(updates).eq('id', id).then();
+    this.enqueueOrExecuteMutation({ table: 'item_models', action: 'UPDATE', payload: updates, matchField: 'id', matchValue: id, tenant_id: old.tenant_id });
 
     const diffs: string[] = [];
     if (updates.name !== undefined && updates.name !== old.name) diffs.push(`Nome de "${old.name}" para "${updates.name}"`);
@@ -1941,7 +2367,7 @@ export class AppStore {
     const old = (data.models || []).find((m: ItemModel) => m.id === id);
     data.models = data.models.filter((m: ItemModel) => m.id !== id);
     this.saveStoreData(data);
-    supabase.from('item_models').delete().eq('id', id).then();
+    this.enqueueOrExecuteMutation({ table: 'item_models', action: 'DELETE', payload: null, matchField: 'id', matchValue: id, tenant_id: old?.tenant_id });
 
     if (old) {
       this.logAudit({
@@ -1968,16 +2394,21 @@ export class AppStore {
     if (!Array.isArray(data.services)) data.services = [];
     data.services.push(newService);
     this.saveStoreData(data);
-    supabase.from('services').insert({
-      id: newService.id,
-      tenant_id: newService.tenant_id,
-      name: newService.name,
-      code: newService.code,
-      description: newService.description || null,
-      default_price: newService.default_price || 0,
-      estimated_time_minutes: newService.estimated_time_minutes || 60,
-      is_active: newService.is_active !== false
-    }).then();
+    this.enqueueOrExecuteMutation({
+      table: 'services',
+      action: 'INSERT',
+      payload: {
+        id: newService.id,
+        tenant_id: newService.tenant_id,
+        name: newService.name,
+        code: newService.code,
+        description: newService.description || null,
+        default_price: newService.default_price || 0,
+        estimated_time_minutes: newService.estimated_time_minutes || 60,
+        is_active: newService.is_active !== false
+      },
+      tenant_id: newService.tenant_id
+    });
 
     this.logAudit({
       tenant_id: newService.tenant_id,
@@ -1999,7 +2430,7 @@ export class AppStore {
     const updated = { ...old, ...updates, updated_at: new Date().toISOString() };
     data.services[idx] = updated;
     this.saveStoreData(data);
-    supabase.from('services').update(updates).eq('id', id).then();
+    this.enqueueOrExecuteMutation({ table: 'services', action: 'UPDATE', payload: updates, matchField: 'id', matchValue: id, tenant_id: old.tenant_id });
 
     const diffs: string[] = [];
     if (updates.name !== undefined && updates.name !== old.name) diffs.push(`Nome de "${old.name}" para "${updates.name}"`);
@@ -2030,7 +2461,7 @@ export class AppStore {
     const old = (data.services || []).find((s: Service) => s.id === id);
     data.services = data.services.filter((s: Service) => s.id !== id);
     this.saveStoreData(data);
-    supabase.from('services').delete().eq('id', id).then();
+    this.enqueueOrExecuteMutation({ table: 'services', action: 'DELETE', payload: null, matchField: 'id', matchValue: id, tenant_id: old?.tenant_id });
 
     if (old) {
       this.logAudit({
@@ -2069,19 +2500,24 @@ export class AppStore {
     };
     data.workflowStates.push(newState);
     this.saveStoreData(data);
-    supabase.from('workflow_states').insert({
-      id: newState.id,
-      tenant_id: newState.tenant_id,
-      workflow_id: newState.workflow_id,
-      code: newState.code,
-      name: newState.name,
-      color: newState.color || 'slate',
-      stage_type: newState.stage_type || 'EM_ANDAMENTO',
-      sort_order: newState.sort_order,
-      is_initial: newState.is_initial || false,
-      is_final: newState.is_final || false,
-      description: newState.description || null
-    }).then();
+    this.enqueueOrExecuteMutation({
+      table: 'workflow_states',
+      action: 'INSERT',
+      payload: {
+        id: newState.id,
+        tenant_id: newState.tenant_id,
+        workflow_id: newState.workflow_id,
+        code: newState.code,
+        name: newState.name,
+        color: newState.color || 'slate',
+        stage_type: newState.stage_type || 'EM_ANDAMENTO',
+        sort_order: newState.sort_order,
+        is_initial: newState.is_initial || false,
+        is_final: newState.is_final || false,
+        description: newState.description || null
+      },
+      tenant_id: newState.tenant_id
+    });
 
     this.logAudit({
       tenant_id: tenantId,
@@ -2104,7 +2540,7 @@ export class AppStore {
     const updated = { ...old, ...updates };
     data.workflowStates[idx] = updated;
     this.saveStoreData(data);
-    supabase.from('workflow_states').update(updates).eq('id', id).then();
+    this.enqueueOrExecuteMutation({ table: 'workflow_states', action: 'UPDATE', payload: updates, matchField: 'id', matchValue: id, tenant_id: old.tenant_id });
 
     const diffs: string[] = [];
     if (updates.name !== undefined && updates.name !== old.name) diffs.push(`Nome de "${old.name}" para "${updates.name}"`);
@@ -2132,7 +2568,7 @@ export class AppStore {
     const old = data.workflowStates.find((st: WorkflowState) => st.id === id);
     data.workflowStates = data.workflowStates.filter((st: WorkflowState) => st.id !== id);
     this.saveStoreData(data);
-    supabase.from('workflow_states').delete().eq('id', id).then();
+    this.enqueueOrExecuteMutation({ table: 'workflow_states', action: 'DELETE', payload: null, matchField: 'id', matchValue: id, tenant_id: old?.tenant_id });
 
     if (old) {
       this.logAudit({
@@ -2155,7 +2591,14 @@ export class AppStore {
       const state = data.workflowStates.find((s: WorkflowState) => s.id === id);
       if (state) {
         state.sort_order = idx + 1;
-        supabase.from('workflow_states').update({ sort_order: idx + 1 }).eq('id', id).then();
+        this.enqueueOrExecuteMutation({
+          table: 'workflow_states',
+          action: 'UPDATE',
+          payload: { sort_order: idx + 1 },
+          matchField: 'id',
+          matchValue: id,
+          tenant_id: tenantId
+        });
       }
     });
     this.saveStoreData(data);
@@ -2254,13 +2697,116 @@ export class AppStore {
     const cleanToken = token.trim().toLowerCase();
     const data = this.getStoreData();
     const orders: ServiceOrder[] = data.serviceOrders || INITIAL_SERVICE_ORDERS;
+    // SECURITY: public tracking must only match by cryptographic tracking_token (or exact UUID).
+    // Allowing sequential order_number would enable enumeration/scraping of all customer orders.
     const order = orders.find((o: ServiceOrder) => 
       (o.tracking_token && o.tracking_token.toLowerCase() === cleanToken) ||
-      (o.order_number && o.order_number.toLowerCase() === cleanToken) ||
       o.id === token
     );
     if (!order) return null;
     return this.getServiceOrderById(order.id);
+  }
+
+  static async fetchRemoteServiceOrderByTrackingToken(token: string): Promise<ServiceOrder | null> {
+    if (!token) return null;
+    const cleanToken = token.trim();
+
+    // 1. Try local memory/localStorage store first
+    const local = this.getServiceOrderByTrackingToken(cleanToken);
+    if (local) return local;
+
+    // 2. Fetch directly from Supabase for mobile devices or new sessions
+    // SECURITY: never allow sequential order_number or interpolate into PostgREST filters.
+    try {
+      const TRACKING_TOKEN_RE = /^[0-9a-f]{32}$/i;
+      let column: 'id' | 'tracking_token' | null = null;
+      if (TRACKING_TOKEN_RE.test(cleanToken)) column = 'tracking_token';
+      else if (isValidUUID(cleanToken)) column = 'id';
+      if (!column) return null;
+
+      const query = supabase
+        .from('service_orders')
+        .select('*')
+        .eq(column, column === 'tracking_token' ? cleanToken.toLowerCase() : cleanToken)
+        .limit(1);
+
+      const { data: orderData, error: orderError } = await query.maybeSingle();
+      if (orderError || !orderData) {
+        return null;
+      }
+
+      // Fetch items for this order
+      const { data: itemsData } = await supabase
+        .from('service_order_items')
+        .select('*')
+        .eq('service_order_id', orderData.id);
+
+      const itemIds = (itemsData || []).map(i => i.id);
+      let itemServicesData: any[] = [];
+      if (itemIds.length > 0) {
+        const { data: srvs } = await supabase
+          .from('service_order_item_services')
+          .select('*')
+          .in('service_order_item_id', itemIds);
+        itemServicesData = srvs || [];
+      }
+
+      // Fetch models
+      const { data: modelsData } = await supabase
+        .from('item_models')
+        .select('*')
+        .eq('tenant_id', orderData.tenant_id);
+
+      // Fetch customer
+      const { data: customerData } = await supabase
+        .from('customers')
+        .select('*')
+        .eq('id', orderData.customer_id)
+        .maybeSingle();
+
+      // Fetch company
+      const { data: companyData } = await supabase
+        .from('companies')
+        .select('*')
+        .eq('id', orderData.tenant_id)
+        .maybeSingle();
+
+      // Assemble items
+      const assembledItems: ServiceOrderItem[] = (itemsData || []).map(it => {
+        const srvs = itemServicesData.filter(s => s.service_order_item_id === it.id);
+        const modelObj = (modelsData || []).find(m => m.id === it.model_id);
+        return {
+          ...it,
+          order_number: orderData.order_number,
+          model: modelObj,
+          services: srvs
+        };
+      });
+
+      const assembledOrder: ServiceOrder = {
+        ...orderData,
+        customer: customerData || undefined,
+        items: assembledItems
+      };
+
+      // Cache locally in store
+      const storeData = this.getStoreData();
+      if (companyData && !(storeData.companies || []).some((c: Company) => c.id === companyData.id)) {
+        storeData.companies = [...(storeData.companies || []), companyData];
+      }
+      if (customerData && !(storeData.customers || []).some((c: Customer) => c.id === customerData.id)) {
+        storeData.customers = [...(storeData.customers || []), customerData];
+      }
+      if (!(storeData.serviceOrders || []).some((o: ServiceOrder) => o.id === assembledOrder.id)) {
+        storeData.serviceOrders = [assembledOrder, ...(storeData.serviceOrders || [])];
+      }
+      this.saveStoreData(storeData, false);
+
+      return assembledOrder;
+    } catch (e) {
+      console.warn('Error fetching remote service order by tracking token:', e);
+      return null;
+    }
   }
 
   static addServiceOrder(
@@ -2428,36 +2974,54 @@ export class AppStore {
         created_at: new Date().toISOString()
       };
       data.payments.push(newPayment);
+      this.recordOrderPaymentToCashRegister(
+        orderData.tenant_id,
+        orderId,
+        orderNumber,
+        orderData.initial_payment.amount,
+        orderData.initial_payment.payment_method,
+        orderData.opened_by,
+        orderData.opened_by_name || performedByName || 'Atendente'
+      );
     }
 
     this.saveStoreData(data);
 
-    // Persist to Supabase Database in relational order
-    supabase.from('service_orders').insert({
-      id: newOrder.id,
-      tenant_id: newOrder.tenant_id,
-      order_number: newOrder.order_number,
-      order_sequence: newOrder.order_sequence,
-      order_year: newOrder.order_year,
-      customer_id: newOrder.customer_id,
-      opened_by: newOrder.opened_by,
-      opened_at: newOrder.opened_at,
-      expected_at: newOrder.expected_at || null,
-      status: 'ABERTA',
-      financial_status: newOrder.financial_status,
-      subtotal_amount: newOrder.subtotal_amount,
-      discount_amount: newOrder.discount_amount,
-      surcharge_amount: 0,
-      total_amount: newOrder.total_amount,
-      paid_amount: newOrder.paid_amount,
-      tracking_token: newOrder.tracking_token,
-      notes: newOrder.notes || null,
-      internal_notes: newOrder.internal_notes || null
-    }).then(() => {
-      // Persist items
-      for (const item of orderItems) {
-        const validStateId = isValidUUID(item.current_state_id) && !item.current_state_id?.startsWith('a4000000') ? item.current_state_id : null;
-        supabase.from('service_order_items').insert({
+    // Persist to Supabase Database with offline resilience
+    this.enqueueOrExecuteMutation({
+      table: 'service_orders',
+      action: 'INSERT',
+      payload: {
+        id: newOrder.id,
+        tenant_id: newOrder.tenant_id,
+        order_number: newOrder.order_number,
+        order_sequence: newOrder.order_sequence,
+        order_year: newOrder.order_year,
+        customer_id: newOrder.customer_id,
+        opened_by: newOrder.opened_by,
+        opened_at: newOrder.opened_at,
+        expected_at: newOrder.expected_at || null,
+        status: 'ABERTA',
+        financial_status: newOrder.financial_status,
+        subtotal_amount: newOrder.subtotal_amount,
+        discount_amount: newOrder.discount_amount,
+        surcharge_amount: 0,
+        total_amount: newOrder.total_amount,
+        paid_amount: newOrder.paid_amount,
+        tracking_token: newOrder.tracking_token,
+        notes: newOrder.notes || null,
+        internal_notes: newOrder.internal_notes || null
+      },
+      tenant_id: newOrder.tenant_id
+    });
+
+    // Persist items & services
+    for (const item of orderItems) {
+      const validStateId = isValidUUID(item.current_state_id) && !item.current_state_id?.startsWith('a4000000') ? item.current_state_id : null;
+      this.enqueueOrExecuteMutation({
+        table: 'service_order_items',
+        action: 'INSERT',
+        payload: {
           id: item.id,
           tenant_id: item.tenant_id,
           service_order_id: item.service_order_id,
@@ -2477,38 +3041,49 @@ export class AppStore {
           discount_amount: item.discount_amount,
           total_amount: item.total_amount,
           received_at: item.received_at
-        }).then(() => {
-          for (const srv of (item.services || [])) {
-            supabase.from('service_order_item_services').insert({
-              id: srv.id,
-              tenant_id: srv.tenant_id,
-              service_order_item_id: srv.service_order_item_id,
-              service_id: srv.service_id,
-              technician_id: isValidUUID(srv.technician_id) ? srv.technician_id : null,
-              quantity: srv.quantity,
-              unit_price: srv.unit_price,
-              discount_amount: srv.discount_amount,
-              surcharge_amount: srv.surcharge_amount,
-              total_amount: srv.total_amount,
-              status: srv.status,
-              field_data: srv.field_data || {}
-            }).then();
-          }
+        },
+        tenant_id: item.tenant_id
+      });
+
+      for (const srv of (item.services || [])) {
+        this.enqueueOrExecuteMutation({
+          table: 'service_order_item_services',
+          action: 'INSERT',
+          payload: {
+            id: srv.id,
+            tenant_id: srv.tenant_id,
+            service_order_item_id: srv.service_order_item_id,
+            service_id: srv.service_id,
+            technician_id: isValidUUID(srv.technician_id) ? srv.technician_id : null,
+            quantity: srv.quantity,
+            unit_price: srv.unit_price,
+            discount_amount: srv.discount_amount,
+            surcharge_amount: srv.surcharge_amount,
+            total_amount: srv.total_amount,
+            status: srv.status,
+            field_data: srv.field_data || {}
+          },
+          tenant_id: srv.tenant_id
         });
       }
-    });
+    }
 
     if (newPayment) {
-      supabase.from('payments').insert({
-        id: newPayment.id,
-        tenant_id: newPayment.tenant_id,
-        service_order_id: newPayment.service_order_id,
-        amount: newPayment.amount,
-        payment_method: newPayment.payment_method,
-        received_by: newPayment.received_by,
-        paid_at: newPayment.paid_at,
-        notes: newPayment.notes
-      }).then();
+      this.enqueueOrExecuteMutation({
+        table: 'payments',
+        action: 'INSERT',
+        payload: {
+          id: newPayment.id,
+          tenant_id: newPayment.tenant_id,
+          service_order_id: newPayment.service_order_id,
+          amount: newPayment.amount,
+          payment_method: newPayment.payment_method,
+          received_by: newPayment.received_by,
+          paid_at: newPayment.paid_at,
+          notes: newPayment.notes
+        },
+        tenant_id: newPayment.tenant_id
+      });
     }
 
     this.logAudit({
@@ -2598,22 +3173,41 @@ export class AppStore {
     if (updates.custom_field_values) dbItemUpdates.custom_field_values = targetItem.custom_field_values;
     if (updates.checklist) dbItemUpdates.checklist = updates.checklist;
 
-    supabase.from('service_order_items').update(dbItemUpdates).eq('id', itemId).then();
-    supabase.from('service_orders').update({
-      status: parentOrder.status,
-      assigned_technician_id: parentOrder.assigned_technician_id || null,
-      updated_at: new Date().toISOString()
-    }).eq('id', parentOrder.id).then();
+    this.enqueueOrExecuteMutation({
+      table: 'service_order_items',
+      action: 'UPDATE',
+      payload: dbItemUpdates,
+      matchField: 'id',
+      matchValue: itemId,
+      tenant_id: targetItem.tenant_id
+    });
 
-    supabase.from('order_status_history').insert({
-      tenant_id: targetItem.tenant_id,
-      service_order_id: parentOrder.id,
-      item_id: targetItem.id,
-      previous_status: updates.status ? targetItem.status : null,
-      new_status: updates.status || targetItem.status,
-      changed_by: updates.assigned_technician_id || parentOrder.opened_by,
-      notes: updates.technical_notes || null
-    }).then();
+    this.enqueueOrExecuteMutation({
+      table: 'service_orders',
+      action: 'UPDATE',
+      payload: {
+        status: parentOrder.status,
+        updated_at: new Date().toISOString()
+      },
+      matchField: 'id',
+      matchValue: parentOrder.id,
+      tenant_id: targetItem.tenant_id
+    });
+
+    this.enqueueOrExecuteMutation({
+      table: 'order_status_history',
+      action: 'INSERT',
+      payload: {
+        tenant_id: targetItem.tenant_id,
+        service_order_id: parentOrder.id,
+        item_id: targetItem.id,
+        previous_status: updates.status ? targetItem.status : null,
+        new_status: updates.status || targetItem.status,
+        changed_by: updates.assigned_technician_id || parentOrder.opened_by,
+        notes: updates.technical_notes || null
+      },
+      tenant_id: targetItem.tenant_id
+    });
 
     // Audit Log for Technical Update
     const modelName = targetItem.model?.name || targetItem.model?.description || 'Item';
@@ -2716,6 +3310,15 @@ export class AppStore {
           };
           data.payments.push(payObj);
           checkoutPayments.push(payObj);
+          this.recordOrderPaymentToCashRegister(
+            order.tenant_id,
+            order.id,
+            order.order_number,
+            p.amount,
+            p.payment_method,
+            order.opened_by,
+            performedByName || 'Atendente'
+          );
         }
       }
     }
@@ -2766,36 +3369,55 @@ export class AppStore {
     this.saveStoreData(data);
 
     // Persist delivery to Supabase Database
-    supabase.from('service_orders').update({
-      status: 'ENTREGUE',
-      delivered_at: deliveredAt,
-      closed_at: deliveredAt,
-      discount_amount: order.discount_amount,
-      total_amount: order.total_amount,
-      paid_amount: order.paid_amount,
-      remaining_amount: order.remaining_amount,
-      financial_status: order.financial_status,
-      delivery_info: order.delivery_info,
-      updated_at: deliveredAt
-    }).eq('id', orderId).then();
+    this.enqueueOrExecuteMutation({
+      table: 'service_orders',
+      action: 'UPDATE',
+      payload: {
+        status: 'ENTREGUE',
+        delivered_at: deliveredAt,
+        closed_at: deliveredAt,
+        discount_amount: order.discount_amount,
+        total_amount: order.total_amount,
+        paid_amount: order.paid_amount,
+        remaining_amount: order.remaining_amount,
+        financial_status: order.financial_status,
+        delivery_info: order.delivery_info,
+        updated_at: deliveredAt
+      },
+      matchField: 'id',
+      matchValue: orderId,
+      tenant_id: order.tenant_id
+    });
 
-    supabase.from('service_order_items').update({
-      status: 'ENTREGUE',
-      completed_at: deliveredAt,
-      updated_at: deliveredAt
-    }).eq('service_order_id', orderId).then();
+    this.enqueueOrExecuteMutation({
+      table: 'service_order_items',
+      action: 'UPDATE',
+      payload: {
+        status: 'ENTREGUE',
+        completed_at: deliveredAt,
+        updated_at: deliveredAt
+      },
+      matchField: 'service_order_id',
+      matchValue: orderId,
+      tenant_id: order.tenant_id
+    });
 
     for (const pay of checkoutPayments) {
-      supabase.from('payments').insert({
-        id: pay.id,
-        tenant_id: pay.tenant_id,
-        service_order_id: pay.service_order_id,
-        amount: pay.amount,
-        payment_method: pay.payment_method,
-        received_by: pay.received_by,
-        paid_at: pay.paid_at,
-        notes: 'Pagamento recebido na entrega / checkout'
-      }).then();
+      this.enqueueOrExecuteMutation({
+        table: 'payments',
+        action: 'INSERT',
+        payload: {
+          id: pay.id,
+          tenant_id: pay.tenant_id,
+          service_order_id: pay.service_order_id,
+          amount: pay.amount,
+          payment_method: pay.payment_method,
+          received_by: pay.received_by,
+          paid_at: pay.paid_at,
+          notes: 'Pagamento recebido na entrega / checkout'
+        },
+        tenant_id: pay.tenant_id
+      });
     }
 
     this.logAudit({
@@ -2828,17 +3450,31 @@ export class AppStore {
 
     this.saveStoreData(data);
 
-    supabase.from('service_orders').update({
-      status: 'EM_ANDAMENTO',
-      delivered_at: null,
-      closed_at: null,
-      updated_at: new Date().toISOString()
-    }).eq('id', orderId).then();
+    this.enqueueOrExecuteMutation({
+      table: 'service_orders',
+      action: 'UPDATE',
+      payload: {
+        status: 'EM_ANDAMENTO',
+        delivered_at: null,
+        closed_at: null,
+        updated_at: new Date().toISOString()
+      },
+      matchField: 'id',
+      matchValue: orderId,
+      tenant_id: order.tenant_id
+    });
 
-    supabase.from('service_order_items').update({
-      status: 'RECEBIDO',
-      updated_at: new Date().toISOString()
-    }).eq('service_order_id', orderId).then();
+    this.enqueueOrExecuteMutation({
+      table: 'service_order_items',
+      action: 'UPDATE',
+      payload: {
+        status: 'RECEBIDO',
+        updated_at: new Date().toISOString()
+      },
+      matchField: 'service_order_id',
+      matchValue: orderId,
+      tenant_id: order.tenant_id
+    });
 
     this.logAudit({
       tenant_id: order.tenant_id,
@@ -2859,7 +3495,14 @@ export class AppStore {
     data.payments = (data.payments || []).filter((p: Payment) => p.service_order_id !== orderId);
     this.saveStoreData(data);
 
-    supabase.from('service_orders').delete().eq('id', orderId).then();
+    this.enqueueOrExecuteMutation({
+      table: 'service_orders',
+      action: 'DELETE',
+      payload: null,
+      matchField: 'id',
+      matchValue: orderId,
+      tenant_id: order?.tenant_id
+    });
 
     this.logAudit({
       tenant_id: order?.tenant_id,
@@ -2887,48 +3530,52 @@ export class AppStore {
     data.settings = updated;
     this.saveStoreData(data);
 
-    supabase.from('company_settings').upsert({
-      tenant_id: tenantId,
-      sku_mode: updated.sku_mode,
-      sku_prefix: updated.sku_prefix,
-      sku_digits: updated.sku_digits,
-      sku_start_number: updated.sku_start_number,
-      sku_current_number: updated.sku_current_number,
-      thermal_paper_width_mm: updated.thermal_paper_width_mm,
-      require_customer_document: updated.require_customer_document,
-      require_item_serial: updated.require_item_serial ?? updated.require_cartridge_serial,
-      require_cartridge_serial: updated.require_cartridge_serial ?? updated.require_item_serial,
-      require_technician_on_entry: updated.require_technician_on_entry,
-      auto_print_on_entry: updated.auto_print_on_entry,
-      auto_print_on_delivery: updated.auto_print_on_delivery,
-      print_entry_copies: updated.print_entry_copies,
-      print_delivery_copies: updated.print_delivery_copies,
-      printer_paper_width: updated.printer_paper_width,
-      printer_font_size: updated.printer_font_size,
-      printer_density: updated.printer_density,
-      show_prices_on_receipt: updated.show_prices_on_receipt,
-      show_qr_code_on_receipt: updated.show_qr_code_on_receipt,
-      show_checklist_on_receipt: updated.show_checklist_on_receipt,
-      show_accessories_on_receipt: updated.show_accessories_on_receipt,
-      show_reported_issue_on_receipt: updated.show_reported_issue_on_receipt,
-      show_technician_on_receipt: updated.show_technician_on_receipt,
-      show_customer_signature_line: updated.show_customer_signature_line,
-      show_attendant_signature_line: updated.show_attendant_signature_line,
-      show_company_cnpj: updated.show_company_cnpj,
-      show_company_contact: updated.show_company_contact,
-      show_company_address: updated.show_company_address,
-      receipt_header: updated.receipt_header,
-      receipt_footer: updated.receipt_footer,
-      receipt_delivery_footer: updated.receipt_delivery_footer,
-      receipt_header_note: updated.receipt_header_note,
-      receipt_footer_note: updated.receipt_footer_note,
-      active_templates: updated.active_templates,
-      technician_group_ids: updated.technician_group_ids,
-      item_description_display_mode: updated.item_description_display_mode,
-      default_inactivity_timeout_minutes: updated.default_inactivity_timeout_minutes,
-      updated_at: new Date().toISOString()
-    }, { onConflict: 'tenant_id' }).then(({ error }) => {
-      if (error) console.error('Error updating company_settings in Supabase:', error);
+    this.enqueueOrExecuteMutation({
+      table: 'company_settings',
+      action: 'UPSERT',
+      payload: {
+        tenant_id: tenantId,
+        sku_mode: updated.sku_mode,
+        sku_prefix: updated.sku_prefix,
+        sku_digits: updated.sku_digits,
+        sku_start_number: updated.sku_start_number,
+        sku_current_number: updated.sku_current_number,
+        thermal_paper_width_mm: updated.thermal_paper_width_mm,
+        require_customer_document: updated.require_customer_document,
+        require_item_serial: updated.require_item_serial ?? updated.require_cartridge_serial,
+        require_cartridge_serial: updated.require_cartridge_serial ?? updated.require_item_serial,
+        require_technician_on_entry: updated.require_technician_on_entry,
+        auto_print_on_entry: updated.auto_print_on_entry,
+        auto_print_on_delivery: updated.auto_print_on_delivery,
+        print_entry_copies: updated.print_entry_copies,
+        print_delivery_copies: updated.print_delivery_copies,
+        printer_paper_width: updated.printer_paper_width,
+        printer_font_size: updated.printer_font_size,
+        printer_density: updated.printer_density,
+        show_prices_on_receipt: updated.show_prices_on_receipt,
+        show_qr_code_on_receipt: updated.show_qr_code_on_receipt,
+        show_checklist_on_receipt: updated.show_checklist_on_receipt,
+        show_accessories_on_receipt: updated.show_accessories_on_receipt,
+        show_reported_issue_on_receipt: updated.show_reported_issue_on_receipt,
+        show_technician_on_receipt: updated.show_technician_on_receipt,
+        show_customer_signature_line: updated.show_customer_signature_line,
+        show_attendant_signature_line: updated.show_attendant_signature_line,
+        show_company_cnpj: updated.show_company_cnpj,
+        show_company_contact: updated.show_company_contact,
+        show_company_address: updated.show_company_address,
+        receipt_header: updated.receipt_header,
+        receipt_footer: updated.receipt_footer,
+        receipt_delivery_footer: updated.receipt_delivery_footer,
+        receipt_header_note: updated.receipt_header_note,
+        receipt_footer_note: updated.receipt_footer_note,
+        active_templates: updated.active_templates,
+        technician_group_ids: updated.technician_group_ids,
+        item_description_display_mode: updated.item_description_display_mode,
+        default_inactivity_timeout_minutes: updated.default_inactivity_timeout_minutes,
+        updated_at: new Date().toISOString()
+      },
+      onConflict: 'tenant_id',
+      tenant_id: tenantId
     });
 
     const diffs: string[] = [];
@@ -2999,7 +3646,7 @@ export class AppStore {
     data.auditLogs.unshift(newLog);
     if (data.auditLogs.length > 500) data.auditLogs = data.auditLogs.slice(0, 500);
     this.saveStoreData(data);
-    supabase.from('audit_logs').insert(newLog).then();
+    this.enqueueOrExecuteMutation({ table: 'audit_logs', action: 'INSERT', payload: newLog, tenant_id: newLog.tenant_id });
     return newLog;
   }
 
@@ -3007,6 +3654,236 @@ export class AppStore {
     const data = this.getStoreData();
     const logs: AuditLog[] = data.auditLogs || INITIAL_AUDIT_LOGS;
     return logs.filter(l => !tenantId || !l.tenant_id || l.tenant_id === tenantId);
+  }
+
+  // ==========================================================================
+  // CASH REGISTER & CASH FLOW (Frente de Caixa / PDV)
+  // ==========================================================================
+  static getActiveCashRegister(tenantId: string): CashRegisterSession | null {
+    const data = this.getStoreData();
+    const registers: CashRegisterSession[] = data.cashRegisters || [];
+    return registers.find(r => r.tenant_id === tenantId && r.status === 'ABERTO') || null;
+  }
+
+  static getCashRegisterHistory(tenantId: string): CashRegisterSession[] {
+    const data = this.getStoreData();
+    const registers: CashRegisterSession[] = data.cashRegisters || [];
+    return registers
+      .filter(r => r.tenant_id === tenantId)
+      .sort((a, b) => new Date(b.opened_at).getTime() - new Date(a.opened_at).getTime());
+  }
+
+  static openCashRegister(
+    tenantId: string,
+    initialAmount: number,
+    userId: string,
+    userName: string,
+    notes?: string
+  ): CashRegisterSession {
+    const data = this.getStoreData();
+    if (!Array.isArray(data.cashRegisters)) data.cashRegisters = [];
+
+    const existingOpen = data.cashRegisters.find((r: CashRegisterSession) => r.tenant_id === tenantId && r.status === 'ABERTO');
+    if (existingOpen) {
+      throw new Error(`Já existe um caixa aberto para esta empresa desde ${new Date(existingOpen.opened_at).toLocaleTimeString()}. Feche o caixa anterior antes de abrir um novo.`);
+    }
+
+    const newId = generateUUID();
+    const movementId = generateUUID();
+    const now = new Date().toISOString();
+
+    const openingMovement: CashRegisterMovement = {
+      id: movementId,
+      tenant_id: tenantId,
+      register_id: newId,
+      type: 'ABERTURA',
+      amount: initialAmount,
+      payment_method: 'DINHEIRO',
+      description: 'Fundo de troco inicial de abertura de caixa',
+      performed_by: userId,
+      performed_by_name: userName,
+      created_at: now
+    };
+
+    const newSession: CashRegisterSession = {
+      id: newId,
+      tenant_id: tenantId,
+      opened_by: userId,
+      opened_by_name: userName,
+      opened_at: now,
+      initial_amount: initialAmount,
+      status: 'ABERTO',
+      notes,
+      movements: [openingMovement]
+    };
+
+    data.cashRegisters.push(newSession);
+    this.saveStoreData(data);
+
+    const { movements: _movs, ...dbSession } = newSession as any;
+    this.enqueueOrExecuteMutation({ table: 'cash_registers', action: 'INSERT', payload: dbSession, tenant_id: tenantId });
+    this.enqueueOrExecuteMutation({ table: 'cash_register_movements', action: 'INSERT', payload: openingMovement, tenant_id: tenantId });
+
+    this.logAudit({
+      tenant_id: tenantId,
+      user_name: userName,
+      action: 'CAIXA_ABERTURA',
+      resource: 'cash_registers',
+      resource_id: newId,
+      details: `Abertura de caixa com fundo inicial de R$ ${initialAmount.toFixed(2)} por ${userName}`
+    });
+
+    return newSession;
+  }
+
+  static addCashRegisterMovement(
+    tenantId: string,
+    type: 'SANGRIA' | 'SUPRIMENTO',
+    amount: number,
+    description: string,
+    userId: string,
+    userName: string
+  ): CashRegisterMovement {
+    const data = this.getStoreData();
+    const active = (data.cashRegisters || []).find((r: CashRegisterSession) => r.tenant_id === tenantId && r.status === 'ABERTO');
+    if (!active) {
+      throw new Error('Não há nenhum caixa aberto no momento. Abra o caixa antes de lançar movimentações.');
+    }
+
+    if (amount <= 0) {
+      throw new Error('O valor da movimentação deve ser maior que zero.');
+    }
+
+    const movement: CashRegisterMovement = {
+      id: generateUUID(),
+      tenant_id: tenantId,
+      register_id: active.id,
+      type,
+      amount,
+      payment_method: 'DINHEIRO',
+      description,
+      performed_by: userId,
+      performed_by_name: userName,
+      created_at: new Date().toISOString()
+    };
+
+    active.movements.push(movement);
+    this.saveStoreData(data);
+    this.enqueueOrExecuteMutation({ table: 'cash_register_movements', action: 'INSERT', payload: movement, tenant_id: tenantId });
+
+    this.logAudit({
+      tenant_id: tenantId,
+      user_name: userName,
+      action: type === 'SANGRIA' ? 'CAIXA_SANGRIA' : 'CAIXA_SUPRIMENTO',
+      resource: 'cash_registers',
+      resource_id: active.id,
+      details: `${type === 'SANGRIA' ? 'Sangria (Retirada)' : 'Suprimento (Entrada)'} de R$ ${amount.toFixed(2)}: ${description}`
+    });
+
+    return movement;
+  }
+
+  static recordOrderPaymentToCashRegister(
+    tenantId: string,
+    orderId: string,
+    orderNumber: string,
+    amount: number,
+    paymentMethod: PaymentMethod,
+    userId: string,
+    userName: string
+  ) {
+    try {
+      const data = this.getStoreData();
+      const active = (data.cashRegisters || []).find((r: CashRegisterSession) => r.tenant_id === tenantId && r.status === 'ABERTO');
+      if (!active) return;
+
+      const movement: CashRegisterMovement = {
+        id: generateUUID(),
+        tenant_id: tenantId,
+        register_id: active.id,
+        type: 'VENDA_ORDEM',
+        amount,
+        payment_method: paymentMethod,
+        order_id: orderId,
+        order_number: orderNumber,
+        description: `Recebimento da OS #${orderNumber} (${paymentMethod})`,
+        performed_by: userId,
+        performed_by_name: userName,
+        created_at: new Date().toISOString()
+      };
+
+      active.movements.push(movement);
+      this.saveStoreData(data, false);
+      this.enqueueOrExecuteMutation({ table: 'cash_register_movements', action: 'INSERT', payload: movement, tenant_id: tenantId });
+    } catch (e) {
+      console.warn('Could not register cash movement for order payment:', e);
+    }
+  }
+
+  static closeCashRegister(
+    tenantId: string,
+    countedCash: number,
+    userId: string,
+    userName: string,
+    notes?: string
+  ): CashRegisterSession {
+    const data = this.getStoreData();
+    const active = (data.cashRegisters || []).find((r: CashRegisterSession) => r.tenant_id === tenantId && r.status === 'ABERTO');
+    if (!active) {
+      throw new Error('Nenhum caixa aberto encontrado para fechamento.');
+    }
+
+    let calculatedCash = active.initial_amount || 0;
+    for (const mov of active.movements) {
+      if (mov.type === 'SUPRIMENTO') {
+        calculatedCash += mov.amount;
+      } else if (mov.type === 'SANGRIA') {
+        calculatedCash -= mov.amount;
+      } else if (mov.type === 'VENDA_ORDEM' && mov.payment_method === 'DINHEIRO') {
+        calculatedCash += mov.amount;
+      }
+    }
+
+    const difference = countedCash - calculatedCash;
+
+    active.status = 'FECHADO';
+    active.closed_at = new Date().toISOString();
+    active.closed_by = userId;
+    active.closed_by_name = userName;
+    active.closing_counted_cash = countedCash;
+    active.closing_calculated_cash = calculatedCash;
+    active.closing_difference = difference;
+    if (notes) active.notes = (active.notes ? `${active.notes}\n` : '') + notes;
+
+    this.saveStoreData(data);
+    this.enqueueOrExecuteMutation({
+      table: 'cash_registers',
+      action: 'UPDATE',
+      payload: {
+        status: 'FECHADO',
+        closed_at: active.closed_at,
+        closed_by: active.closed_by,
+        closed_by_name: active.closed_by_name,
+        closing_counted_cash: active.closing_counted_cash,
+        closing_calculated_cash: active.closing_calculated_cash,
+        closing_difference: active.closing_difference,
+        notes: active.notes
+      },
+      matchField: 'id',
+      matchValue: active.id,
+      tenant_id: tenantId
+    });
+
+    this.logAudit({
+      tenant_id: tenantId,
+      user_name: userName,
+      action: 'CAIXA_FECHAMENTO',
+      resource: 'cash_registers',
+      resource_id: active.id,
+      details: `Fechamento de caixa por ${userName}. Contado: R$ ${countedCash.toFixed(2)}, Calculado: R$ ${calculatedCash.toFixed(2)}, Diferença: R$ ${difference.toFixed(2)}`
+    });
+
+    return active;
   }
 
   static getTenantStats(tenantId: string) {
@@ -3055,10 +3932,25 @@ export class AppStore {
     const data = this.getStoreData();
     const profiles: Profile[] = data.profiles || MOCK_PROFILES;
     const user = profiles.find(p => p.email.toLowerCase().trim() === email.toLowerCase().trim());
-    if (!user) throw new Error('Usuário não encontrado.');
+    if (!user) throw new Error('E-mail ou senha incorretos.');
     if (user.is_active === false) throw new Error('Este usuário está desativado.');
-    if (user.password && user.password !== pass) {
-      throw new Error('Senha incorreta.');
+    // SECURITY: a profile without a stored password must never authenticate.
+    if (!user.password || !verifyPassword(pass, user.password)) {
+      throw new Error('E-mail ou senha incorretos.');
+    }
+
+    // Auto-upgrade legacy plain-text password to salted SHA-256 hash
+    if (user.password && !isPasswordHashed(user.password)) {
+      const upgradeHash = hashPassword(pass);
+      user.password = upgradeHash;
+      this.enqueueOrExecuteMutation({
+        table: 'profiles',
+        action: 'UPDATE',
+        payload: { password: upgradeHash },
+        matchField: 'id',
+        matchValue: user.id,
+        tenant_id: user.tenant_id
+      });
     }
 
     const sessionToken = generateUUID();
@@ -3101,13 +3993,65 @@ export class AppStore {
     deviceInfo?: { device?: string; ip?: string },
     forceLogin: boolean = false
   ): Promise<{ user: Profile; requiresConfirmation?: boolean; activeDevice?: string; activeAt?: string }> {
-    const data = this.getStoreData();
-    const profiles: Profile[] = data.profiles || MOCK_PROFILES;
-    const user = profiles.find(p => p.email.toLowerCase().trim() === email.toLowerCase().trim());
-    if (!user) throw new Error('Usuário não encontrado.');
+    const normalizedEmail = email.toLowerCase().trim();
+    let data = this.getStoreData();
+    let profiles: Profile[] = data.profiles || MOCK_PROFILES;
+    let user = profiles.find(p => p.email.toLowerCase().trim() === normalizedEmail);
+
+    // If user is not found locally or has no password locally (e.g., fresh browser in production),
+    // fetch profile and company from Supabase before rejecting authentication.
+    if (!user || !user.password) {
+      try {
+        const timeoutPromise = new Promise<{ data: null; error: any }>((resolve) =>
+          setTimeout(() => resolve({ data: null, error: new Error('timeout') }), 2500)
+        );
+        const queryPromise = supabase
+          .from('profiles')
+          .select('*')
+          .ilike('email', normalizedEmail)
+          .limit(1)
+          .maybeSingle();
+
+        const { data: remoteUser, error: remoteError } = await Promise.race([queryPromise, timeoutPromise]);
+        if (!remoteError && remoteUser) {
+          if (!Array.isArray(data.profiles)) data.profiles = [];
+          const existingIdx = data.profiles.findIndex((p: Profile) => p.id === remoteUser.id || p.email.toLowerCase().trim() === normalizedEmail);
+          if (existingIdx !== -1) {
+            data.profiles[existingIdx] = { ...data.profiles[existingIdx], ...remoteUser };
+          } else {
+            data.profiles.push(remoteUser as Profile);
+          }
+
+          if (remoteUser.tenant_id) {
+            const { data: remoteCompany } = await supabase
+              .from('companies')
+              .select('*')
+              .eq('id', remoteUser.tenant_id)
+              .maybeSingle();
+            if (remoteCompany) {
+              if (!Array.isArray(data.companies)) data.companies = [];
+              const compIdx = data.companies.findIndex((c: Company) => c.id === remoteCompany.id);
+              if (compIdx !== -1) {
+                data.companies[compIdx] = { ...data.companies[compIdx], ...remoteCompany };
+              } else {
+                data.companies.push(remoteCompany as Company);
+              }
+            }
+          }
+
+          this.saveStoreData(data, true);
+          profiles = data.profiles;
+          user = profiles.find(p => p.email.toLowerCase().trim() === normalizedEmail);
+        }
+      } catch {
+        // Offline or network error fallback
+      }
+    }
+
+    if (!user) throw new Error('E-mail ou senha incorretos.');
     if (user.is_active === false) throw new Error('Este usuário está desativado.');
-    if (user.password && user.password !== pass) {
-      throw new Error('Senha incorreta.');
+    if (!user.password || !verifyPassword(pass, user.password)) {
+      throw new Error('E-mail ou senha incorretos.');
     }
 
     // Check remote session on Supabase if not forcing login
@@ -3274,6 +4218,24 @@ export class AppStore {
         .order('created_at', { ascending: false })
         .limit(100);
 
+      // 9. Fetch Cash Registers & Movements
+      const { data: cashRegistersData } = await supabase
+        .from('cash_registers')
+        .select('*')
+        .eq('tenant_id', targetTenant)
+        .order('opened_at', { ascending: false });
+
+      const { data: cashMovementsData } = await supabase
+        .from('cash_register_movements')
+        .select('*')
+        .eq('tenant_id', targetTenant)
+        .order('created_at', { ascending: true });
+
+      const assembledCashRegisters: CashRegisterSession[] = (cashRegistersData || []).map(reg => ({
+        ...reg,
+        movements: (cashMovementsData || []).filter(m => m.register_id === reg.id)
+      }));
+
       // Merge items & services into orders
       const assembledOrders: ServiceOrder[] = (ordersData || []).map(o => {
         const items = (orderItemsData || [])
@@ -3298,6 +4260,9 @@ export class AppStore {
         };
       });
 
+      // Flush pending offline mutations first
+      await this.flushOfflineQueue();
+
       // Update store
       const current = this.getStoreData();
       if (companiesData && companiesData.length > 0) current.companies = companiesData;
@@ -3306,17 +4271,34 @@ export class AppStore {
       if (subsData && subsData.length > 0) current.subscriptions = subsData;
       if (settingsData && settingsData.length > 0) current.settings = settingsData[0];
       if (permGroupsData && permGroupsData.length > 0) current.permissionGroups = permGroupsData;
-      current.customers = customersData || [];
+
+      // Merge customers preserving locally created offline ones
+      const remoteCustIds = new Set((customersData || []).map(c => c.id));
+      const localOnlyCustomers = (current.customers || []).filter((c: Customer) => !remoteCustIds.has(c.id));
+      current.customers = [...localOnlyCustomers, ...(customersData || [])];
+
       current.categories = categoriesData || [];
       current.brands = brandsData || [];
       current.models = modelsData || [];
       current.services = servicesData || [];
       if (workflowStatesData && workflowStatesData.length > 0) current.workflowStates = workflowStatesData;
-      current.serviceOrders = assembledOrders || [];
+
+      // Merge orders preserving locally created offline ones
+      const remoteOrderIds = new Set(assembledOrders.map(o => o.id));
+      const localOnlyOrders = (current.serviceOrders || []).filter((o: ServiceOrder) => !remoteOrderIds.has(o.id));
+      current.serviceOrders = [...localOnlyOrders, ...assembledOrders];
+
       current.payments = paymentsData || [];
       current.auditLogs = auditLogsData || [];
 
+      if (assembledCashRegisters.length > 0) {
+        const remoteRegIds = new Set(assembledCashRegisters.map(r => r.id));
+        const localOnlyRegs = (current.cashRegisters || []).filter((r: CashRegisterSession) => !remoteRegIds.has(r.id));
+        current.cashRegisters = [...localOnlyRegs, ...assembledCashRegisters];
+      }
+
       this.saveStoreData(current, true);
+      this.notifySyncStatus();
       return current;
     } catch (err) {
       console.error('Error during syncFromSupabase:', err);
@@ -3357,6 +4339,21 @@ export class AppStore {
     if (!comp) throw new Error('Empresa não encontrada.');
     comp.is_active = comp.is_active === false ? true : false;
     this.saveStoreData(data);
+    this.enqueueOrExecuteMutation({
+      table: 'companies',
+      action: 'UPDATE',
+      payload: { is_active: comp.is_active, updated_at: new Date().toISOString() },
+      matchField: 'id',
+      matchValue: companyId
+    });
+    this.logAudit({
+      tenant_id: companyId,
+      user_name: performedByName || 'Super Administrador',
+      action: 'STATUS_EMPRESA',
+      resource: 'companies',
+      resource_id: companyId,
+      details: `Status da empresa "${comp.trade_name}" alterado para ${comp.is_active ? 'ATIVA' : 'SUSPENSA'}`
+    });
     return comp;
   }
 
@@ -3365,7 +4362,7 @@ export class AppStore {
   }
 
   static async getEntryByTokenAsync(token: string) {
-    return this.getServiceOrderByTrackingToken(token) || this.getServiceOrderById(token);
+    return this.fetchRemoteServiceOrderByTrackingToken(token);
   }
 
   static initRealtime(tenantId: string) {
@@ -3456,4 +4453,25 @@ export class AppStore {
       defaultCategories: preset.categories.map(c => c.name)
     };
   }
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    AppStore.notifySyncStatus();
+    AppStore.flushOfflineQueue().then(() => {
+      const current = (AppStore as any).getStoreData();
+      const tenant = current?.company?.id || current?.companies?.[0]?.id;
+      if (tenant) AppStore.syncFromSupabase(tenant);
+    });
+  });
+
+  window.addEventListener('offline', () => {
+    AppStore.notifySyncStatus();
+  });
+
+  setInterval(() => {
+    if (typeof navigator !== 'undefined' && navigator.onLine !== false && AppStore.getOfflineQueue().length > 0) {
+      AppStore.flushOfflineQueue();
+    }
+  }, 20000);
 }

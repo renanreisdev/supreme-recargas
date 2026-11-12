@@ -94,7 +94,7 @@ describe('Supabase Full End-to-End Persistence and Hydration', () => {
     expect(newOrder.items?.length).toBe(1);
     const itemId = newOrder.items![0].id;
 
-    await new Promise((r) => setTimeout(r, 800));
+    await AppStore.waitForPendingMutations();
 
     // Verify in Supabase table directly
     const { data: dbOrder, error: orderErr } = await supabase
@@ -126,7 +126,7 @@ describe('Supabase Full End-to-End Persistence and Hydration', () => {
       custom_field_values: { output_weight_grams: 38.0 }
     });
 
-    await new Promise((r) => setTimeout(r, 600));
+    await AppStore.waitForPendingMutations();
 
     const { data: updatedDbItem } = await supabase
       .from('service_order_items')
@@ -145,6 +145,7 @@ describe('Supabase Full End-to-End Persistence and Hydration', () => {
     AppStore.deleteBrand(brand.id);
     AppStore.deleteCategory(cat.id);
     AppStore.deleteService(srv.id);
+    await AppStore.waitForPendingMutations();
   });
 
   it('persists company settings (SKU mode, technician groups, description mode) to Supabase and resolves eligible technicians', async () => {
@@ -162,8 +163,8 @@ describe('Supabase Full End-to-End Persistence and Hydration', () => {
     expect(updatedSettings.sku_prefix).toBe('SUP-');
     expect(updatedSettings.item_description_display_mode).toBe('FULL');
 
-    // Wait for Supabase upsert
-    await new Promise((r) => setTimeout(r, 600));
+    // Wait for Supabase upsert to complete
+    await AppStore.waitForPendingMutations();
 
     // 2. Query Supabase directly
     const { data: dbSettings, error } = await supabase

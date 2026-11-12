@@ -115,6 +115,9 @@ export interface Company {
   business_segment?: BusinessSegment;
   active_template_keys?: BusinessTemplateKey[];
   is_active: boolean;
+  terms_accepted_at?: string;
+  terms_accepted_by?: string;
+  terms_version?: string;
   created_at: string;
   updated_at: string;
 }
@@ -172,6 +175,9 @@ export interface Profile {
   // Auto-logout inactivity timeout in minutes (e.g. 5, 10, 15, 30, 60, 120, 0 = disabled)
   inactivity_timeout_minutes?: number;
 
+  // Security: mandatory password change on first login or after admin reset
+  must_change_password?: boolean;
+
   created_at: string;
   company?: Company;
 }
@@ -191,6 +197,8 @@ export interface Customer {
   company_name?: string;
   address?: string;
   notes?: string;
+  is_anonymized?: boolean;
+  anonymized_at?: string;
   created_at: string;
   updated_at?: string;
 }
@@ -747,4 +755,41 @@ export interface KanbanColumnConfig {
   color: KanbanColumnColor;
   statuses: string[];
   description?: string;
+}
+
+// ============================================================================
+// 8. CASH REGISTER & CASH FLOW (Frente de Caixa / PDV)
+// ============================================================================
+
+export interface CashRegisterMovement {
+  id: string;
+  tenant_id: string;
+  register_id: string;
+  type: 'ABERTURA' | 'SANGRIA' | 'SUPRIMENTO' | 'VENDA_ORDEM';
+  amount: number;
+  payment_method?: PaymentMethod;
+  order_id?: string;
+  order_number?: string;
+  description: string;
+  performed_by: string;
+  performed_by_name: string;
+  created_at: string;
+}
+
+export interface CashRegisterSession {
+  id: string;
+  tenant_id: string;
+  opened_by: string;
+  opened_by_name: string;
+  opened_at: string;
+  closed_by?: string;
+  closed_by_name?: string;
+  closed_at?: string;
+  initial_amount: number; // Saldo de abertura / troco inicial
+  status: 'ABERTO' | 'FECHADO';
+  notes?: string;
+  closing_counted_cash?: number; // Contagem física cega do operador
+  closing_calculated_cash?: number; // Calculado pelo sistema
+  closing_difference?: number; // Diferença apurada
+  movements: CashRegisterMovement[];
 }

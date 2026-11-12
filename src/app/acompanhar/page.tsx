@@ -25,9 +25,9 @@ export default function TrackingSearchPage() {
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 text-slate-950 shadow-xl shadow-emerald-950/50">
             <Sparkles className="w-8 h-8" />
           </div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Supreme Recargas</h1>
+          <h1 className="text-2xl font-bold text-white tracking-tight">Agilis</h1>
           <p className="text-xs text-slate-400">
-            Acompanhamento de Comandas & Status de Cartuchos em Tempo Real
+            Acompanhamento de Ordens de Serviço & Status em Tempo Real
           </p>
         </div>
 
@@ -36,7 +36,7 @@ export default function TrackingSearchPage() {
           <div className="space-y-1 text-center">
             <h2 className="text-base font-bold text-white">Consultar Atendimento</h2>
             <p className="text-xs text-slate-400">
-              Digite o número da comanda impresso no seu comprovante
+              Digite o código de rastreio ou escaneie o QR Code do seu comprovante
             </p>
           </div>
 
@@ -44,10 +44,10 @@ export default function TrackingSearchPage() {
             <div className="relative">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <Input
-                placeholder="Ex: 2026-000001"
+                placeholder="Código de rastreio da sua via"
                 value={comandaInput}
                 onChange={(e) => setComandaInput(e.target.value)}
-                className="pl-9 bg-slate-950 border-slate-700 text-white font-mono text-center text-sm font-bold tracking-wider uppercase h-11 focus:ring-emerald-500 focus:border-emerald-500"
+                className="pl-9 bg-slate-950 border-slate-700 text-white font-mono text-center text-xs font-bold tracking-wider uppercase h-11 focus:ring-emerald-500 focus:border-emerald-500"
               />
             </div>
 

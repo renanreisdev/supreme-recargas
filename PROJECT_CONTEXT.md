@@ -1,7 +1,7 @@
-# PROJECT CONTEXT - Supreme Recargas 2
+# PROJECT CONTEXT - Agilis OS
 
 ## 1. Visão Geral
-Aplicação web SaaS comercial e multiempresa para controle profissional de recepção, verificação, recarga, testes, diagnóstico técnico e entrega de cartuchos de impressora.
+Aplicação web SaaS comercial e multiempresa para controle profissional de recepção ágil (<60s), bancada técnica de precisão, diagnósticos, testes e ordens de serviço.
 
 ## 2. Tecnologias & Stack
 - **Frontend**: Next.js 14+ (App Router), React, TypeScript (Strict Mode)

@@ -34,7 +34,12 @@ import {
   Timer,
   LogOut,
   Radio,
-  Laptop
+  Laptop,
+  ShieldAlert,
+  Download,
+  FileSpreadsheet,
+  ShieldCheck,
+  Database
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import Link from 'next/link';
@@ -89,9 +94,9 @@ function CompanySettingsContent() {
 
   const { currentCompany, currentUser, hasPermission, refreshUser } = useAuth();
   
-  // Navigation Tabs (Separated: regras vs impressao)
-  const [activeTab, setActiveTab] = useState<'equipe' | 'grupos' | 'empresa' | 'regras' | 'impressao'>(
-    ['equipe', 'grupos', 'empresa', 'regras', 'impressao'].includes(initialTab) ? initialTab : 'equipe'
+  // Navigation Tabs (Separated: regras vs impressao vs assinatura)
+  const [activeTab, setActiveTab] = useState<'equipe' | 'grupos' | 'empresa' | 'regras' | 'impressao' | 'assinatura'>(
+    ['equipe', 'grupos', 'empresa', 'regras', 'impressao', 'assinatura'].includes(initialTab) ? initialTab : 'equipe'
   );
 
   const [users, setUsers] = useState<Profile[]>([]);
@@ -135,6 +140,105 @@ function CompanySettingsContent() {
   const [companyZipCode, setCompanyZipCode] = useState(currentCompany.zip_code || '');
   const [companyResponsible, setCompanyResponsible] = useState(currentCompany.responsible_name || '');
   const [companySaveSuccess, setCompanySaveSuccess] = useState(false);
+  const [companyData, setCompanyData] = useState<Company>(currentCompany);
+  const [showTermsModal, setShowTermsModal] = useState(false);
+
+  const handleExportJsonBackup = () => {
+    try {
+      const backup = AppStore.getTenantBackupData(currentCompany.id);
+      const json = JSON.stringify(backup, null, 2);
+      const blob = new Blob([json], { type: 'application/json;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      const safeName = (currentCompany.trade_name || 'empresa').toLowerCase().replace(/[^a-z0-9]/g, '_');
+      const dateStr = new Date().toISOString().slice(0, 10);
+      link.setAttribute('download', `backup_completo_${safeName}_${dateStr}.json`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast.success('Backup completo da loja (JSON) exportado com sucesso!');
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro ao gerar backup da empresa.');
+    }
+  };
+
+  const handleExportOrdersCsv = () => {
+    try {
+      const orders = AppStore.getServiceOrders(currentCompany.id);
+      const headers = ['Numero_OS', 'Data_Abertura', 'Cliente', 'Telefone', 'Status', 'Financeiro', 'Total_R$', 'Pago_R$', 'Tecnico', 'Notas'];
+      const rows = orders.map(o => [
+        o.order_number,
+        o.opened_at ? new Date(o.opened_at).toLocaleDateString('pt-BR') : '',
+        `"${(o.customer?.name || '').replace(/"/g, '""')}"`,
+        `"${(o.customer?.phone || '').replace(/"/g, '""')}"`,
+        o.status,
+        o.financial_status,
+        (o.total_amount || 0).toFixed(2),
+        (o.paid_amount || 0).toFixed(2),
+        `"${(o.assigned_technician_name || '').replace(/"/g, '""')}"`,
+        `"${(o.notes || '').replace(/"/g, '""')}"`
+      ]);
+
+      const csv = [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      const dateStr = new Date().toISOString().slice(0, 10);
+      link.setAttribute('download', `relatorio_comandas_${dateStr}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast.success(`${orders.length} comanda(s) exportada(s) para CSV com sucesso!`);
+    } catch (e: any) {
+      toast.error('Erro ao exportar relatório de comandas.');
+    }
+  };
+
+  const handleExportCustomersCsv = () => {
+    try {
+      const custs = AppStore.getCustomers(currentCompany.id);
+      const headers = ['Codigo', 'Nome', 'Telefone', 'Documento', 'Email', 'Empresa', 'Data_Cadastro'];
+      const rows = custs.map(c => [
+        c.internal_code,
+        `"${(c.name || '').replace(/"/g, '""')}"`,
+        `"${(c.phone || '').replace(/"/g, '""')}"`,
+        `"${(c.document || '').replace(/"/g, '""')}"`,
+        `"${(c.email || '').replace(/"/g, '""')}"`,
+        `"${(c.company_name || '').replace(/"/g, '""')}"`,
+        c.created_at ? new Date(c.created_at).toLocaleDateString('pt-BR') : ''
+      ]);
+
+      const csv = [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      const dateStr = new Date().toISOString().slice(0, 10);
+      link.setAttribute('download', `clientes_${dateStr}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast.success(`${custs.length} cliente(s) exportado(s) para CSV com sucesso!`);
+    } catch (e: any) {
+      toast.error('Erro ao exportar base de clientes.');
+    }
+  };
+
+  const handleAcceptTerms = () => {
+    try {
+      const updated = AppStore.acceptCompanyTerms(currentCompany.id, currentUser?.full_name || 'Administrador', '2026.1');
+      setCompanyData(updated);
+      setShowTermsModal(false);
+      toast.success('Termos de Uso e Licença de Software aceitos digitalmente com sucesso!');
+    } catch (e: any) {
+      toast.error('Erro ao registrar aceite de termos.');
+    }
+  };
 
   // Operational Rules State (Tab 4)
   const [settings, setSettings] = useState<CompanySettings>(AppStore.getSettings(currentCompany.id));
@@ -174,6 +278,15 @@ function CompanySettingsContent() {
   const [printSaveSuccess, setPrintSaveSuccess] = useState(false);
   const [previewTab, setPreviewTab] = useState<'entrada' | 'entrega'>('entrada');
   const [previewQrUrl, setPreviewQrUrl] = useState<string>('');
+  const [pixQrUrl, setPixQrUrl] = useState<string>('');
+  const [pixCopied, setPixCopied] = useState<boolean>(false);
+
+  const handleCopyPix = () => {
+    navigator.clipboard.writeText('pix@supremerecargas.com.br');
+    setPixCopied(true);
+    toast.success('Chave Pix copiada com sucesso!');
+    setTimeout(() => setPixCopied(false), 2500);
+  };
 
   // Reset Password Modal State
   const [userToResetPass, setUserToResetPass] = useState<Profile | null>(null);
@@ -258,6 +371,14 @@ function CompanySettingsContent() {
       color: { dark: '#000000', light: '#ffffff' }
     })
       .then(url => setPreviewQrUrl(url))
+      .catch(() => {});
+
+    QRCode.toDataURL('00020126580014br.gov.bcb.pix0136pix@supremerecargas.com.br5204000053039865802BR5925SUPREME RECARGAS SISTEMAS6009SAO PAULO62070503***6304', {
+      width: 200,
+      margin: 1,
+      color: { dark: '#0f172a', light: '#ffffff' }
+    })
+      .then(url => setPixQrUrl(url))
       .catch(() => {});
   }, []);
 
@@ -621,6 +742,32 @@ function CompanySettingsContent() {
     return u.group_name || (u.role === 'ADMINISTRADOR' ? 'Administradores' : u.role === 'TECNICO' ? 'Técnicos de Bancada' : 'Atendimento & Balcão');
   };
 
+  const canAccessEmpresa = currentUser?.role === 'SUPER_ADMIN' ||
+                           currentUser?.role === 'ADMINISTRADOR' ||
+                           hasPermission('manage_company') ||
+                           hasPermission('manage_users');
+
+  if (!canAccessEmpresa) {
+    return (
+      <div className="max-w-2xl mx-auto mt-16 p-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-xl text-center space-y-4">
+        <div className="w-16 h-16 rounded-2xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 flex items-center justify-center mx-auto border border-rose-200 dark:border-rose-900">
+          <ShieldAlert className="w-8 h-8" />
+        </div>
+        <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Acesso Restrito: Configurações da Empresa</h2>
+        <p className="text-sm text-slate-600 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
+          Você não possui permissão para gerenciar a equipe ou configurações cadastrais da empresa. Solicite acesso ao Administrador.
+        </p>
+        <div className="pt-4">
+          <Link href="/dashboard">
+            <Button className="bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-bold rounded-xl px-6">
+              Voltar ao Painel Principal
+            </Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 pb-20 max-w-7xl mx-auto">
       {/* Global Dialog Modal */}
@@ -752,6 +899,22 @@ function CompanySettingsContent() {
             >
               <Printer className="w-4 h-4" />
               <span>Impressão & Comandas</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('assinatura')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shrink-0 ${
+                activeTab === 'assinatura'
+                  ? 'bg-amber-600 text-white shadow-md shadow-amber-600/20'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              <Sparkles className="w-4 h-4 text-amber-300" />
+              <span>Assinatura & Plano</span>
+              {limits.subscription.status === 'TRIAL' && (
+                <span className="bg-amber-400 text-slate-950 text-[10px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-wider">Trial</span>
+              )}
             </button>
           </>
         )}
@@ -968,7 +1131,7 @@ function CompanySettingsContent() {
                         <div className="flex items-center gap-1">
                           <button
                             onClick={() => handleOpenEditGroup(g)}
-                            className="p-1 text-slate-400 hover:text-emerald-600 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors"
+                            className="p-1.5 text-slate-500 hover:text-emerald-600 rounded-lg hover:bg-slate-100 dark:text-slate-400 dark:hover:text-emerald-400 dark:hover:bg-slate-800 transition-colors"
                             title="Editar Grupo"
                           >
                             <Edit className="w-3.5 h-3.5" />
@@ -976,7 +1139,7 @@ function CompanySettingsContent() {
                           {!g.is_system_default && (
                             <button
                               onClick={() => handleDeleteGroup(g.id)}
-                              className="p-1 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
+                              className="p-1.5 text-slate-500 hover:text-rose-600 rounded-lg hover:bg-slate-100 dark:text-slate-400 dark:hover:text-rose-400 dark:hover:bg-slate-800 transition-colors"
                               title="Excluir Grupo"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -1009,95 +1172,256 @@ function CompanySettingsContent() {
         </div>
       )}
 
-      {/* TAB 3: DADOS DA EMPRESA */}
+      {/* TAB 3: DADOS DA EMPRESA, BACKUP & TERMOS DE USO */}
       {activeTab === 'empresa' && hasPermission('manage_company') && (
-        <div className="bg-white dark:bg-[#0e1626] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-6 space-y-4">
-          <div className="pb-3 border-b border-slate-100 dark:border-slate-800">
-            <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-              <Building2 className="w-4 h-4 text-emerald-600" />
-              <span>Dados Cadastrais da Empresa</span>
-            </h3>
-            <p className="text-xs text-slate-500">
-              Informações utilizadas nos cabeçalhos de comprovantes, ordens de serviço e identificação fiscal.
-            </p>
+        <div className="space-y-6">
+          {/* Card 1: Dados Cadastrais */}
+          <div className="bg-white dark:bg-[#0e1626] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-6 space-y-4">
+            <div className="pb-3 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-emerald-600" />
+                <span>Dados Cadastrais da Empresa</span>
+              </h3>
+              <p className="text-xs text-slate-500">
+                Informações utilizadas nos cabeçalhos de comprovantes, ordens de serviço e identificação fiscal.
+              </p>
+            </div>
+
+            <form onSubmit={handleSaveCompanyData} className="space-y-4">
+              {companySaveSuccess && (
+                <div className="p-3 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 rounded-xl flex items-center gap-2 text-emerald-800 dark:text-emerald-200 text-xs font-semibold">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>Dados da empresa salvos com sucesso!</span>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center mb-1">
+                    <span>Nome Fantasia</span>
+                    <span className="text-red-500 font-bold ml-1">*</span>
+                  </label>
+                  <Input required value={tradeName} onChange={e => setTradeName(e.target.value)} placeholder="Ex: Agilis Serviços Técnicos" className="text-xs rounded-xl" />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Razão Social</label>
+                  <Input value={corporateName} onChange={e => setCorporateName(e.target.value)} placeholder="Ex: Supreme Comércio e Serviços LTDA" className="text-xs rounded-xl" />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">CNPJ / CPF</label>
+                  <Input value={cnpj} onChange={e => setCnpj(e.target.value)} placeholder="00.000.000/0000-00" className="text-xs rounded-xl font-mono" />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Telefone Principal</label>
+                  <Input value={companyPhone} onChange={e => setCompanyPhone(e.target.value)} placeholder="(11) 3333-4444" className="text-xs rounded-xl" />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">WhatsApp Corporativo</label>
+                  <Input value={companyWhatsapp} onChange={e => setCompanyWhatsapp(e.target.value)} placeholder="(11) 98888-7777" className="text-xs rounded-xl" />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">E-mail Principal</label>
+                  <Input type="email" value={companyEmail} onChange={e => setCompanyEmail(e.target.value)} placeholder="contato@empresa.com.br" className="text-xs rounded-xl" />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Endereço Completo</label>
+                  <Input value={companyAddress} onChange={e => setCompanyAddress(e.target.value)} placeholder="Rua das Flores, 123 - Centro" className="text-xs rounded-xl" />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Cidade</label>
+                  <Input value={companyCity} onChange={e => setCompanyCity(e.target.value)} placeholder="São Paulo" className="text-xs rounded-xl" />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Estado (UF)</label>
+                    <Input value={companyState} onChange={e => setCompanyState(e.target.value.toUpperCase())} placeholder="SP" maxLength={2} className="text-xs rounded-xl uppercase font-mono" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">CEP</label>
+                    <Input value={companyZipCode} onChange={e => setCompanyZipCode(e.target.value)} placeholder="01000-000" className="text-xs rounded-xl font-mono" />
+                  </div>
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Responsável / Proprietário</label>
+                  <Input value={companyResponsible} onChange={e => setCompanyResponsible(e.target.value)} placeholder="Nome do proprietário ou gerente" className="text-xs rounded-xl" />
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <Button type="submit" size="sm" className="bg-emerald-600 hover:bg-emerald-700 font-bold text-xs text-white gap-1.5 rounded-xl h-9 shadow-xs">
+                  <Check className="w-4 h-4" />
+                  <span>Salvar Dados Cadastrais</span>
+                </Button>
+              </div>
+            </form>
           </div>
 
-          <form onSubmit={handleSaveCompanyData} className="space-y-4">
-            {companySaveSuccess && (
-              <div className="p-3 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 rounded-xl flex items-center gap-2 text-emerald-800 dark:text-emerald-200 text-xs font-semibold">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>Dados da empresa salvos com sucesso!</span>
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Card 2: Exportação & Backup Integral dos Dados da Loja (B2B) */}
+          <div className="bg-white dark:bg-[#0e1626] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-6 space-y-4">
+            <div className="pb-3 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center mb-1">
-                  <span>Nome Fantasia</span>
-                  <span className="text-red-500 font-bold ml-1">*</span>
-                </label>
-                <Input required value={tradeName} onChange={e => setTradeName(e.target.value)} placeholder="Ex: Supreme Recargas" className="text-xs rounded-xl" />
+                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <Database className="w-4 h-4 text-emerald-600" />
+                  <span>Backup & Portabilidade Integral dos Dados</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Seus dados pertencem à sua empresa. Exporte a qualquer momento backups completos em JSON ou planilhas CSV para auditoria e gestão.
+                </p>
               </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Razão Social</label>
-                <Input value={corporateName} onChange={e => setCorporateName(e.target.value)} placeholder="Ex: Supreme Comércio e Serviços LTDA" className="text-xs rounded-xl" />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">CNPJ / CPF</label>
-                <Input value={cnpj} onChange={e => setCnpj(e.target.value)} placeholder="00.000.000/0000-00" className="text-xs rounded-xl font-mono" />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Telefone Principal</label>
-                <Input value={companyPhone} onChange={e => setCompanyPhone(e.target.value)} placeholder="(11) 3333-4444" className="text-xs rounded-xl" />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">WhatsApp Corporativo</label>
-                <Input value={companyWhatsapp} onChange={e => setCompanyWhatsapp(e.target.value)} placeholder="(11) 98888-7777" className="text-xs rounded-xl" />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">E-mail Principal</label>
-                <Input type="email" value={companyEmail} onChange={e => setCompanyEmail(e.target.value)} placeholder="contato@empresa.com.br" className="text-xs rounded-xl" />
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Endereço Completo</label>
-                <Input value={companyAddress} onChange={e => setCompanyAddress(e.target.value)} placeholder="Rua das Flores, 123 - Centro" className="text-xs rounded-xl" />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Cidade</label>
-                <Input value={companyCity} onChange={e => setCompanyCity(e.target.value)} placeholder="São Paulo" className="text-xs rounded-xl" />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Estado (UF)</label>
-                  <Input value={companyState} onChange={e => setCompanyState(e.target.value.toUpperCase())} placeholder="SP" maxLength={2} className="text-xs rounded-xl uppercase font-mono" />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">CEP</label>
-                  <Input value={companyZipCode} onChange={e => setCompanyZipCode(e.target.value)} placeholder="01000-000" className="text-xs rounded-xl font-mono" />
-                </div>
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Responsável / Proprietário</label>
-                <Input value={companyResponsible} onChange={e => setCompanyResponsible(e.target.value)} placeholder="Nome do proprietário ou gerente" className="text-xs rounded-xl" />
-              </div>
+              <Badge className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 text-[10px] font-bold self-start sm:self-auto">
+                LGPD Art. 18 (Portabilidade)
+              </Badge>
             </div>
 
-            <div className="flex justify-end pt-2">
-              <Button type="submit" size="sm" className="bg-emerald-600 hover:bg-emerald-700 font-bold text-xs text-white gap-1.5 rounded-xl h-9 shadow-xs">
-                <Check className="w-4 h-4" />
-                <span>Salvar Dados Cadastrais</span>
-              </Button>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
+              {/* Opção 1: Backup JSON Completo */}
+              <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 flex flex-col justify-between space-y-3 hover:border-emerald-300 dark:hover:border-emerald-800 transition-colors">
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-400 flex items-center justify-center font-bold text-xs">
+                      JSON
+                    </div>
+                    <span className="font-bold text-xs text-slate-900 dark:text-slate-100">
+                      Backup Integral da Loja
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    Arquivo estruturado com cadastro da loja, regras, clientes, catálogo completo, serviços, comandas e pagamentos.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExportJsonBackup}
+                  className="w-full text-xs font-semibold gap-1.5 rounded-xl border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-300 dark:hover:bg-emerald-950/40 h-8"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Exportar Backup (JSON)</span>
+                </Button>
+              </div>
+
+              {/* Opção 2: CSV Comandas */}
+              <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 flex flex-col justify-between space-y-3 hover:border-blue-300 dark:hover:border-blue-800 transition-colors">
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-950/70 text-blue-700 dark:text-blue-400 flex items-center justify-center font-bold text-xs">
+                      CSV
+                    </div>
+                    <span className="font-bold text-xs text-slate-900 dark:text-slate-100">
+                      Relatório de Comandas & OS
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    Planilha compatível com Excel com número de OS, datas, clientes, status de bancada, financeiro e técnicos responsáveis.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExportOrdersCsv}
+                  className="w-full text-xs font-semibold gap-1.5 rounded-xl border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-300 dark:hover:bg-blue-950/40 h-8"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                  <span>Exportar Comandas (CSV)</span>
+                </Button>
+              </div>
+
+              {/* Opção 3: CSV Clientes */}
+              <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 flex flex-col justify-between space-y-3 hover:border-purple-300 dark:hover:border-purple-800 transition-colors">
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-950/70 text-purple-700 dark:text-purple-400 flex items-center justify-center font-bold text-xs">
+                      CSV
+                    </div>
+                    <span className="font-bold text-xs text-slate-900 dark:text-slate-100">
+                      Base Cadastral de Clientes
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    Planilha com códigos internos, nomes, telefones, WhatsApp, documentos CPF/CNPJ e e-mails para mala direta e contato.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExportCustomersCsv}
+                  className="w-full text-xs font-semibold gap-1.5 rounded-xl border-purple-300 text-purple-700 hover:bg-purple-50 dark:border-purple-800 dark:text-purple-300 dark:hover:bg-purple-950/40 h-8"
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  <span>Exportar Clientes (CSV)</span>
+                </Button>
+              </div>
             </div>
-          </form>
+          </div>
+
+          {/* Card 3: Termos de Uso, Licença de Software & LGPD */}
+          <div className="bg-white dark:bg-[#0e1626] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-6 space-y-4">
+            <div className="pb-3 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                <span>Termos de Uso, Licença de Software & LGPD</span>
+              </h3>
+              <p className="text-xs text-slate-500">
+                Formalização contratual de uso da plataforma SaaS, responsabilidades operacionais e política de proteção de dados.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                    Status da Licença & Termos:
+                  </span>
+                  {companyData.terms_accepted_at ? (
+                    <Badge className="bg-emerald-600 text-white text-[10px] font-bold gap-1">
+                      <CheckCircle2 className="w-3 h-3" />
+                      <span>Ativo & Aceito Digitalmente</span>
+                    </Badge>
+                  ) : (
+                    <Badge className="bg-amber-500 text-white text-[10px] font-bold gap-1">
+                      <ShieldAlert className="w-3 h-3" />
+                      <span>Pendente de Formalização</span>
+                    </Badge>
+                  )}
+                </div>
+
+                <p className="text-[11px] text-slate-500">
+                  {companyData.terms_accepted_at ? (
+                    <>
+                      Versão homologada <strong>{companyData.terms_version || '2026.1'}</strong> formalizada por <strong>{companyData.terms_accepted_by || 'Administrador'}</strong> em {new Date(companyData.terms_accepted_at).toLocaleString('pt-BR')}.
+                    </>
+                  ) : (
+                    'O administrador da empresa deve ler e registrar o aceite digital dos termos de licenciamento e tratamento de dados.'
+                  )}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowTermsModal(true)}
+                  className="text-xs rounded-xl font-bold h-9"
+                >
+                  <FileText className="w-3.5 h-3.5 mr-1" />
+                  <span>{companyData.terms_accepted_at ? 'Ver Termos de Uso' : 'Ler e Aceitar Termos'}</span>
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1227,7 +1551,7 @@ function CompanySettingsContent() {
                 <div>
                   <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
                     <Wrench className="w-4 h-4 text-emerald-600" />
-                    <span>Grupos de Usuários Elegíveis como "Técnicos Responsáveis"</span>
+                    <span>Grupos de Usuários Elegíveis como &ldquo;Técnicos Responsáveis&rdquo;</span>
                   </h4>
                   <p className="text-[11px] text-slate-500 mt-0.5">
                     Defina quais grupos de usuários aparecerão na seleção de técnico da comanda e da bancada técnica.
@@ -1922,7 +2246,7 @@ function CompanySettingsContent() {
 
                           {/* Header */}
                           <div className="text-center border-b border-dashed border-black pb-1.5 space-y-0.5">
-                            <h4 className="font-black text-xs uppercase">{tradeName || 'SUPREME RECARGAS'}</h4>
+                            <h4 className="font-black text-xs uppercase">{tradeName || 'AGILIS OS'}</h4>
                             {receiptHeader && <p className="text-[8.5px] font-bold">{receiptHeader}</p>}
                             {showCompanyCnpj && cnpj && <p className="text-[8.5px]">CNPJ: {cnpj}</p>}
                             {showCompanyContact && (companyPhone || companyWhatsapp) && (
@@ -2041,7 +2365,7 @@ function CompanySettingsContent() {
 
                               {/* Header 2ª Via */}
                               <div className="text-center border-b border-dashed border-black pb-1.5 space-y-0.5">
-                                <h4 className="font-black text-xs uppercase">{tradeName || 'SUPREME RECARGAS'}</h4>
+                                <h4 className="font-black text-xs uppercase">{tradeName || 'AGILIS OS'}</h4>
                                 {receiptHeader && <p className="text-[8.5px] font-bold">{receiptHeader}</p>}
                                 {showCompanyContact && (companyPhone || companyWhatsapp) && (
                                   <p className="text-[8.5px]">Tel: {companyPhone} • Whats: {companyWhatsapp}</p>
@@ -2086,7 +2410,7 @@ function CompanySettingsContent() {
                         </div>
 
                         <div className="text-center border-b border-dashed border-black pb-1.5 space-y-0.5">
-                          <h4 className="font-black text-xs uppercase">{tradeName || 'SUPREME RECARGAS'}</h4>
+                          <h4 className="font-black text-xs uppercase">{tradeName || 'AGILIS OS'}</h4>
                           <p className="text-[8.5px] font-bold">COMPROVANTE DE SAÍDA E RETIRADA</p>
                         </div>
 
@@ -2138,6 +2462,441 @@ function CompanySettingsContent() {
                   <Link href="/impressao">
                     <span className="text-emerald-600 hover:underline font-bold">Abrir Emissor Completo →</span>
                   </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 6: ASSINATURA, PLANO & PAGAMENTO MANUAL VIA PIX */}
+      {activeTab === 'assinatura' && (
+        <div className="space-y-6">
+          {/* Top Banner: Status & Trial Alert */}
+          {limits.subscription.status === 'TRIAL' ? (
+            <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-300 dark:border-amber-700/50 rounded-2xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-start gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-amber-500/20">
+                  <Timer className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-black text-slate-900 dark:text-slate-100">
+                      Período de Testes Grátis Ativo (14 Dias)
+                    </h3>
+                    <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border-amber-300 dark:border-amber-800 text-[10px] font-bold">
+                      TRIAL
+                    </Badge>
+                  </div>
+                  {(() => {
+                    const trialExpires = limits.subscription.expires_at 
+                      ? new Date(limits.subscription.expires_at) 
+                      : new Date(new Date(limits.subscription.starts_at || Date.now()).getTime() + 14 * 86400000);
+                    const daysRemaining = Math.max(0, Math.ceil((trialExpires.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+                    return (
+                      <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                        Sua degustação completa expira em <strong className="text-slate-900 dark:text-slate-100">{trialExpires.toLocaleDateString('pt-BR')}</strong> (restam <span className="font-bold text-amber-600 dark:text-amber-400">{daysRemaining} dias</span>). Após os testes, mantenha seu acesso fazendo o Pix manual abaixo.
+                      </p>
+                    );
+                  })()}
+                </div>
+              </div>
+              <Button
+                onClick={() => {
+                  const el = document.getElementById('pix-manual-section');
+                  if (el) el.scrollIntoView({ behavior: 'smooth' });
+                }}
+                className="bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-xs shrink-0 shadow-md shadow-amber-500/20"
+              >
+                Ver Chave Pix para Ativação
+              </Button>
+            </div>
+          ) : (
+            <div className="bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-300 dark:border-emerald-700/50 rounded-2xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-start gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-emerald-600/20">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-black text-slate-900 dark:text-slate-100">
+                      Assinatura Regular Ativa
+                    </h3>
+                    <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 text-[10px] font-bold">
+                      ATIVO
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                    Sua empresa possui acesso integral a todos os módulos do <strong>{limits.plan.name}</strong>. Para renovações antecipadas ou upgrades, utilize a chave Pix abaixo.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Current Plan Overview Card & Manual Pix Section */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-1 bg-white dark:bg-[#0e1626] rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm flex flex-col justify-between">
+              <div>
+                <span className="text-[11px] font-bold tracking-wider uppercase text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                  Plano Atual Contratado
+                </span>
+                <h2 className="text-2xl font-black text-slate-900 dark:text-slate-100 mt-3">
+                  {limits.plan.name}
+                </h2>
+                <p className="text-xs text-slate-500 mt-1">
+                  {limits.plan.description || 'Sistema completo de gestão para assistência técnica e recargas'}
+                </p>
+
+                <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800">
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-3xl font-black text-slate-900 dark:text-slate-100">
+                      {formatCurrency(limits.finalMonthlyPrice)}
+                    </span>
+                    <span className="text-xs font-semibold text-slate-500">/mês</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Cobrança mensal avulsa ou manual via Pix
+                  </p>
+                </div>
+
+                <div className="mt-5 space-y-2 pt-4 border-t border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-500">Usuários permitidos:</span>
+                    <strong className="text-slate-900 dark:text-slate-100">{limits.maxUsers} colaboradores</strong>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-500">Usuários em uso:</span>
+                    <strong className="text-emerald-600 dark:text-emerald-400">{limits.usedUsers} ativos</strong>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-500">Ciclo de faturamento:</span>
+                    <strong className="text-slate-900 dark:text-slate-100">Mensal</strong>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <p className="text-[11px] text-slate-500 italic">
+                  💡 Precisa de mais colaboradores ou funções exclusivas? Consulte os planos de upgrade ao lado.
+                </p>
+              </div>
+            </div>
+
+            {/* Manual Pix Payment Section */}
+            <div id="pix-manual-section" className="lg:col-span-2 bg-white dark:bg-[#0e1626] rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm space-y-6">
+              <div className="flex items-start justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-teal-500/10 text-teal-600 dark:text-teal-400 flex items-center justify-center font-black text-xs">
+                      PIX
+                    </div>
+                    <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
+                      Pagamento & Renovação Manual via Pix
+                    </h3>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Sem intermediários ou taxas de cartão. Faça o Pix e envie o comprovante diretamente ao nosso financeiro para liberação imediata.
+                  </p>
+                </div>
+                <Badge className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[11px] font-mono">
+                  Validação em até 15 min
+                </Badge>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+                {/* QR Code and Copy Key */}
+                <div className="flex flex-col items-center text-center p-4 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200/80 dark:border-slate-800">
+                  <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-xs mb-3">
+                    {pixQrUrl ? (
+                      <img src={pixQrUrl} alt="QR Code Pix Supreme Recargas" className="w-36 h-36 mx-auto" />
+                    ) : (
+                      <div className="w-36 h-36 flex items-center justify-center bg-slate-100 text-slate-400 text-xs">
+                        Gerando QR...
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-2">
+                    Abra o app do seu banco e escaneie o QR Code
+                  </p>
+
+                  <div className="w-full space-y-1.5 text-left">
+                    <label className="text-[10px] font-bold uppercase text-slate-400">
+                      Chave Pix (E-mail)
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      <Input
+                        readOnly
+                        value="pix@supremerecargas.com.br"
+                        className="text-xs font-mono bg-white dark:bg-slate-950 font-bold h-9 rounded-xl"
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={handleCopyPix}
+                        className={`h-9 px-3 rounded-xl font-bold text-xs shrink-0 transition-all ${
+                          pixCopied 
+                            ? 'bg-emerald-600 text-white' 
+                            : 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 hover:bg-slate-800'
+                        }`}
+                      >
+                        {pixCopied ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 mr-1 text-white" />
+                            Copiado!
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5 mr-1" />
+                            Copiar
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bank Account Info & WhatsApp Action */}
+                <div className="space-y-4">
+                  <div className="bg-slate-50 dark:bg-slate-900/60 rounded-xl p-4 border border-slate-200/80 dark:border-slate-800 text-xs space-y-2">
+                    <h4 className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                      <Building2 className="w-3.5 h-3.5 text-slate-500" />
+                      Dados Bancários do Favorecido
+                    </h4>
+                    <div className="space-y-1 text-slate-600 dark:text-slate-400 text-[11px]">
+                      <p><strong>Titular:</strong> Supreme Recargas & Softwares Ltda</p>
+                      <p><strong>CNPJ:</strong> 55.892.410/0001-92</p>
+                      <p><strong>Instituição:</strong> Banco Inter (077)</p>
+                      <p><strong>Agência:</strong> 0001 | <strong>Conta:</strong> 9482103-9</p>
+                      <p className="pt-1 text-slate-900 dark:text-slate-200 font-bold">
+                        Valor da Mensalidade: {formatCurrency(limits.finalMonthlyPrice)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-emerald-50 dark:bg-emerald-950/40 rounded-xl p-4 border border-emerald-200 dark:border-emerald-800 space-y-3">
+                    <div>
+                      <h4 className="font-bold text-emerald-900 dark:text-emerald-200 text-xs">
+                        Envie o Comprovante no WhatsApp
+                      </h4>
+                      <p className="text-[11px] text-emerald-700 dark:text-emerald-300 mt-0.5">
+                        Após efetuar o Pix, clique abaixo para abrir nosso canal oficial e enviar o comprovante anexado.
+                      </p>
+                    </div>
+
+                    {(() => {
+                      const msg = `Olá! Sou da empresa *${currentCompany.trade_name}* (CNPJ: ${currentCompany.cnpj || 'Não informado'}).\n\nAcabei de realizar o pagamento manual da mensalidade do plano *${limits.plan.name}* no valor de ${formatCurrency(limits.finalMonthlyPrice)}.\n\nSegue o comprovante em anexo para ativação/renovação do nosso acesso no Supreme Recargas!`;
+                      const waUrl = `https://wa.me/5511999999999?text=${encodeURIComponent(msg)}`;
+                      return (
+                        <a
+                          href={waUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-center gap-2 w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 transition-all"
+                        >
+                          <Smartphone className="w-4 h-4" />
+                          <span>Avisar Pagamento no WhatsApp</span>
+                          <ExternalLink className="w-3.5 h-3.5 opacity-80" />
+                        </a>
+                      );
+                    })()}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Upgrade Options Comparison */}
+          <div className="bg-white dark:bg-[#0e1626] rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm space-y-5">
+            <div>
+              <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-amber-500" />
+                Opções de Planos & Upgrade Disponíveis
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Escolha o plano ideal para a escala de atendimento da sua assistência técnica. Mudança com liberação no mesmo dia.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              {/* Starter */}
+              <div className={`rounded-xl border p-5 flex flex-col justify-between transition-all ${
+                limits.plan.code === 'ESSENCIAL'
+                  ? 'border-emerald-500 bg-emerald-50/20 dark:bg-emerald-950/20 ring-2 ring-emerald-500/20'
+                  : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'
+              }`}>
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-500">Plano Starter</span>
+                    {limits.plan.code === 'ESSENCIAL' && (
+                      <Badge className="bg-emerald-500 text-white text-[10px] font-bold">SEU PLANO</Badge>
+                    )}
+                  </div>
+                  <div className="mt-3 flex items-baseline gap-1">
+                    <span className="text-2xl font-black text-slate-900 dark:text-slate-100">R$ 69</span>
+                    <span className="text-xs text-slate-500 font-semibold">/mês</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-1">Ideal para pequenas lojas e oficinas individuais</p>
+                  
+                  <ul className="mt-4 space-y-2 text-xs text-slate-600 dark:text-slate-400">
+                    <li className="flex items-center gap-1.5">
+                      <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                      <span>Até 3 colaboradores</span>
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                      <span>Emissão de Ordens de Serviço & Comandas</span>
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                      <span>Bancada Kanban & Diagnóstico</span>
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                      <span>Rastreio online por QR Code</span>
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800">
+                  {limits.plan.code === 'ESSENCIAL' ? (
+                    <Button disabled variant="outline" className="w-full text-xs font-bold rounded-xl">
+                      Plano Atual
+                    </Button>
+                  ) : (
+                    <a
+                      href={`https://wa.me/5511999999999?text=${encodeURIComponent(`Olá! Gostaria de migrar minha empresa *${currentCompany.trade_name}* para o Plano Starter (R$ 69/mês).`)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-center w-full py-2 px-3 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200"
+                    >
+                      Mudar para Starter
+                    </a>
+                  )}
+                </div>
+              </div>
+
+              {/* Pro (Recommended) */}
+              <div className={`rounded-xl border p-5 flex flex-col justify-between relative shadow-sm transition-all ${
+                limits.plan.code === 'PROFISSIONAL'
+                  ? 'border-emerald-500 bg-emerald-50/20 dark:bg-emerald-950/20 ring-2 ring-emerald-500/20'
+                  : 'border-emerald-600/30 dark:border-emerald-500/40 bg-slate-50/50 dark:bg-slate-900/50'
+              }`}>
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                  <span className="bg-emerald-600 text-white text-[10px] font-black uppercase tracking-wider px-3 py-0.5 rounded-full shadow-xs">
+                    Mais Popular
+                  </span>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">Plano Profissional</span>
+                    {limits.plan.code === 'PROFISSIONAL' && (
+                      <Badge className="bg-emerald-500 text-white text-[10px] font-bold">SEU PLANO</Badge>
+                    )}
+                  </div>
+                  <div className="mt-3 flex items-baseline gap-1">
+                    <span className="text-2xl font-black text-slate-900 dark:text-slate-100">R$ 129</span>
+                    <span className="text-xs text-slate-500 font-semibold">/mês</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-1">Para assistências com volume médio/alto e frente de caixa</p>
+                  
+                  <ul className="mt-4 space-y-2 text-xs text-slate-600 dark:text-slate-400">
+                    <li className="flex items-center gap-1.5">
+                      <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                      <strong>Até 8 colaboradores inclusos</strong>
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                      <span>Frente de Caixa (PDV) com Sangrias & Fechamento Cego</span>
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                      <span>Disparo 1-Clique de Recibos no WhatsApp</span>
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                      <span>Relatórios Financeiros & Métricas de Faturamento</span>
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                      <span>Logs de Auditoria & Segurança de Sessões</span>
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800">
+                  {limits.plan.code === 'PROFISSIONAL' ? (
+                    <Button disabled variant="outline" className="w-full text-xs font-bold rounded-xl">
+                      Plano Atual
+                    </Button>
+                  ) : (
+                    <a
+                      href={`https://wa.me/5511999999999?text=${encodeURIComponent(`Olá! Gostaria de migrar minha empresa *${currentCompany.trade_name}* para o Plano Profissional (R$ 129/mês).`)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-center w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20"
+                    >
+                      Fazer Upgrade para Pro
+                    </a>
+                  )}
+                </div>
+              </div>
+
+              {/* Enterprise */}
+              <div className={`rounded-xl border p-5 flex flex-col justify-between transition-all ${
+                limits.plan.code === 'ENTERPRISE'
+                  ? 'border-emerald-500 bg-emerald-50/20 dark:bg-emerald-950/20 ring-2 ring-emerald-500/20'
+                  : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'
+              }`}>
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-500">Plano Enterprise</span>
+                    {limits.plan.code === 'ENTERPRISE' && (
+                      <Badge className="bg-emerald-500 text-white text-[10px] font-bold">SEU PLANO</Badge>
+                    )}
+                  </div>
+                  <div className="mt-3 flex items-baseline gap-1">
+                    <span className="text-2xl font-black text-slate-900 dark:text-slate-100">R$ 199</span>
+                    <span className="text-xs text-slate-500 font-semibold">/mês</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-1">Para grandes oficinas, redes e centros com múltiplos técnicos</p>
+                  
+                  <ul className="mt-4 space-y-2 text-xs text-slate-600 dark:text-slate-400">
+                    <li className="flex items-center gap-1.5">
+                      <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                      <strong>Até 25 colaboradores inclusos</strong>
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                      <span>Todos os recursos do Plano Profissional</span>
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                      <span>Exportação Completa de Dados & Backups</span>
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                      <span>Suporte VIP Prioritário com Gerente de Conta</span>
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800">
+                  {limits.plan.code === 'ENTERPRISE' ? (
+                    <Button disabled variant="outline" className="w-full text-xs font-bold rounded-xl">
+                      Plano Atual
+                    </Button>
+                  ) : (
+                    <a
+                      href={`https://wa.me/5511999999999?text=${encodeURIComponent(`Olá! Gostaria de migrar minha empresa *${currentCompany.trade_name}* para o Plano Enterprise (R$ 199/mês).`)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-center w-full py-2 px-3 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200"
+                    >
+                      Mudar para Enterprise
+                    </a>
+                  )}
                 </div>
               </div>
             </div>
@@ -2559,6 +3318,131 @@ function CompanySettingsContent() {
                 </Button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: TERMOS DE USO & LGPD */}
+      {showTermsModal && (
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-150">
+          <div className="bg-white dark:bg-[#0e1626] rounded-3xl border border-slate-200 dark:border-slate-800 w-full max-w-2xl p-6 shadow-2xl space-y-4 max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center border border-emerald-500/20">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
+                    Termos de Uso, Licença & LGPD
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Formalização legal de uso da plataforma SaaS e proteção de dados
+                  </p>
+                </div>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setShowTermsModal(false)} 
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1 text-xs text-slate-600 dark:text-slate-300">
+              <div className="p-3 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-900 dark:text-slate-100">
+                    Licença Corporativa Agilis OS v2
+                  </span>
+                  <Badge className="bg-emerald-600 text-white text-[10px]">Versão 2026.1</Badge>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Empresa Licenciada: <strong>{companyData.trade_name || currentCompany.trade_name}</strong> | CNPJ: {companyData.cnpj || 'Sob cadastramento'}
+                </p>
+              </div>
+
+              <div className="space-y-3 leading-relaxed">
+                <div>
+                  <h4 className="font-bold text-slate-900 dark:text-slate-100 mb-1">
+                    1. Objeto e Concessão de Licença
+                  </h4>
+                  <p>
+                    O presente termo formaliza a concessão de licença de uso temporária, não exclusiva e intransferível do software de gestão técnica <strong>Agilis OS v2</strong>. O sistema destina-se ao gerenciamento de ordens de serviço, recarga de cartuchos, oficinas de manutenção, bancadas técnicas e automação de atendimento.
+                  </p>
+                </div>
+
+                <div>
+                  <h4 className="font-bold text-slate-900 dark:text-slate-100 mb-1">
+                    2. Titularidade e Portabilidade dos Dados do Lojista
+                  </h4>
+                  <p>
+                    Todos os dados inseridos pela empresa licenciada (clientes, histórico de comandas, peças, diagnósticos, laudos e valores) são de <strong>propriedade exclusiva da empresa contratante</strong>. O software garante a qualquer momento a extração completa e portabilidade desses dados em formatos abertos e estruturados (JSON e CSV), sem retenção forçada.
+                  </p>
+                </div>
+
+                <div>
+                  <h4 className="font-bold text-slate-900 dark:text-slate-100 mb-1">
+                    3. Conformidade com a LGPD (Lei Geral de Proteção de Dados - Lei nº 13.709/2018)
+                  </h4>
+                  <p>
+                    A empresa licenciada atua como <strong>Controladora</strong> dos dados pessoais de seus clientes cadastrados. A plataforma atua como <strong>Operadora</strong> e disponibiliza mecanismos de privacidade e segurança avançados, incluindo criptografia de senhas com salteamento SHA-256, isolamento multi-inquilino a nível de banco e função de <strong>Anonimização de Titulares (Art. 18 da LGPD)</strong> para atendimento a solicitações de exclusão de dados pessoais.
+                  </p>
+                </div>
+
+                <div>
+                  <h4 className="font-bold text-slate-900 dark:text-slate-100 mb-1">
+                    4. Continuidade Operacional e Modo Offline
+                  </h4>
+                  <p>
+                    O Agilis OS v2 dispõe de camada de resiliência com fila outbox local. Em caso de instabilidade na conexão de internet, o lojista e seus atendentes mantêm a capacidade de emitir comandas no balcão e registrar serviços na bancada. As mutações locais são armazenadas com segurança e reenviadas automaticamente quando a conexão é restabelecida.
+                  </p>
+                </div>
+
+                <div>
+                  <h4 className="font-bold text-slate-900 dark:text-slate-100 mb-1">
+                    5. Responsabilidades de Acesso e Auditoria
+                  </h4>
+                  <p>
+                    O acesso à plataforma é individualizado. É responsabilidade de cada usuário guardar o sigilo de sua credencial. Todas as operações críticas (concessão de descontos acima da alçada, cancelamentos de comanda, entregas com valor zerado e alterações de parâmetros) são registradas com trilha de auditoria contendo nome do operador, data e hora.
+                  </p>
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div className="text-[11px] text-slate-500">
+                  {companyData.terms_accepted_at ? (
+                    <span className="text-emerald-600 font-semibold flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      Termo aceito por {companyData.terms_accepted_by} em {new Date(companyData.terms_accepted_at).toLocaleDateString('pt-BR')}
+                    </span>
+                  ) : (
+                    <span>Ao clicar em &quot;Aceitar Termos&quot;, você declara ciência e concordância legal em nome da empresa.</span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowTermsModal(false)}
+                    className="rounded-xl text-xs h-9"
+                  >
+                    Fechar
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={handleAcceptTerms}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs gap-1.5 h-9"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>{companyData.terms_accepted_at ? 'Revalidar Aceite' : 'Aceitar Termos Digitalmente'}</span>
+                  </Button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}

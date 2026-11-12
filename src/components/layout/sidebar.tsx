@@ -26,7 +26,8 @@ import {
   Layers,
   ArrowUpRight,
   Timer,
-  Smartphone
+  Smartphone,
+  Banknote
 } from 'lucide-react';
 import { useAuth, getBrowserDeviceDescription } from '@/lib/auth-context';
 import { cn, getRoleBadgeConfig } from '@/lib/utils';
@@ -162,6 +163,12 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
           show: hasPermission('create_entry')
         },
         {
+          title: 'Frente de Caixa (PDV)',
+          href: '/caixa',
+          icon: Banknote,
+          show: ['ADMINISTRADOR', 'ATENDENTE'].includes(currentUser.role)
+        },
+        {
           title: 'Bancada Técnica (Kanban)',
           href: '/bancada',
           icon: Wrench,
@@ -233,8 +240,8 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <h1 className="font-extrabold text-sm tracking-tight text-slate-900 dark:text-white">
-                Supreme <span className="text-emerald-600 dark:text-emerald-400">Recargas</span>
+              <h1 className="font-extrabold text-base tracking-tight text-slate-900 dark:text-white">
+                Agilis <span className="text-emerald-600 dark:text-emerald-400">OS</span>
               </h1>
               <span className="text-[9px] px-1.5 py-0.2 rounded-full font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 font-mono">
                 PRO
