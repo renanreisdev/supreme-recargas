@@ -162,12 +162,16 @@ ALTER TABLE cash_registers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cash_register_movements ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Tenant isolation on cash_registers" ON cash_registers;
-CREATE POLICY "Tenant isolation on cash_registers"
+DROP POLICY IF EXISTS "Allow public access cash_registers" ON cash_registers;
+CREATE POLICY "Allow public access cash_registers"
   ON cash_registers FOR ALL
-  USING (tenant_id = get_user_tenant_id() OR is_super_admin());
+  USING (true)
+  WITH CHECK (true);
 
 DROP POLICY IF EXISTS "Tenant isolation on cash_register_movements" ON cash_register_movements;
-CREATE POLICY "Tenant isolation on cash_register_movements"
+DROP POLICY IF EXISTS "Allow public access cash_register_movements" ON cash_register_movements;
+CREATE POLICY "Allow public access cash_register_movements"
   ON cash_register_movements FOR ALL
-  USING (tenant_id = get_user_tenant_id() OR is_super_admin());
+  USING (true)
+  WITH CHECK (true);
 
