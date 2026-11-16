@@ -9,6 +9,7 @@ import { AppStore } from '@/lib/store';
 import { toast } from '@/lib/toast';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { BrandIcon } from '@/components/ui/brand-logo';
 import { getRoleBadgeConfig } from '@/lib/utils';
 
 interface HeaderProps {
@@ -84,9 +85,7 @@ export function Header({ onToggleMobileMenu }: HeaderProps) {
         </button>
 
         <div className="flex items-center gap-1.5 sm:hidden">
-          <div className="w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center text-white shadow-xs">
-            <Zap className="w-4 h-4 fill-white" />
-          </div>
+          <BrandIcon className="w-8 h-8" />
         </div>
       </div>
 

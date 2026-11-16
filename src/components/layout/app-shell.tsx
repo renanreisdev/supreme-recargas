@@ -8,6 +8,7 @@ import { Sidebar } from './sidebar';
 import { Header } from './header';
 import { BottomNav } from './bottom-nav';
 import { MustChangePasswordModal } from '@/components/auth/MustChangePasswordModal';
+import { BrandIcon } from '@/components/ui/brand-logo';
 import { Zap } from 'lucide-react';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -46,10 +47,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center space-y-4 text-white">
-        <div className="w-12 h-12 rounded-2xl bg-emerald-600 flex items-center justify-center animate-pulse shadow-lg shadow-emerald-900/50">
-          <Zap className="w-6 h-6 fill-white" />
-        </div>
-        <p className="text-xs text-slate-400 font-mono tracking-wider">Carregando Agilis...</p>
+        <BrandIcon className="w-12 h-12 animate-pulse" />
+        <p className="text-xs text-slate-400 font-mono tracking-wider">Carregando Agil OS...</p>
       </div>
     );
   }

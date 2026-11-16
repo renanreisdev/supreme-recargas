@@ -27,6 +27,7 @@ import { formatDateTime } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
+import { BrandIcon } from '@/components/ui/brand-logo';
 import { toast } from '@/lib/toast';
 
 function LoginForm() {
@@ -138,14 +139,12 @@ function LoginForm() {
     <div className="w-full max-w-md space-y-6 relative z-10 animate-in fade-in zoom-in-95 duration-200">
       {/* Brand Header */}
       <div className="text-center space-y-2">
-        <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-emerald-600 shadow-xl shadow-emerald-900/40 text-white mb-2">
-          <Zap className="w-8 h-8 fill-white" />
-        </div>
+        <BrandIcon className="w-14 h-14 mx-auto mb-2" />
         <h1 className="text-2xl font-extrabold text-white tracking-tight">
-          Supreme <span className="text-emerald-400">Recargas</span>
+          Agil <span className="text-emerald-400">OS</span>
         </h1>
         <p className="text-xs text-slate-400">
-          Sistema Profissional de Controle de Cartuchos & Gestão de Oficina
+          Sistema Operacional de Ordens de Serviço, Balcão &amp; Bancada Técnica
         </p>
       </div>
 
@@ -277,7 +276,7 @@ function LoginForm() {
       {/* Sign Up / Free Trial Link */}
       <div className="text-center pt-2">
         <p className="text-xs text-slate-400">
-          Sua loja ainda não usa o Supreme Recargas?{' '}
+          Sua loja ainda não usa o Agil OS?{' '}
           <Link href="/cadastro" className="font-bold text-emerald-400 hover:text-emerald-300 underline underline-offset-4 transition-colors">
             Comece 14 dias grátis
           </Link>

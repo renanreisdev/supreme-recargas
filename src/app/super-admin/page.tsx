@@ -535,7 +535,7 @@ export default function SuperAdminPage() {
 
   const copyProposalToClipboard = () => {
     if (!selectedCalcPlan) return;
-    const text = `*PROPOSTA AGILIS OS - SISTEMA OPERACIONAL*
+    const text = `*PROPOSTA AGIL OS - SISTEMA OPERACIONAL*
 Plano Escolhido: ${selectedCalcPlan.name}
 ----------------------------------------
 • Mensalidade Base: ${formatCurrency(calcResults.base)}

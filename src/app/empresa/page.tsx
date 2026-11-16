@@ -3353,7 +3353,7 @@ function CompanySettingsContent() {
               <div className="p-3 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-slate-900 dark:text-slate-100">
-                    Licença Corporativa Agilis OS v2
+                    Licença Corporativa Agil OS v2
                   </span>
                   <Badge className="bg-emerald-600 text-white text-[10px]">Versão 2026.1</Badge>
                 </div>
@@ -3368,7 +3368,7 @@ function CompanySettingsContent() {
                     1. Objeto e Concessão de Licença
                   </h4>
                   <p>
-                    O presente termo formaliza a concessão de licença de uso temporária, não exclusiva e intransferível do software de gestão técnica <strong>Agilis OS v2</strong>. O sistema destina-se ao gerenciamento de ordens de serviço, recarga de cartuchos, oficinas de manutenção, bancadas técnicas e automação de atendimento.
+                    O presente termo formaliza a concessão de licença de uso temporária, não exclusiva e intransferível do software de gestão técnica <strong>Agil OS v2</strong>. O sistema destina-se ao gerenciamento de ordens de serviço, recarga de cartuchos, oficinas de manutenção, bancadas técnicas e automação de atendimento.
                   </p>
                 </div>
 
@@ -3395,7 +3395,7 @@ function CompanySettingsContent() {
                     4. Continuidade Operacional e Modo Offline
                   </h4>
                   <p>
-                    O Agilis OS v2 dispõe de camada de resiliência com fila outbox local. Em caso de instabilidade na conexão de internet, o lojista e seus atendentes mantêm a capacidade de emitir comandas no balcão e registrar serviços na bancada. As mutações locais são armazenadas com segurança e reenviadas automaticamente quando a conexão é restabelecida.
+                    O Agil OS v2 dispõe de camada de resiliência com fila outbox local. Em caso de instabilidade na conexão de internet, o lojista e seus atendentes mantêm a capacidade de emitir comandas no balcão e registrar serviços na bancada. As mutações locais são armazenadas com segurança e reenviadas automaticamente quando a conexão é restabelecida.
                   </p>
                 </div>
 

@@ -1,10 +1,9 @@
 'use client';
 
-import React, { useState, Suspense } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { 
-  Zap, 
   Building2, 
   User, 
   Lock, 
@@ -24,20 +23,77 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { AppStore } from '@/lib/store';
-import { BusinessSegment } from '@/types';
+import { BusinessSegment, Plan } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { BrandIcon } from '@/components/ui/brand-logo';
 import { toast } from '@/lib/toast';
+
+function formatCadastroPlanPrice(value: number): string {
+  const num = Number(value) || 0;
+  if (num === 0) return 'Grátis';
+  if (Number.isInteger(num)) return `R$ ${num}/mês após trial`;
+  return `R$ ${num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/mês após trial`;
+}
+
+function resolveInitialPlanId(plans: Plan[], planParam: string | null): string {
+  if (plans.length === 0) return '';
+  if (planParam) {
+    const clean = planParam.trim().toLowerCase();
+    const byIdOrCode = plans.find(
+      p => p.id.toLowerCase() === clean || p.code.toLowerCase() === clean
+    );
+    if (byIdOrCode) return byIdOrCode.id;
+
+    if (clean === 'starter') return plans[0].id;
+    if (clean === 'pro') return (plans[1] || plans[0]).id;
+    if (clean === 'enterprise') return plans[plans.length - 1].id;
+  }
+  return (plans[1] || plans[0]).id;
+}
 
 function CadastroForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const planParam = searchParams.get('plan') || 'pro';
+  const planParam = searchParams.get('plan');
 
   const { login } = useAuth();
+
+  // Dynamic Plans State
+  const [plans, setPlans] = useState<Plan[]>(() =>
+    AppStore.getPlans().filter(p => p.is_active !== false)
+  );
+  const [selectedPlanId, setSelectedPlanId] = useState<string>(() =>
+    resolveInitialPlanId(AppStore.getPlans().filter(p => p.is_active !== false), planParam)
+  );
+
+  useEffect(() => {
+    let mounted = true;
+    const syncPlansState = (list: Plan[]) => {
+      if (!mounted) return;
+      const active = list.filter(p => p.is_active !== false);
+      setPlans(active);
+      setSelectedPlanId(prev => {
+        if (prev && active.some(p => p.id === prev)) return prev;
+        return resolveInitialPlanId(active, planParam);
+      });
+    };
+
+    const handleStoreUpdate = () => syncPlansState(AppStore.getPlans());
+
+    AppStore.syncPublicPlans().then(synced => {
+      if (synced.length > 0) syncPlansState(synced);
+    });
+
+    window.addEventListener('supreme_store_updated', handleStoreUpdate);
+    return () => {
+      mounted = false;
+      window.removeEventListener('supreme_store_updated', handleStoreUpdate);
+    };
+  }, [planParam]);
 
   // Form State
   const [tradeName, setTradeName] = useState('');
@@ -46,9 +102,6 @@ function CadastroForm() {
   const [city, setCity] = useState('');
   const [state, setState] = useState('SP');
   const [segment, setSegment] = useState<BusinessSegment>('RECARGA_CARTUCHOS');
-  const [selectedPlan, setSelectedPlan] = useState<'starter' | 'pro' | 'enterprise'>(
-    planParam === 'starter' || planParam === 'enterprise' ? planParam : 'pro'
-  );
 
   // Admin User State
   const [adminName, setAdminName] = useState('');
@@ -95,13 +148,7 @@ function CadastroForm() {
         return;
       }
 
-      // Map plan to plan ID
-      const allPlans = AppStore.getPlans();
-      const matchedPlan = allPlans.find(p => {
-        if (selectedPlan === 'starter') return p.code === 'STARTER' || p.max_users <= 2;
-        if (selectedPlan === 'enterprise') return p.code === 'ENTERPRISE' || p.max_users >= 10;
-        return p.code === 'PRO' || (p.max_users > 2 && p.max_users < 10);
-      }) || allPlans[0];
+      const matchedPlan = plans.find(p => p.id === selectedPlanId) || plans[0];
 
       // Create new tenant with 14-day trial
       const newCompany = AppStore.addCompany(
@@ -133,7 +180,7 @@ function CadastroForm() {
       const loginRes = await login(adminEmail.trim(), adminPassword, true);
 
       if (loginRes.success) {
-        toast.success(`Bem-vindo ao Supreme Recargas, ${adminName || tradeName}! Seus 14 dias de teste grátis começaram.`);
+        toast.success(`Bem-vindo ao Agil OS, ${adminName || tradeName}! Seus 14 dias de teste grátis começaram.`);
         router.replace('/dashboard?welcome=true');
       } else {
         toast.success('Empresa cadastrada com sucesso! Faça login com suas novas credenciais.');
@@ -150,9 +197,7 @@ function CadastroForm() {
       {/* Brand Header */}
       <div className="text-center space-y-2">
         <Link href="/" className="inline-flex items-center justify-center gap-2 mb-2">
-          <div className="w-12 h-12 rounded-2xl bg-emerald-600 shadow-xl shadow-emerald-900/40 text-white flex items-center justify-center">
-            <Zap className="w-6 h-6 fill-white" />
-          </div>
+          <BrandIcon className="w-12 h-12" />
         </Link>
         <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
           Comece seu Teste Grátis de <span className="text-emerald-400">14 Dias</span>
@@ -379,45 +424,30 @@ function CadastroForm() {
                 <span className="text-emerald-400 font-extrabold uppercase">R$ 0,00 Hoje</span>
               </div>
 
-              <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                <button
-                  type="button"
-                  onClick={() => setSelectedPlan('starter')}
-                  className={`p-2.5 rounded-xl border transition-all ${
-                    selectedPlan === 'starter'
-                      ? 'bg-emerald-500/10 border-emerald-500 text-white font-bold'
-                      : 'bg-slate-950 border-slate-800 text-slate-400'
-                  }`}
-                >
-                  <span className="block text-[11px]">Starter</span>
-                  <span className="text-[10px] text-slate-500">R$ 69/mês após trial</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setSelectedPlan('pro')}
-                  className={`p-2.5 rounded-xl border transition-all relative ${
-                    selectedPlan === 'pro'
-                      ? 'bg-emerald-500/10 border-emerald-500 text-white font-bold ring-1 ring-emerald-500'
-                      : 'bg-slate-950 border-slate-800 text-slate-400'
-                  }`}
-                >
-                  <span className="block text-[11px] text-emerald-400">Profissional ★</span>
-                  <span className="text-[10px] text-slate-500">R$ 129/mês após trial</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setSelectedPlan('enterprise')}
-                  className={`p-2.5 rounded-xl border transition-all ${
-                    selectedPlan === 'enterprise'
-                      ? 'bg-emerald-500/10 border-emerald-500 text-white font-bold'
-                      : 'bg-slate-950 border-slate-800 text-slate-400'
-                  }`}
-                >
-                  <span className="block text-[11px]">Empresa</span>
-                  <span className="text-[10px] text-slate-500">R$ 199/mês após trial</span>
-                </button>
+              <div className={`grid gap-2 text-center text-xs ${plans.length <= 2 ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-3'}`}>
+                {plans.map((plan, idx) => {
+                  const isSelected = selectedPlanId === plan.id;
+                  const isPopular = plans.length >= 3 ? idx === 1 : plan.code?.toUpperCase().includes('PRO');
+                  return (
+                    <button
+                      key={plan.id}
+                      type="button"
+                      onClick={() => setSelectedPlanId(plan.id)}
+                      className={`p-2.5 rounded-xl border transition-all relative ${
+                        isSelected
+                          ? 'bg-emerald-500/10 border-emerald-500 text-white font-bold ring-1 ring-emerald-500'
+                          : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <span className={`block text-[11px] ${isPopular ? 'text-emerald-400' : ''}`}>
+                        {plan.name}{isPopular ? ' ★' : ''}
+                      </span>
+                      <span className="text-[10px] text-slate-500">
+                        {formatCadastroPlanPrice(plan.monthly_price)}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 

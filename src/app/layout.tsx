@@ -8,7 +8,7 @@ import { AppShell } from "@/components/layout/app-shell";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Agilis OS - Sistema Operacional de Balcão e Bancada Técnica",
+  title: "Agil OS - Sistema Operacional de Balcão e Bancada Técnica",
   description: "Plataforma SaaS Multi-tenant para recepção ágil, ordens de serviço, bancada técnica de precisão, diagnóstico e rastreamento em tempo real.",
 };
 

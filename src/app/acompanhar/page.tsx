@@ -6,6 +6,7 @@ import { Sparkles, Search, ShieldCheck, QrCode, ArrowRight, MessageSquare, Build
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { BrandIcon } from '@/components/ui/brand-logo';
 
 export default function TrackingSearchPage() {
   const router = useRouter();
@@ -22,10 +23,10 @@ export default function TrackingSearchPage() {
       <div className="w-full max-w-md space-y-6">
         {/* Brand Header */}
         <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 text-slate-950 shadow-xl shadow-emerald-950/50">
-            <Sparkles className="w-8 h-8" />
-          </div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Agilis</h1>
+          <BrandIcon className="w-14 h-14 mx-auto" />
+          <h1 className="text-2xl font-bold text-white tracking-tight">
+            Agil <span className="text-emerald-400">OS</span>
+          </h1>
           <p className="text-xs text-slate-400">
             Acompanhamento de Ordens de Serviço & Status em Tempo Real
           </p>

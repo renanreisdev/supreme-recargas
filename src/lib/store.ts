@@ -440,36 +440,56 @@ export const MOCK_COMPANIES: Company[] = [
 
 export const MOCK_PLANS: Plan[] = [
   {
-    id: 'plan-starter-saas',
-    name: 'Plano Essencial',
-    code: 'ESSENCIAL',
-    description: 'Para pequenas oficinas e assistências em início de operação',
-    max_users: 3,
-    monthly_price: 59.90,
+    id: 'a1000000-0000-0000-0000-000000000001',
+    name: 'Plano Inicial',
+    code: 'INICIAL',
+    description: 'Ideal para profissionais autônomos e pequenas assistências em início de operação.',
+    max_users: 5,
+    monthly_price: 0.00,
     extra_user_price: 15.00,
-    features: ['Emissão de Ordens de Serviço', 'Bancada Técnica Kanban', 'Etiqueta com QR Code de Rastreio', 'Até 3 Usuários'],
+    features: [
+      'Comandas Térmicas (58mm e 80mm)',
+      'Rastreio Online via QR Code',
+      'Cadastro Rápido de Clientes',
+      'Tabela de Modelos e Serviços',
+      'Kanban Técnico da Bancada'
+    ],
     is_active: true
   },
   {
-    id: 'plan-pro-saas',
+    id: 'a1000000-0000-0000-0000-000000000002',
+    name: 'Plano Básico',
+    code: 'BASICO',
+    description: 'O mais escolhido por lojas de recarga e assistências com balcão e bancada ativa.',
+    max_users: 5,
+    monthly_price: 79.90,
+    extra_user_price: 15.00,
+    features: [
+      'Ordens de Serviço & Atendimentos Ilimitados',
+      'Pesagem de Precisão (Entrada vs Saída)',
+      'Kanban Técnico Customizável',
+      'Notificação WhatsApp em 1 Clique',
+      'Frente de Caixa Diário (PDV)',
+      'Relatórios de Faturamento & Comissões'
+    ],
+    is_active: true
+  },
+  {
+    id: 'a1000000-0000-0000-0000-000000000003',
     name: 'Plano Profissional',
     code: 'PROFISSIONAL',
-    description: 'Para centros de serviço com alto volume e equipe dedicada',
-    max_users: 8,
-    monthly_price: 119.90,
+    description: 'Para centros de serviço de alto volume, redes de suprimentos e oficinas multissetor.',
+    max_users: 5,
+    monthly_price: 149.90,
     extra_user_price: 15.00,
-    features: ['Ordens Ilimitadas', 'Múltiplos Segmentos Simultâneos', 'Relatórios Financeiros & Faturamento', 'Controle de Checklists e Histórico de Ativos', 'Até 8 Usuários'],
-    is_active: true
-  },
-  {
-    id: 'plan-master-saas',
-    name: 'Plano Enterprise',
-    code: 'ENTERPRISE',
-    description: 'Para grandes redes de assistência e franquias',
-    max_users: 25,
-    monthly_price: 249.90,
-    extra_user_price: 12.00,
-    features: ['Capacidade Expandida', 'Auditoria Completa', 'Suporte Prioritário', 'Workflows Customizados', 'Até 25 Usuários'],
+    features: [
+      'Ordens e Checklists Ilimitados',
+      'Múltiplos Segmentos Simultâneos',
+      'Gestão de Permissões Granulares (RBAC)',
+      'Auditoria Imutável de Operações',
+      'Sessão Única e Segurança Avançada',
+      'Exportação & Backup Completo LGPD'
+    ],
     is_active: true
   }
 ];
@@ -478,7 +498,7 @@ export const MOCK_SUBSCRIPTIONS: Subscription[] = [
   {
     id: 'sub-supreme-01',
     tenant_id: MOCK_COMPANY_SUPREME.id,
-    plan_id: 'plan-pro-saas',
+    plan_id: 'a1000000-0000-0000-0000-000000000003',
     status: 'ACTIVE',
     starts_at: '2026-01-01T00:00:00Z',
     extra_users: 2,
@@ -489,7 +509,7 @@ export const MOCK_SUBSCRIPTIONS: Subscription[] = [
   {
     id: 'sub-alfa-02',
     tenant_id: MOCK_COMPANY_ALFA.id,
-    plan_id: 'plan-starter-saas',
+    plan_id: 'a1000000-0000-0000-0000-000000000002',
     status: 'ACTIVE',
     starts_at: '2026-02-01T00:00:00Z',
     extra_users: 0,
@@ -1306,17 +1326,68 @@ export class AppStore {
   // --------------------------------------------------------------------------
   // PLANS & SUBSCRIPTIONS (Unified User Capacity)
   // --------------------------------------------------------------------------
+  private static normalizePlan(p: any): Plan {
+    return {
+      ...p,
+      monthly_price: Number(p.monthly_price ?? 0),
+      max_users: Number(p.max_users ?? p.max_total_users ?? 5),
+      extra_user_price: Number(p.extra_user_price ?? 15),
+      features: Array.isArray(p.features) ? p.features : [],
+      is_active: p.is_active !== false,
+    };
+  }
+
   static getPlans(): Plan[] {
     const data = this.getStoreData();
-    return data.plans || MOCK_PLANS;
+    const rawPlans = data.plans || MOCK_PLANS;
+    return rawPlans
+      .map((p: any) => this.normalizePlan(p))
+      .sort((a: Plan, b: Plan) => a.monthly_price - b.monthly_price);
+  }
+
+  static async syncPublicPlans(): Promise<Plan[]> {
+    try {
+      const { data: plansData, error } = await supabase
+        .from('plans')
+        .select('*')
+        .order('monthly_price', { ascending: true });
+
+      if (!error && Array.isArray(plansData) && plansData.length > 0) {
+        const normalized = plansData.map(p => this.normalizePlan(p));
+        const current = this.getStoreData();
+        current.plans = normalized;
+        this.saveStoreData(current, true);
+        return normalized;
+      }
+    } catch (err) {
+      console.warn('Error syncing public plans from Supabase:', err);
+    }
+    return this.getPlans();
   }
 
   static addPlan(plan: Omit<Plan, 'id' | 'created_at' | 'updated_at'>, performedByName?: string): Plan {
     const data = this.getStoreData();
-    const newPlan: Plan = { ...plan, id: generateUUID(), created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+    const now = new Date().toISOString();
+    const newPlan: Plan = this.normalizePlan({ ...plan, id: generateUUID(), created_at: now, updated_at: now });
     data.plans.push(newPlan);
     this.saveStoreData(data);
-    this.enqueueOrExecuteMutation({ table: 'plans', action: 'INSERT', payload: newPlan });
+    this.enqueueOrExecuteMutation({
+      table: 'plans',
+      action: 'INSERT',
+      payload: {
+        id: newPlan.id,
+        name: newPlan.name,
+        code: newPlan.code,
+        description: newPlan.description,
+        monthly_price: newPlan.monthly_price,
+        max_users: newPlan.max_users,
+        extra_user_price: newPlan.extra_user_price,
+        features: newPlan.features || [],
+        is_active: newPlan.is_active !== false,
+        created_at: now,
+        updated_at: now,
+      },
+    });
 
     this.logAudit({
       user_name: performedByName || 'Super Administrador',
@@ -1334,17 +1405,29 @@ export class AppStore {
     const idx = data.plans.findIndex((p: Plan) => p.id === id);
     if (idx === -1) throw new Error('Plano não encontrado');
     const old = data.plans[idx];
-    const updated = { ...old, ...updates, updated_at: new Date().toISOString() };
+    const now = new Date().toISOString();
+    const updated = this.normalizePlan({ ...old, ...updates, updated_at: now });
     data.plans[idx] = updated;
     this.saveStoreData(data);
-    this.enqueueOrExecuteMutation({ table: 'plans', action: 'UPDATE', payload: updates, matchField: 'id', matchValue: id });
+
+    const dbPayload: Record<string, any> = { updated_at: now };
+    if (updates.name !== undefined) dbPayload.name = updates.name;
+    if (updates.code !== undefined) dbPayload.code = updates.code;
+    if (updates.description !== undefined) dbPayload.description = updates.description;
+    if (updates.monthly_price !== undefined) dbPayload.monthly_price = Number(updates.monthly_price);
+    if (updates.max_users !== undefined) dbPayload.max_users = Number(updates.max_users);
+    if (updates.extra_user_price !== undefined) dbPayload.extra_user_price = Number(updates.extra_user_price);
+    if (updates.features !== undefined) dbPayload.features = updates.features;
+    if (updates.is_active !== undefined) dbPayload.is_active = updates.is_active;
+
+    this.enqueueOrExecuteMutation({ table: 'plans', action: 'UPDATE', payload: dbPayload, matchField: 'id', matchValue: id });
 
     this.logAudit({
       user_name: performedByName || 'Super Administrador',
       action: 'ALTERACAO_PLANO',
       resource: 'plans',
       resource_id: id,
-      details: `Atualizado plano "${old.name}" (Preço: R$ ${updated.price_monthly}, Limite: ${updated.max_users} usuários)`
+      details: `Atualizado plano "${old.name}" (Preço: R$ ${updated.monthly_price}, Limite: ${updated.max_users} usuários)`
     });
 
     return updated;
@@ -4137,7 +4220,10 @@ export class AppStore {
       const { data: profilesData } = await supabase.from('profiles').select('*');
 
       // 3. Fetch Plans & Subscriptions
-      const { data: plansData } = await supabase.from('plans').select('*');
+      const { data: plansData } = await supabase
+        .from('plans')
+        .select('*')
+        .order('monthly_price', { ascending: true });
       const { data: subsData } = await supabase.from('subscriptions').select('*');
 
       // 4. Target tenant
@@ -4267,7 +4353,7 @@ export class AppStore {
       const current = this.getStoreData();
       if (companiesData && companiesData.length > 0) current.companies = companiesData;
       if (profilesData && profilesData.length > 0) current.profiles = profilesData;
-      if (plansData && plansData.length > 0) current.plans = plansData;
+      if (plansData && plansData.length > 0) current.plans = plansData.map(p => this.normalizePlan(p));
       if (subsData && subsData.length > 0) current.subscriptions = subsData;
       if (settingsData && settingsData.length > 0) current.settings = settingsData[0];
       if (permGroupsData && permGroupsData.length > 0) current.permissionGroups = permGroupsData;

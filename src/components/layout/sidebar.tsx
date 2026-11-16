@@ -35,6 +35,7 @@ import { toast } from '@/lib/toast';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { BrandIcon } from '@/components/ui/brand-logo';
 
 interface NavItem {
   title: string;
@@ -235,13 +236,11 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
       {/* Brand Header */}
       <div className="p-4 border-b border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between bg-slate-50/50 dark:bg-slate-950/40">
         <Link href="/dashboard" className="flex items-center gap-3 group">
-          <div className="w-10 h-10 rounded-2xl bg-emerald-600 flex items-center justify-center shadow-md shadow-emerald-900/20 font-bold text-white transition-transform group-hover:scale-105">
-            <Zap className="w-5 h-5 fill-white text-white" />
-          </div>
+          <BrandIcon className="w-10 h-10 shrink-0 transition-transform group-hover:scale-105" />
           <div>
             <div className="flex items-center gap-1.5">
               <h1 className="font-extrabold text-base tracking-tight text-slate-900 dark:text-white">
-                Agilis <span className="text-emerald-600 dark:text-emerald-400">OS</span>
+                Agil <span className="text-emerald-600 dark:text-emerald-400">OS</span>
               </h1>
               <span className="text-[9px] px-1.5 py-0.2 rounded-full font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 font-mono">
                 PRO

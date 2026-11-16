@@ -1,9 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { 
-  Zap, 
   Printer, 
   Scale, 
   QrCode, 
@@ -26,83 +25,97 @@ import {
   FileText,
   BadgeCheck
 } from 'lucide-react';
+import { AppStore } from '@/lib/store';
+import { Plan } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { BrandIcon } from '@/components/ui/brand-logo';
+
+const DEFAULT_PLAN_FEATURES: string[] = [
+  'Emissão de Ordens de Serviço e Comandas Térmicas',
+  'Bancada Técnica Kanban em Tempo Real',
+  'Rastreio Online por QR Code para Clientes',
+  'Cadastro Rápido de Clientes & Modelos'
+];
+
+function formatPlanPrice(value: number): string {
+  const num = Number(value) || 0;
+  if (Number.isInteger(num)) {
+    return String(num);
+  }
+  return num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 
 export default function LandingPage() {
   const [billingCycle, setBillingCycle] = useState<'MONTHLY' | 'ANNUAL'>('MONTHLY');
   const [activeFeatureTab, setActiveFeatureTab] = useState<'BALCAO' | 'BANCADA' | 'IMPRESSAO' | 'GESTAO'>('BALCAO');
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
+  const [plans, setPlans] = useState<Plan[]>(() =>
+    AppStore.getPlans().filter(p => p.is_active !== false)
+  );
 
-  const discountPercent = 20;
+  useEffect(() => {
+    let mounted = true;
+    const loadFromStore = () => {
+      if (!mounted) return;
+      setPlans(AppStore.getPlans().filter(p => p.is_active !== false));
+    };
 
-  const pricingPlans = [
-    {
-      id: 'starter',
-      name: 'Starter',
-      description: 'Ideal para profissionais autônomos e pequenos centros de recarga.',
-      monthlyPrice: 69,
-      annualPrice: Math.round(69 * 0.8),
-      highlight: false,
-      badge: null,
-      features: [
-        '1 Usuário de Acesso',
-        'Até 150 cartuchos/mês',
-        'Comandas Térmicas (58mm e 80mm)',
-        'Rastreio Online via QR Code',
-        'Cadastro Rápido de Clientes',
-        'Tabela de Modelos e Preços',
-        'Suporte via WhatsApp'
-      ],
-      cta: 'Começar 14 Dias Grátis',
-      ctaLink: '/cadastro?plan=starter'
-    },
-    {
-      id: 'pro',
-      name: 'Profissional',
-      description: 'O mais escolhido por lojas de recarga com balcão e bancada técnica ativa.',
-      monthlyPrice: 129,
-      annualPrice: Math.round(129 * 0.8),
-      highlight: true,
-      badge: 'MAIS ESCOLHIDO',
-      features: [
-        'Até 4 Usuários (Atendentes + Técnicos)',
-        'Cartuchos & Toners Ilimitados',
-        'Pesagem de Precisão (Entrada vs Saída)',
-        'Kanban Técnico da Oficina Customizável',
-        'Notificação WhatsApp em 1 Clique',
-        'Controle de Circuito Elétrico (CID)',
-        'Comandas em 2 Vias Automáticas',
-        'Frente de Caixa Diário',
-        'Relatórios de Faturamento & Comissões',
-        'Suporte Prioritário'
-      ],
-      cta: 'Testar Profissional Grátis',
-      ctaLink: '/cadastro?plan=pro'
-    },
-    {
-      id: 'enterprise',
-      name: 'Empresa / Rede',
-      description: 'Para lojas de alto volume, redes de suprimentos e assistências multisetor.',
-      monthlyPrice: 199,
-      annualPrice: Math.round(199 * 0.8),
-      highlight: false,
-      badge: 'ILIMITADO',
-      features: [
-        'Usuários Ilimitados',
-        'Volume Ilimitado de Ordens',
-        'Múltiplos Segmentos (Informática, Celulares)',
-        'Gestão de Permissões Granulares (RBAC)',
-        'Auditoria Imutável de Operações',
-        'Backup Diário Automatizado na Nuvem',
-        'Migração Assistida de Dados',
-        'Treinamento de Equipe por Vídeo',
-        'Atendimento VIP com Gerente de Conta'
-      ],
-      cta: 'Começar com Plano Empresa',
-      ctaLink: '/cadastro?plan=enterprise'
-    }
-  ];
+    loadFromStore();
+    AppStore.syncPublicPlans().then((synced) => {
+      if (mounted && synced.length > 0) {
+        setPlans(synced.filter(p => p.is_active !== false));
+      }
+    });
+
+    window.addEventListener('supreme_store_updated', loadFromStore);
+    return () => {
+      mounted = false;
+      window.removeEventListener('supreme_store_updated', loadFromStore);
+    };
+  }, []);
+
+  const pricingPlans = plans.map((plan, index) => {
+    const monthlyPrice = Number(plan.monthly_price) || 0;
+    const annualPrice = Number((monthlyPrice * 0.8).toFixed(2));
+    const maxUsers = Number(plan.max_users ?? plan.max_total_users ?? 5);
+    const extraUserPrice = Number(plan.extra_user_price ?? 15);
+    const upperCode = `${plan.code || ''} ${plan.name || ''}`.toUpperCase();
+    const isHighlighted =
+      plans.length >= 3
+        ? index === 1
+        : upperCode.includes('PRO') || upperCode.includes('BASICO');
+
+    const badge = isHighlighted
+      ? 'MAIS ESCOLHIDO'
+      : index === plans.length - 1 && plans.length > 1
+      ? 'COMPLETO'
+      : null;
+
+    const baseFeatures =
+      Array.isArray(plan.features) && plan.features.length > 0
+        ? plan.features
+        : DEFAULT_PLAN_FEATURES;
+
+    const features = [
+      `Até ${maxUsers} usuários inclusos`,
+      `Usuário adicional: R$ ${extraUserPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/mês`,
+      ...baseFeatures
+    ];
+
+    return {
+      id: plan.id,
+      name: plan.name,
+      description: plan.description || 'Plano completo para gestão de atendimentos, bancada técnica e caixa.',
+      monthlyPrice,
+      annualPrice,
+      highlight: isHighlighted,
+      badge,
+      features,
+      cta: `Começar com ${plan.name}`,
+      ctaLink: `/cadastro?plan=${encodeURIComponent(plan.id)}`
+    };
+  });
 
   const faqs = [
     {
@@ -111,7 +124,7 @@ export default function LandingPage() {
     },
     {
       q: 'Funciona com a minha impressora térmica atual?',
-      a: 'Sim! O Supreme Recargas possui suporte nativo padrão ESC/POS para todas as impressoras térmicas de 58mm e 80mm do mercado (Bematech, Daruma, Elgin, Epson, Xprinter, Knup, etc.). Não requer drivers complexos adicionais.'
+      a: 'Sim! O Agil OS possui suporte nativo padrão ESC/POS para todas as impressoras térmicas de 58mm e 80mm do mercado (Bematech, Daruma, Elgin, Epson, Xprinter, Knup, etc.). Não requer drivers complexos adicionais.'
     },
     {
       q: 'Como funciona a pesagem de precisão da bancada?',
@@ -123,11 +136,11 @@ export default function LandingPage() {
     },
     {
       q: 'Posso usar o sistema para conserto de computadores e celulares também?',
-      a: 'Sim! O Supreme conta com suporte a múltiplos segmentos (Assistência de Informática, Celulares e Recarga de Cartuchos) com kanbans, laudos e checklists dedicados.'
+      a: 'Sim! O Agil OS conta com suporte a múltiplos segmentos (Assistência de Informática, Celulares e Recarga de Cartuchos) com kanbans, laudos e checklists dedicados.'
     },
     {
       q: 'Como meus clientes acompanham os pedidos?',
-      a: 'Cada comanda impressa sai com um QR Code exclusivo. O cliente aponta a câmera do celular de casa e acompanha em tempo real se o cartucho já está pronto para retirada, sem precisar de senha.'
+      a: 'Cada comanda impressa sai com um QR Code exclusivo. O cliente aponta a câmera do celular de casa e acompanha em tempo real se o pedido já está pronto para retirada, sem precisar de senha.'
     }
   ];
 
@@ -144,15 +157,13 @@ export default function LandingPage() {
       <header className="sticky top-0 z-50 bg-[#070b14]/80 backdrop-blur-xl border-b border-slate-800/80 transition-all">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center shadow-lg shadow-emerald-900/40 text-white">
-              <Zap className="w-5 h-5 fill-white" />
-            </div>
+            <BrandIcon className="w-10 h-10" />
             <div>
               <span className="text-lg sm:text-xl font-extrabold tracking-tight text-white flex items-center gap-1.5">
-                Supreme <span className="text-emerald-400">Recargas</span>
+                Agil <span className="text-emerald-400">OS</span>
               </span>
               <span className="hidden sm:block text-[10px] text-slate-400 font-medium uppercase tracking-wider">
-                SaaS de Balcão & Bancada Técnica
+                SaaS de Balcão &amp; Bancada Técnica
               </span>
             </div>
           </div>
@@ -247,7 +258,7 @@ export default function LandingPage() {
                   <div className="w-3 h-3 rounded-full bg-emerald-500/80" />
                 </div>
                 <span className="text-xs font-mono font-bold text-slate-400">
-                  supreme-recargas.app/entradas/2026-000142
+                  agilos.supremeinformatica.com.br/entradas/2026-000142
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -358,7 +369,7 @@ export default function LandingPage() {
                     </div>
                     <div className="text-[11px] leading-tight space-y-0.5">
                       <span className="text-slate-400 block">Consulta pública:</span>
-                      <strong className="text-emerald-400 font-mono text-[10px]">supremerecargas.com/os</strong>
+                      <strong className="text-emerald-400 font-mono text-[10px]">agilos.supremeinformatica.com.br/os</strong>
                       <span className="text-slate-500 block text-[9px]">Cliente acompanha sem login</span>
                     </div>
                   </div>
@@ -406,7 +417,7 @@ export default function LandingPage() {
             Elimine as dores de cabeça que fazem sua loja perder dinheiro todos os dias
           </h2>
           <p className="text-xs sm:text-sm text-slate-400 mt-3">
-            Sistemas genéricos não entendem o que é um bico injetor entupido, circuito CID queimado ou pesagem de precisão em gramas. O Supreme foi construído do zero para o seu nicho.
+            Sistemas genéricos não entendem o que é um bico injetor entupido, circuito CID queimado ou pesagem de precisão em gramas. O Agil OS foi construído do zero para o seu nicho.
           </p>
         </div>
 
@@ -629,7 +640,7 @@ export default function LandingPage() {
                 </div>
                 <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 text-center font-mono text-[11px] space-y-1">
                   <div className="text-slate-400 font-bold">==============================</div>
-                  <div className="text-white font-extrabold text-xs">SUPREME RECARGAS EXPRESS</div>
+                  <div className="text-white font-extrabold text-xs">AGIL OS EXPRESS</div>
                   <div className="text-slate-400">CNPJ: 12.345.678/0001-90</div>
                   <div className="text-slate-400">==============================</div>
                   <div className="text-emerald-400 font-bold py-1">ORDEM DE SERVIÇO #2026-000142</div>
@@ -768,11 +779,19 @@ export default function LandingPage() {
                   </p>
 
                   <div className="mt-6 flex items-baseline gap-1">
-                    <span className="text-slate-400 text-xs">R$</span>
-                    <span className="text-4xl sm:text-5xl font-black text-white font-mono">{price}</span>
-                    <span className="text-slate-400 text-xs">/mês</span>
+                    {price === 0 ? (
+                      <span className="text-4xl sm:text-5xl font-black text-emerald-400 font-mono">Grátis</span>
+                    ) : (
+                      <>
+                        <span className="text-slate-400 text-xs">R$</span>
+                        <span className="text-4xl sm:text-5xl font-black text-white font-mono">
+                          {formatPlanPrice(price)}
+                        </span>
+                        <span className="text-slate-400 text-xs">/mês</span>
+                      </>
+                    )}
                   </div>
-                  {billingCycle === 'ANNUAL' && (
+                  {billingCycle === 'ANNUAL' && price > 0 && (
                     <span className="text-[11px] text-emerald-400 font-semibold block mt-1">
                       Cobrado anualmente (Economia de 20%)
                     </span>
@@ -962,12 +981,10 @@ export default function LandingPage() {
       <footer className="border-t border-slate-800/80 bg-[#05080f] py-12 relative z-10 text-xs text-slate-400">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center text-white">
-              <Zap className="w-4 h-4 fill-white" />
-            </div>
+            <BrandIcon className="w-8 h-8" />
             <div>
               <span className="font-extrabold text-white text-sm">
-                Supreme <span className="text-emerald-400">Recargas</span>
+                Agil <span className="text-emerald-400">OS</span>
               </span>
               <span className="block text-[10px] text-slate-500">
                 Sistema Operacional de Balcão, Pesagem e Oficina
@@ -983,7 +1000,7 @@ export default function LandingPage() {
           </div>
 
           <div className="text-center md:text-right text-[11px] text-slate-500 space-y-0.5">
-            <p>© {new Date().getFullYear()} Supreme Recargas. Todos os direitos reservados.</p>
+            <p>© {new Date().getFullYear()} Agil OS. Todos os direitos reservados.</p>
             <p className="flex items-center justify-center md:justify-end gap-1">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
               <span>Privacidade e Segurança em conformidade com a LGPD</span>
