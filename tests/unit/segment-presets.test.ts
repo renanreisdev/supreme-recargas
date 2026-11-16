@@ -2,13 +2,15 @@ import { describe, it, expect } from 'vitest';
 import { AppStore, BUSINESS_PRESETS, MOCK_COMPANY_SUPREME } from '@/lib/store';
 
 describe('Multi-Segment Presets & Extensible Domain Tests', () => {
-  it('should have all 5 business presets defined with appropriate metadata', () => {
+  it('should have all 6 business presets defined with appropriate metadata including VIDEOGAMES_ELETRONICOS', () => {
     const keys = Object.keys(BUSINESS_PRESETS);
     expect(keys).toContain('RECARGA_CARTUCHOS');
     expect(keys).toContain('ASSISTENCIA_INFORMATICA');
     expect(keys).toContain('ASSISTENCIA_CELULARES');
+    expect(keys).toContain('VIDEOGAMES_ELETRONICOS');
     expect(keys).toContain('FERRAMENTAS_MOTORES');
     expect(keys).toContain('OFICINA_GERAL');
+    expect(BUSINESS_PRESETS.VIDEOGAMES_ELETRONICOS.services.some(s => s.code === 'TROCA_HDMI')).toBe(true);
   });
 
   it('should configure RECARGA_CARTUCHOS with ink and toner categories and scale weighing', () => {
@@ -77,5 +79,164 @@ describe('Multi-Segment Presets & Extensible Domain Tests', () => {
     expect(order.items).toHaveLength(2);
     expect(order.total_amount).toBe(185.00);
     expect(order.financial_status).toBe('PENDENTE');
+  });
+
+  it('should start clean company and support multi-segment preset selection, inline overrides and smart merge without duplicates', () => {
+    const comp = AppStore.addCompany(
+      {
+        trade_name: 'Loja Flex Multi-Segmento',
+        corporate_name: 'Loja Flex Multi-Segmento LTDA',
+        cnpj: '55.666.777/0001-88',
+        phone: '(11) 93333-4444',
+        email: `flex.${Date.now()}@loja.com.br`
+      },
+      {
+        fullName: 'Marcos Admin',
+        email: `flex.${Date.now()}@loja.com.br`,
+        password: 'Password@123'
+      },
+      AppStore.getPlans()[0]?.id,
+      'Auto-Cadastro',
+      'ASSISTENCIA_INFORMATICA'
+    );
+
+    expect(comp.presets_configured_at).toBeUndefined();
+    expect(comp.presets_dismissed_at).toBeUndefined();
+
+    // First import combining Notebook (Informática) + Console HDMI (Videogames) with edited service price & custom Kanban label
+    const res1 = AppStore.applyPresetSelection(
+      comp.id,
+      {
+        segments: ['ASSISTENCIA_INFORMATICA', 'VIDEOGAMES_ELETRONICOS'],
+        categories: [
+          { name: 'Notebook', slug: 'notebook', identifier_label: 'Service Tag' },
+          { name: 'Console de Videogame', slug: 'console-videogame', identifier_label: 'Nº de Série' }
+        ],
+        brands: [
+          { name: 'Dell', slug: 'dell' },
+          { name: 'Sony PlayStation', slug: 'sony-playstation' }
+        ],
+        services: [
+          {
+            name: 'Formatação & Otimização Pro',
+            code: 'FORMATACAO',
+            default_price: 149.90,
+            estimated_time_minutes: 90,
+            category_slugs: ['notebook']
+          },
+          {
+            name: 'Troca de Conector HDMI (Micro-Solda)',
+            code: 'TROCA_HDMI',
+            default_price: 299.00,
+            estimated_time_minutes: 120,
+            category_slugs: ['console-videogame']
+          }
+        ],
+        models: [
+          {
+            name: 'PlayStation 5 (PS5)',
+            internal_code: 'PS5-FAT',
+            brand_name: 'Sony PlayStation',
+            category_slug: 'console-videogame'
+          }
+        ],
+        workflowStates: [
+          {
+            code: 'RECEBIDO',
+            name: 'Recebido Balcão',
+            color: 'slate',
+            stage_type: 'RECEBIDO',
+            sort_order: 1,
+            is_initial: true,
+            is_final: false
+          },
+          {
+            code: 'BANCADA_VIP',
+            name: 'Bancada Micro-Solda VIP',
+            color: 'blue',
+            stage_type: 'EM_ANDAMENTO',
+            sort_order: 2,
+            is_initial: false,
+            is_final: false
+          }
+        ]
+      },
+      'Marcos Admin'
+    );
+
+    expect(res1.addedCategories).toBe(2);
+    expect(res1.addedBrands).toBe(2);
+    expect(res1.addedServices).toBe(2);
+    expect(res1.addedModels).toBe(1);
+    expect(res1.addedWorkflowStates).toBe(2);
+
+    const updatedComp = AppStore.getCompany(comp.id);
+    expect(updatedComp.presets_configured_at).toBeDefined();
+    expect(updatedComp.active_template_keys).toEqual(['ASSISTENCIA_INFORMATICA', 'VIDEOGAMES_ELETRONICOS']);
+
+    const services = AppStore.getServices(comp.id);
+    const hdmiSrv = services.find(s => s.code === 'TROCA_HDMI');
+    expect(hdmiSrv?.default_price).toBe(299.00);
+
+    const states = AppStore.getWorkflowStates(comp.id);
+    expect(states.some(s => s.name === 'Bancada Micro-Solda VIP')).toBe(true);
+
+    // Second import (smart merge): repeats Dell & Notebook, adds Lenovo & Xbox Series S
+    const res2 = AppStore.applyPresetSelection(
+      comp.id,
+      {
+        segments: ['ASSISTENCIA_INFORMATICA', 'VIDEOGAMES_ELETRONICOS'],
+        categories: [
+          { name: 'Notebook', slug: 'notebook' }
+        ],
+        brands: [
+          { name: 'Dell', slug: 'dell' },
+          { name: 'Lenovo', slug: 'lenovo' }
+        ],
+        services: [],
+        models: [
+          { name: 'PlayStation 5 (PS5)', internal_code: 'PS5-FAT', brand_name: 'Sony PlayStation', category_slug: 'console-videogame' },
+          { name: 'Xbox Series S', internal_code: 'XSS', brand_name: 'Microsoft Xbox' }
+        ],
+        workflowStates: []
+      },
+      'Marcos Admin'
+    );
+
+    expect(res2.skippedCategories).toBe(1);
+    expect(res2.addedCategories).toBe(0);
+    expect(res2.skippedBrands).toBe(1);
+    expect(res2.addedBrands).toBe(1);
+    expect(res2.skippedModels).toBe(1);
+    expect(res2.addedModels).toBe(1);
+
+    // Replace workflow states option
+    AppStore.applyPresetSelection(
+      comp.id,
+      {
+        categories: [],
+        brands: [],
+        services: [],
+        models: [],
+        replaceWorkflowStates: true,
+        workflowStates: [
+          { code: 'NOVO_INICIO', name: 'Entrada Única', color: 'emerald', stage_type: 'RECEBIDO', sort_order: 1, is_initial: true, is_final: false }
+        ]
+      },
+      'Marcos Admin'
+    );
+    const replacedStates = AppStore.getWorkflowStates(comp.id);
+    expect(replacedStates).toHaveLength(1);
+    expect(replacedStates[0].code).toBe('NOVO_INICIO');
+  });
+
+  it('should record presets_dismissed_at when admin chooses to configure later', () => {
+    const comp = AppStore.addCompany(
+      { trade_name: 'Loja Adiada Test', email: `adiar.${Date.now()}@loja.com.br` },
+      { fullName: 'Admin Adiar', email: `adiar.${Date.now()}@loja.com.br`, password: 'Password@123' }
+    );
+    const dismissed = AppStore.dismissPresetOnboarding(comp.id, 'Admin Adiar');
+    expect(dismissed.presets_dismissed_at).toBeDefined();
+    expect(AppStore.getCompany(comp.id).presets_dismissed_at).toBe(dismissed.presets_dismissed_at);
   });
 });

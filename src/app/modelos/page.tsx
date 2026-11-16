@@ -17,7 +17,8 @@ import {
   Download,
   FileSpreadsheet,
   CheckCircle2,
-  X
+  X,
+  Sparkles
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { AppStore } from '@/lib/store';
@@ -38,6 +39,7 @@ import { ServicesTab } from '@/components/modelos/ServicesTab';
 import { CategoriesTab } from '@/components/modelos/CategoriesTab';
 import { BrandsTab } from '@/components/modelos/BrandsTab';
 import { WorkflowTab } from '@/components/modelos/WorkflowTab';
+import { PresetCatalogWizard } from '@/components/presets/PresetCatalogWizard';
 
 export interface DialogModalState {
   isOpen: boolean;
@@ -71,7 +73,9 @@ export default function CatalogAndModelsPage() {
   const [csvModelsRows, setCsvModelsRows] = useState<any[]>([]);
   const [isImportingModels, setIsImportingModels] = useState(false);
   const [importModelsFileName, setImportModelsFileName] = useState('');
+  const [showPresetWizard, setShowPresetWizard] = useState(false);
 
+  const isAdmin = currentUser?.role === 'ADMINISTRADOR' || currentUser?.role === 'SUPER_ADMIN';
   const canManage = hasPermission('manage_models') || hasPermission('catalog_manage') || currentUser?.role === 'ADMINISTRADOR';
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
@@ -384,9 +388,20 @@ export default function CatalogAndModelsPage() {
         </div>
 
         {/* Global Action Button */}
-        {canManage && (
-          <div className="flex items-center gap-2">
-            {activeTab === 'MODELS' && (
+        {(canManage || isAdmin) && (
+          <div className="flex flex-wrap items-center gap-2">
+            {isAdmin && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowPresetWizard(true)}
+                className="gap-1.5 text-xs font-bold border-emerald-500/40 text-emerald-700 dark:text-emerald-300 bg-emerald-500/5 hover:bg-emerald-500/15 shadow-xs"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span>Biblioteca de Pré-Cadastros</span>
+              </Button>
+            )}
+            {canManage && activeTab === 'MODELS' && (
               <div className="flex items-center gap-2">
                 <Button 
                   variant="outline"
@@ -420,7 +435,7 @@ export default function CatalogAndModelsPage() {
                 Nova Marca
               </Button>
             )}
-            {activeTab === 'WORKFLOW' && (
+            {canManage && activeTab === 'WORKFLOW' && (
               <Button onClick={() => setIsCreateOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-2 text-xs shadow-lg shadow-emerald-600/20">
                 <PlusCircle className="w-4 h-4" />
                 Nova Etapa do Kanban
@@ -723,6 +738,17 @@ export default function CatalogAndModelsPage() {
           </div>
         </div>
       )}
+
+      {/* Biblioteca Flexível de Pré-Cadastros (Exclusivo Administrador) */}
+      <PresetCatalogWizard
+        mode="modal"
+        isOpen={showPresetWizard}
+        onClose={() => setShowPresetWizard(false)}
+        onComplete={() => {
+          loadData();
+          setShowPresetWizard(false);
+        }}
+      />
     </div>
   );
 }

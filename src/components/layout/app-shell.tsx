@@ -8,6 +8,7 @@ import { Sidebar } from './sidebar';
 import { Header } from './header';
 import { BottomNav } from './bottom-nav';
 import { MustChangePasswordModal } from '@/components/auth/MustChangePasswordModal';
+import { PresetCatalogWizard } from '@/components/presets/PresetCatalogWizard';
 import { BrandIcon } from '@/components/ui/brand-logo';
 import { Zap, Crown, Megaphone, X, ArrowLeft } from 'lucide-react';
 
@@ -18,6 +19,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [platformSettings, setPlatformSettings] = useState(() => AppStore.getPlatformSettings());
   const [announcementDismissed, setAnnouncementDismissed] = useState(false);
+  const [showPresetWizard, setShowPresetWizard] = useState(false);
 
   useEffect(() => {
     const syncPlatformBanner = () => {
@@ -50,6 +52,59 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       router.replace('/login');
     }
   }, [isLoading, isAuthenticated, isPublicPage, router]);
+
+  // Trigger Flexible Catalog Presets Wizard on Administrator's 1st access for clean stores
+  useEffect(() => {
+    if (
+      isLoading ||
+      !isAuthenticated ||
+      isPublicPage ||
+      currentUser?.role !== 'ADMINISTRADOR' ||
+      currentUser?.must_change_password ||
+      impersonatedTenantId ||
+      !currentCompany?.id
+    ) {
+      setShowPresetWizard(false);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        await AppStore.syncFromSupabase(currentCompany.id).catch(() => null);
+        if (cancelled) return;
+        const freshComp = AppStore.getCompany(currentCompany.id);
+        if (freshComp.presets_configured_at || freshComp.presets_dismissed_at) {
+          setShowPresetWizard(false);
+          return;
+        }
+        const hasCatalog =
+          AppStore.getCategories(currentCompany.id).length > 0 ||
+          AppStore.getBrands(currentCompany.id).length > 0 ||
+          AppStore.getServices(currentCompany.id).length > 0 ||
+          AppStore.getModels(currentCompany.id).length > 0;
+
+        if (!hasCatalog) {
+          setShowPresetWizard(true);
+        }
+      } catch {
+        // Ignore silent background sync errors
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isLoading,
+    isAuthenticated,
+    isPublicPage,
+    currentUser?.id,
+    currentUser?.role,
+    currentUser?.must_change_password,
+    impersonatedTenantId,
+    currentCompany?.id
+  ]);
 
   if (isPublicPage) {
     return <main className="min-h-screen bg-slate-950 text-slate-100">{children}</main>;
@@ -144,6 +199,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Mandatory Password Reset Modal on first login or after admin reset */}
       <MustChangePasswordModal />
+
+      {/* First-Access Flexible Presets Wizard (Administrator Only) */}
+      <PresetCatalogWizard
+        mode="modal"
+        isOpen={showPresetWizard}
+        isFirstAccess={true}
+        onClose={() => setShowPresetWizard(false)}
+        onComplete={() => setShowPresetWizard(false)}
+      />
     </div>
   );
 }

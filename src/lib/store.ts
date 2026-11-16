@@ -40,7 +40,9 @@ import {
   PaymentMethod,
   CashRegisterSession,
   CashRegisterMovement,
-  PlatformSaasSettings
+  PlatformSaasSettings,
+  PresetImportSelection,
+  PresetImportResult
 } from '@/types';
 import { supabase } from './supabase';
 import { hashPassword, verifyPassword, isPasswordHashed, buildLgpdAnonymizedCustomer } from '@/lib/security';
@@ -110,32 +112,39 @@ function generateTrackingToken(): string {
 export const BUSINESS_PRESETS: Record<BusinessTemplateKey, BusinessTemplate> = {
   RECARGA_CARTUCHOS: {
     key: 'RECARGA_CARTUCHOS',
-    name: 'Recarga de Cartuchos & Toners',
-    description: 'Gestão para centros de recarga rápida de cartuchos jato de tinta e toners laser com balança.',
+    name: 'Impressoras, Cartuchos & Toners',
+    description: 'Recarga rápida com controle de peso na balança, toners laser e manutenção de impressoras EcoTank/Laser.',
     icon: 'Printer',
     categories: [
-      { id: 'cat-cartucho-tinta', name: 'Cartucho de Tinta', slug: 'cartucho-tinta', icon: 'Printer', identifier_label: 'Final de Série', is_system: true, is_active: true },
-      { id: 'cat-toner-laser', name: 'Toner Laser', slug: 'toner-laser', icon: 'Layers', identifier_label: 'Nº de Série', is_system: true, is_active: true }
+      { id: 'cat-cartucho-tinta', name: 'Cartucho de Tinta', slug: 'cartucho-tinta', icon: 'Printer', identifier_label: 'Final de Série', inspection_type: 'SCALE', is_system: true, is_active: true },
+      { id: 'cat-toner-laser', name: 'Toner Laser', slug: 'toner-laser', icon: 'Layers', identifier_label: 'Nº de Série', inspection_type: 'SCALE', is_system: true, is_active: true },
+      { id: 'cat-impressora-tanque', name: 'Impressora / Multifuncional', slug: 'impressora-tanque', icon: 'Printer', identifier_label: 'Nº de Série', inspection_type: 'CHECKLIST', checklist_items: ['Cabo de força incluso', 'Cabeça de impressão desentupida', 'Tanque sem vazamentos', 'Traciona papel corretamente'], is_system: true, is_active: true }
     ],
     brands: [
       { id: 'brand-hp', name: 'HP', slug: 'hp', is_system: true, is_active: true },
       { id: 'brand-canon', name: 'Canon', slug: 'canon', is_system: true, is_active: true },
       { id: 'brand-epson', name: 'Epson', slug: 'epson', is_system: true, is_active: true },
       { id: 'brand-samsung', name: 'Samsung', slug: 'samsung', is_system: true, is_active: true },
-      { id: 'brand-brother', name: 'Brother', slug: 'brother', is_system: true, is_active: true }
+      { id: 'brand-brother', name: 'Brother', slug: 'brother', is_system: true, is_active: true },
+      { id: 'brand-xerox', name: 'Xerox', slug: 'xerox', is_system: true, is_active: true },
+      { id: 'brand-lexmark', name: 'Lexmark', slug: 'lexmark', is_system: true, is_active: true }
     ],
     models: [
-      { id: 'mod-hp-664', category_id: 'cat-cartucho-tinta', brand_id: 'brand-hp', brand_name: 'HP', name: 'HP 664', internal_code: 'HP664', description: 'Cartucho jato de tinta HP DeskJet 2136/2676', attributes: { capacity_ml: 2.0, empty_weight_grams: 28.5, full_weight_grams: 30.5 }, is_active: true },
-      { id: 'mod-hp-667', category_id: 'cat-cartucho-tinta', brand_id: 'brand-hp', brand_name: 'HP', name: 'HP 667', internal_code: 'HP667', description: 'Cartucho HP Advantage 2376/2776', attributes: { capacity_ml: 2.0, empty_weight_grams: 29.0, full_weight_grams: 31.0 }, is_active: true },
-      { id: 'mod-hp-122', category_id: 'cat-cartucho-tinta', brand_id: 'brand-hp', brand_name: 'HP', name: 'HP 122', internal_code: 'HP122', description: 'Cartucho HP DeskJet 1000/2000', attributes: { capacity_ml: 1.5, empty_weight_grams: 27.0, full_weight_grams: 28.5 }, is_active: true },
-      { id: 'mod-canon-cl146', category_id: 'cat-cartucho-tinta', brand_id: 'brand-canon', brand_name: 'Canon', name: 'Canon CL-146 Color', internal_code: 'CL146', description: 'Cartucho Canon Pixma MG2410', attributes: { capacity_ml: 9.0, empty_weight_grams: 35.0, full_weight_grams: 44.0 }, is_active: true },
-      { id: 'mod-toner-85a', category_id: 'cat-toner-laser', brand_id: 'brand-hp', brand_name: 'HP', name: 'Toner HP CE285A (85A)', internal_code: 'CE285A', description: 'Toner LaserJet P1102w/M1132', attributes: { capacity_ml: 80.0, empty_weight_grams: 650.0, full_weight_grams: 730.0 }, is_active: true }
+      { id: 'mod-hp-664', category_id: 'cat-cartucho-tinta', brand_id: 'brand-hp', brand_name: 'HP', name: 'HP 664', internal_code: 'HP664', description: 'Cartucho jato de tinta HP DeskJet 2136/2676', empty_weight_grams: 28.5, full_weight_grams: 30.5, attributes: { capacity_ml: 2.0, empty_weight_grams: 28.5, full_weight_grams: 30.5 }, is_active: true },
+      { id: 'mod-hp-667', category_id: 'cat-cartucho-tinta', brand_id: 'brand-hp', brand_name: 'HP', name: 'HP 667', internal_code: 'HP667', description: 'Cartucho HP Advantage 2376/2776', empty_weight_grams: 29.0, full_weight_grams: 31.0, attributes: { capacity_ml: 2.0, empty_weight_grams: 29.0, full_weight_grams: 31.0 }, is_active: true },
+      { id: 'mod-hp-122', category_id: 'cat-cartucho-tinta', brand_id: 'brand-hp', brand_name: 'HP', name: 'HP 122', internal_code: 'HP122', description: 'Cartucho HP DeskJet 1000/2000', empty_weight_grams: 27.0, full_weight_grams: 28.5, attributes: { capacity_ml: 1.5, empty_weight_grams: 27.0, full_weight_grams: 28.5 }, is_active: true },
+      { id: 'mod-canon-cl146', category_id: 'cat-cartucho-tinta', brand_id: 'brand-canon', brand_name: 'Canon', name: 'Canon CL-146 Color', internal_code: 'CL146', description: 'Cartucho Canon Pixma MG2410', empty_weight_grams: 35.0, full_weight_grams: 44.0, attributes: { capacity_ml: 9.0, empty_weight_grams: 35.0, full_weight_grams: 44.0 }, is_active: true },
+      { id: 'mod-toner-85a', category_id: 'cat-toner-laser', brand_id: 'brand-hp', brand_name: 'HP', name: 'Toner HP CE285A (85A)', internal_code: 'CE285A', description: 'Toner LaserJet P1102w/M1132', empty_weight_grams: 650.0, full_weight_grams: 730.0, attributes: { capacity_ml: 80.0, empty_weight_grams: 650.0, full_weight_grams: 730.0 }, is_active: true },
+      { id: 'mod-toner-tn1060', category_id: 'cat-toner-laser', brand_id: 'brand-brother', brand_name: 'Brother', name: 'Toner Brother TN-1060', internal_code: 'TN1060', description: 'Toner HL-1112 / DCP-1512 / DCP-1617NW', empty_weight_grams: 420.0, full_weight_grams: 485.0, is_active: true },
+      { id: 'mod-epson-l3250-imp', category_id: 'cat-impressora-tanque', brand_id: 'brand-epson', brand_name: 'Epson', name: 'Epson EcoTank L3250', internal_code: 'L3250', description: 'Multifuncional Tanque de Tinta Wi-Fi', is_active: true }
     ],
     services: [
-      { id: 'srv-recarga', name: 'Recarga de Tinta', code: 'RECARGA', description: 'Injeção de tinta pressurizada e despressurização', default_price: 30.00, estimated_time_minutes: 15, is_active: true, category_ids: ['cat-cartucho-tinta', 'cat-toner-laser'] },
-      { id: 'srv-verificacao', name: 'Verificação Técnica', code: 'VERIFICACAO', description: 'Análise de circuito eletrônico e bicos injetores', default_price: 10.00, estimated_time_minutes: 10, is_active: true, category_ids: ['cat-cartucho-tinta', 'cat-toner-laser'] },
-      { id: 'srv-teste', name: 'Teste de Impressão', code: 'TESTE', description: 'Impressão de padrão de teste em máquina real', default_price: 5.00, estimated_time_minutes: 5, is_active: true, category_ids: ['cat-cartucho-tinta'] },
-      { id: 'srv-desentupimento', name: 'Desentupimento Ultrassônico', code: 'DESENTUPIMENTO', description: 'Banho químico e ultrassom para desobstrução de injetores secos', default_price: 15.00, estimated_time_minutes: 20, is_active: true, category_ids: ['cat-cartucho-tinta'] }
+      { id: 'srv-recarga', name: 'Recarga de Tinta', code: 'RECARGA', description: 'Injeção de tinta pressurizada e despressurização', default_price: 30.00, estimated_time_minutes: 15, is_active: true, category_ids: ['cartucho-tinta', 'toner-laser'] },
+      { id: 'srv-recarga-toner', name: 'Recarga de Toner Laser + Limpeza Cilindro', code: 'RECARGA_TONER', description: 'Desmontagem, remoção de resíduos, troca de pó gráfico e teste', default_price: 65.00, estimated_time_minutes: 30, is_active: true, category_ids: ['toner-laser'] },
+      { id: 'srv-verificacao', name: 'Verificação Técnica', code: 'VERIFICACAO', description: 'Análise de circuito eletrônico e bicos injetores', default_price: 10.00, estimated_time_minutes: 10, is_active: true, category_ids: ['cartucho-tinta', 'toner-laser'] },
+      { id: 'srv-teste', name: 'Teste de Impressão', code: 'TESTE', description: 'Impressão de padrão de teste em máquina real', default_price: 5.00, estimated_time_minutes: 5, is_active: true, category_ids: ['cartucho-tinta'] },
+      { id: 'srv-desentupimento', name: 'Desentupimento Ultrassônico', code: 'DESENTUPIMENTO', description: 'Banho químico e ultrassom para desobstrução de injetores secos', default_price: 15.00, estimated_time_minutes: 20, is_active: true, category_ids: ['cartucho-tinta'] },
+      { id: 'srv-reset-ecotank', name: 'Limpeza Cabeçote & Reset Almofadas EcoTank', code: 'MANUT_ECOTANK', description: 'Desentupimento de cabeça Piezo, sangria das mangueiras e reset do contador', default_price: 90.00, estimated_time_minutes: 60, is_active: true, category_ids: ['impressora-tanque'] }
     ],
     attributes: [
       { name: 'Cor', key: 'color', data_type: 'select', options: ['Preto', 'Tricolor', 'Ciano', 'Magenta', 'Amarelo'], is_required: true, is_filterable: true, sort_order: 1, is_active: true },
@@ -172,32 +181,43 @@ export const BUSINESS_PRESETS: Record<BusinessTemplateKey, BusinessTemplate> = {
 
   ASSISTENCIA_INFORMATICA: {
     key: 'ASSISTENCIA_INFORMATICA',
-    name: 'Assistência Técnica de Informática & Notebooks',
-    description: 'Manutenção de notebooks, computadores, monitores e impressoras.',
+    name: 'Informática, Notebooks & PCs',
+    description: 'Manutenção de notebooks, computadores desktop, monitores, placas-mãe e upgrades de hardware.',
     icon: 'Laptop',
     categories: [
-      { id: 'cat-notebook', name: 'Notebook', slug: 'notebook', icon: 'Laptop', identifier_label: 'Nº de Série / Service Tag', is_system: true, is_active: true },
-      { id: 'cat-computador', name: 'Computador Desktop', slug: 'computador', icon: 'Monitor', identifier_label: 'Nº de Série / Identificador', is_system: true, is_active: true },
-      { id: 'cat-monitor', name: 'Monitor', slug: 'monitor', icon: 'Monitor', identifier_label: 'Nº de Série', is_system: true, is_active: true },
-      { id: 'cat-impressora', name: 'Impressora', slug: 'impressora', icon: 'Printer', identifier_label: 'Nº de Série', is_system: true, is_active: true }
+      { id: 'cat-notebook', name: 'Notebook', slug: 'notebook', icon: 'Laptop', identifier_label: 'Nº de Série / Service Tag', inspection_type: 'CHECKLIST', checklist_items: ['Acompanha Carregador / Fonte Original', 'Liga normalmente (Dá vídeo)', 'Carcaça / Dobradiça sem trincas', 'Teclado e Touchpad funcionais', 'Tela LCD sem manchas ou linhas'], is_system: true, is_active: true },
+      { id: 'cat-computador', name: 'Computador Desktop', slug: 'computador', icon: 'Monitor', identifier_label: 'Nº de Série / Identificador', inspection_type: 'CHECKLIST', checklist_items: ['Gabinete sem avarias', 'Fonte liga corretamente', 'Ventoinhas operando sem ruído'], is_system: true, is_active: true },
+      { id: 'cat-monitor', name: 'Monitor', slug: 'monitor', icon: 'Monitor', identifier_label: 'Nº de Série', inspection_type: 'STANDARD', is_system: true, is_active: true },
+      { id: 'cat-impressora', name: 'Impressora', slug: 'impressora', icon: 'Printer', identifier_label: 'Nº de Série', inspection_type: 'CHECKLIST', is_system: true, is_active: true },
+      { id: 'cat-gpu-placa', name: 'Placa de Vídeo / Hardware', slug: 'placa-video-hardware', icon: 'Cpu', identifier_label: 'Nº de Série', inspection_type: 'STANDARD', is_system: true, is_active: true }
     ],
     brands: [
       { id: 'brand-dell', name: 'Dell', slug: 'dell', is_system: true, is_active: true },
       { id: 'brand-lenovo', name: 'Lenovo', slug: 'lenovo', is_system: true, is_active: true },
       { id: 'brand-acer', name: 'Acer', slug: 'acer', is_system: true, is_active: true },
       { id: 'brand-asus', name: 'Asus', slug: 'asus', is_system: true, is_active: true },
-      { id: 'brand-apple', name: 'Apple', slug: 'apple', is_system: true, is_active: true }
+      { id: 'brand-apple', name: 'Apple', slug: 'apple', is_system: true, is_active: true },
+      { id: 'brand-positivo', name: 'Positivo', slug: 'positivo', is_system: true, is_active: true },
+      { id: 'brand-samsung-inf', name: 'Samsung', slug: 'samsung', is_system: true, is_active: true },
+      { id: 'brand-lg-inf', name: 'LG', slug: 'lg', is_system: true, is_active: true }
     ],
     models: [
       { id: 'mod-dell-latitude', category_id: 'cat-notebook', brand_id: 'brand-dell', brand_name: 'Dell', name: 'Dell Latitude 3470', internal_code: 'LAT3470', description: 'Notebook Corporativo 14" Intel Core i5', is_active: true },
+      { id: 'mod-dell-inspiron', category_id: 'cat-notebook', brand_id: 'brand-dell', brand_name: 'Dell', name: 'Dell Inspiron 15 3520', internal_code: 'INS3520', description: 'Notebook Dell 15.6" Intel Core i5/i7', is_active: true },
       { id: 'mod-lenovo-ideapad', category_id: 'cat-notebook', brand_id: 'brand-lenovo', brand_name: 'Lenovo', name: 'IdeaPad 3 15ALC6', internal_code: 'IP3', description: 'Notebook Lenovo Ryzen 5', is_active: true },
-      { id: 'mod-epson-l3250', category_id: 'cat-impressora', brand_id: 'brand-epson', brand_name: 'Epson', name: 'Epson EcoTank L3250', internal_code: 'L3250', description: 'Multifuncional Tanque de Tinta Wi-Fi', is_active: true }
+      { id: 'mod-acer-aspire5', category_id: 'cat-notebook', brand_id: 'brand-acer', brand_name: 'Acer', name: 'Acer Aspire 5 A515', internal_code: 'A515', description: 'Notebook Acer 15.6" Full HD', is_active: true },
+      { id: 'mod-macbook-air', category_id: 'cat-notebook', brand_id: 'brand-apple', brand_name: 'Apple', name: 'MacBook Air M1/M2', internal_code: 'MBA-M1', description: 'Ultrabook Apple Silicon 13.3"', is_active: true },
+      { id: 'mod-pc-gamer', category_id: 'cat-computador', brand_id: 'brand-asus', brand_name: 'Asus', name: 'Desktop / PC Gamer Custom', internal_code: 'PC-CUST', description: 'Computador de mesa montagem sob medida', is_active: true }
     ],
     services: [
-      { id: 'srv-diagnostico-inf', name: 'Diagnóstico Técnico Especializado', code: 'DIAGNOSTICO', description: 'Análise de hardware, placa-mãe, memória e fonte', default_price: 60.00, estimated_time_minutes: 60, is_active: true, category_ids: ['cat-notebook', 'cat-computador', 'cat-impressora'] },
-      { id: 'srv-formatacao', name: 'Formatação & Reinstalação de Sistema', code: 'FORMATACAO', description: 'Instalação de Windows/Linux limpo, drivers e programas essenciais', default_price: 120.00, estimated_time_minutes: 120, is_active: true, category_ids: ['cat-notebook', 'cat-computador'] },
-      { id: 'srv-limpeza-preventiva', name: 'Limpeza Preventiva & Troca de Pasta Térmica', code: 'LIMPEZA_PREVENTIVA', description: 'Desmontagem, desobstrução de cooler e pasta térmica de alta condutividade', default_price: 90.00, estimated_time_minutes: 60, is_active: true, category_ids: ['cat-notebook', 'cat-computador'] },
-      { id: 'srv-reparo-placa', name: 'Reparo Avançado de Placa-Mãe', code: 'REPARO_PLACA', description: 'Micro-solda, troca de CI, mosfets ou reballing', default_price: 250.00, estimated_time_minutes: 240, is_active: true, category_ids: ['cat-notebook', 'cat-computador'] }
+      { id: 'srv-diagnostico-inf', name: 'Diagnóstico Técnico Especializado', code: 'DIAGNOSTICO', description: 'Análise de hardware, placa-mãe, memória e fonte', default_price: 60.00, estimated_time_minutes: 60, is_active: true, category_ids: ['notebook', 'computador', 'impressora', 'monitor'] },
+      { id: 'srv-formatacao', name: 'Formatação & Reinstalação de Sistema', code: 'FORMATACAO', description: 'Instalação de Windows/Linux limpo, backup, drivers e programas essenciais', default_price: 120.00, estimated_time_minutes: 120, is_active: true, category_ids: ['notebook', 'computador'] },
+      { id: 'srv-limpeza-preventiva', name: 'Limpeza Preventiva & Troca de Pasta Térmica', code: 'LIMPEZA_PREVENTIVA', description: 'Desmontagem, desobstrução de cooler e pasta térmica de alta condutividade', default_price: 90.00, estimated_time_minutes: 60, is_active: true, category_ids: ['notebook', 'computador', 'placa-video-hardware'] },
+      { id: 'srv-upgrade-ssd', name: 'Upgrade de SSD / Memória RAM (Mão de Obra)', code: 'UPGRADE_HARDWARE', description: 'Instalação física, clonagem de sistema ou configuração em BIOS', default_price: 80.00, estimated_time_minutes: 45, is_active: true, category_ids: ['notebook', 'computador'] },
+      { id: 'srv-troca-tela-note', name: 'Troca de Tela LCD / LED Notebook', code: 'TROCA_TELA_NOTEBOOK', description: 'Substituição de painel e teste de cabo flat/inverter', default_price: 180.00, estimated_time_minutes: 60, is_active: true, category_ids: ['notebook', 'monitor'] },
+      { id: 'srv-troca-teclado-note', name: 'Troca de Teclado Notebook', code: 'TROCA_TECLADO', description: 'Substituição de teclado rebitado ou encaixe padrão', default_price: 110.00, estimated_time_minutes: 90, is_active: true, category_ids: ['notebook'] },
+      { id: 'srv-reparo-carcaca', name: 'Reconstrução de Carcaça & Dobradiça', code: 'REPARO_CARCACA', description: 'Recuperação estrutural com resina industrial e ajuste de torque', default_price: 150.00, estimated_time_minutes: 120, is_active: true, category_ids: ['notebook'] },
+      { id: 'srv-reparo-placa', name: 'Reparo Avançado de Placa-Mãe', code: 'REPARO_PLACA', description: 'Micro-solda, troca de CI, mosfets ou reballing', default_price: 250.00, estimated_time_minutes: 240, is_active: true, category_ids: ['notebook', 'computador', 'placa-video-hardware'] }
     ],
     attributes: [
       { name: 'Processador', key: 'cpu', data_type: 'text', is_required: false, is_filterable: true, sort_order: 1, is_active: true },
@@ -223,9 +243,10 @@ export const BUSINESS_PRESETS: Record<BusinessTemplateKey, BusinessTemplate> = {
         { id: 'st-inf-recebido', workflow_id: 'wf-informatica', code: 'RECEBIDO', name: 'Recebido na Recepção', color: 'slate', stage_type: 'RECEBIDO', sort_order: 1, is_initial: true, is_final: false },
         { id: 'st-inf-diagnostico', workflow_id: 'wf-informatica', code: 'EM_DIAGNOSTICO', name: 'Em Diagnóstico', color: 'amber', stage_type: 'EM_ANDAMENTO', sort_order: 2, is_initial: false, is_final: false },
         { id: 'st-inf-orcamento', workflow_id: 'wf-informatica', code: 'AGUARDANDO_APROVACAO', name: 'Aguard. Aprovação', color: 'purple', stage_type: 'AGUARDANDO_APROVACAO', sort_order: 3, is_initial: false, is_final: false },
-        { id: 'st-inf-reparo', workflow_id: 'wf-informatica', code: 'EM_REPARO', name: 'Em Reparo / Bancada', color: 'blue', stage_type: 'EM_ANDAMENTO', sort_order: 4, is_initial: false, is_final: false },
-        { id: 'st-inf-testes', workflow_id: 'wf-informatica', code: 'EM_TESTES', name: 'Em Testes Finais', color: 'teal', stage_type: 'EM_ANDAMENTO', sort_order: 5, is_initial: false, is_final: false },
-        { id: 'st-inf-pronto', workflow_id: 'wf-informatica', code: 'FINALIZADO', name: 'Pronto p/ Retirada', color: 'emerald', stage_type: 'CONCLUIDO', sort_order: 6, is_initial: false, is_final: true }
+        { id: 'st-inf-peca', workflow_id: 'wf-informatica', code: 'AGUARDANDO_PECA', name: 'Aguard. Peça', color: 'amber', stage_type: 'EM_ANDAMENTO', sort_order: 4, is_initial: false, is_final: false },
+        { id: 'st-inf-reparo', workflow_id: 'wf-informatica', code: 'EM_REPARO', name: 'Em Reparo / Bancada', color: 'blue', stage_type: 'EM_ANDAMENTO', sort_order: 5, is_initial: false, is_final: false },
+        { id: 'st-inf-testes', workflow_id: 'wf-informatica', code: 'EM_TESTES', name: 'Em Testes Finais', color: 'teal', stage_type: 'EM_ANDAMENTO', sort_order: 6, is_initial: false, is_final: false },
+        { id: 'st-inf-pronto', workflow_id: 'wf-informatica', code: 'FINALIZADO', name: 'Pronto p/ Retirada', color: 'emerald', stage_type: 'CONCLUIDO', sort_order: 7, is_initial: false, is_final: true }
       ]
     },
     checklist: {
@@ -242,28 +263,39 @@ export const BUSINESS_PRESETS: Record<BusinessTemplateKey, BusinessTemplate> = {
 
   ASSISTENCIA_CELULARES: {
     key: 'ASSISTENCIA_CELULARES',
-    name: 'Assistência Técnica de Celulares & Tablets',
-    description: 'Troca de tela, bateria, conector de carga e reparo em placas de smartphones.',
+    name: 'Celulares, Smartphones & Tablets',
+    description: 'Troca de tela frontal, bateria, conector de carga, desoxidação e micro-solda em placas mobile.',
     icon: 'Smartphone',
     categories: [
-      { id: 'cat-smartphone', name: 'Smartphone', slug: 'smartphone', icon: 'Smartphone', identifier_label: 'IMEI / Nº de Série', is_system: true, is_active: true },
-      { id: 'cat-tablet', name: 'Tablet', slug: 'tablet', icon: 'Tablet', identifier_label: 'Nº de Série', is_system: true, is_active: true }
+      { id: 'cat-smartphone', name: 'Smartphone', slug: 'smartphone', icon: 'Smartphone', identifier_label: 'IMEI / Nº de Série', inspection_type: 'CHECKLIST', checklist_items: ['Tela liga e dá touch em toda a área', 'Câmera Frontal e Traseira funcionam', 'Microfone e Alto-falantes operacionais', 'Reconhece chip SIM e Wi-Fi', 'Carcaça/Tampa sem marcas de queda'], is_system: true, is_active: true },
+      { id: 'cat-tablet', name: 'Tablet', slug: 'tablet', icon: 'Tablet', identifier_label: 'Nº de Série', inspection_type: 'CHECKLIST', checklist_items: ['Display íntegro', 'Conector de carga firme', 'Botões físicos operacionais'], is_system: true, is_active: true },
+      { id: 'cat-smartwatch', name: 'Smartwatch / Wearables', slug: 'smartwatch', icon: 'Watch', identifier_label: 'Nº de Série', inspection_type: 'STANDARD', is_system: true, is_active: true }
     ],
     brands: [
       { id: 'brand-apple-cel', name: 'Apple', slug: 'apple', is_system: true, is_active: true },
       { id: 'brand-samsung-cel', name: 'Samsung', slug: 'samsung', is_system: true, is_active: true },
       { id: 'brand-motorola', name: 'Motorola', slug: 'motorola', is_system: true, is_active: true },
-      { id: 'brand-xiaomi', name: 'Xiaomi', slug: 'xiaomi', is_system: true, is_active: true }
+      { id: 'brand-xiaomi', name: 'Xiaomi', slug: 'xiaomi', is_system: true, is_active: true },
+      { id: 'brand-realme', name: 'Realme', slug: 'realme', is_system: true, is_active: true }
     ],
     models: [
+      { id: 'mod-iphone-11', category_id: 'cat-smartphone', brand_id: 'brand-apple-cel', brand_name: 'Apple', name: 'iPhone 11', internal_code: 'IP11', description: 'Smartphone Apple 64GB/128GB', is_active: true },
       { id: 'mod-iphone-13', category_id: 'cat-smartphone', brand_id: 'brand-apple-cel', brand_name: 'Apple', name: 'iPhone 13', internal_code: 'IP13', description: 'Smartphone Apple 128GB/256GB', is_active: true },
+      { id: 'mod-iphone-14pro', category_id: 'cat-smartphone', brand_id: 'brand-apple-cel', brand_name: 'Apple', name: 'iPhone 14 Pro', internal_code: 'IP14P', description: 'Smartphone Apple ProMotion OLED', is_active: true },
       { id: 'mod-galaxy-s23', category_id: 'cat-smartphone', brand_id: 'brand-samsung-cel', brand_name: 'Samsung', name: 'Galaxy S23', internal_code: 'S23', description: 'Smartphone Samsung 5G', is_active: true },
-      { id: 'mod-moto-g54', category_id: 'cat-smartphone', brand_id: 'brand-motorola', brand_name: 'Motorola', name: 'Moto G54 5G', internal_code: 'G54', description: 'Motorola 256GB', is_active: true }
+      { id: 'mod-galaxy-a54', category_id: 'cat-smartphone', brand_id: 'brand-samsung-cel', brand_name: 'Samsung', name: 'Galaxy A54 5G', internal_code: 'A54', description: 'Samsung Galaxy Linha A', is_active: true },
+      { id: 'mod-moto-g54', category_id: 'cat-smartphone', brand_id: 'brand-motorola', brand_name: 'Motorola', name: 'Moto G54 5G', internal_code: 'G54', description: 'Motorola 256GB', is_active: true },
+      { id: 'mod-redmi-note13', category_id: 'cat-smartphone', brand_id: 'brand-xiaomi', brand_name: 'Xiaomi', name: 'Redmi Note 13', internal_code: 'RN13', description: 'Xiaomi Redmi Note AMOLED', is_active: true },
+      { id: 'mod-ipad-9', category_id: 'cat-tablet', brand_id: 'brand-apple-cel', brand_name: 'Apple', name: 'iPad 9ª Geração (10.2")', internal_code: 'IPAD9', description: 'Tablet Apple 64GB/256GB', is_active: true }
     ],
     services: [
-      { id: 'srv-troca-tela', name: 'Troca de Tela / Módulo Frontal', code: 'TROCA_TELA', description: 'Substituição completa do display touch OLED/IPS', default_price: 180.00, estimated_time_minutes: 60, is_active: true, category_ids: ['cat-smartphone', 'cat-tablet'] },
-      { id: 'srv-troca-bateria', name: 'Troca de Bateria', code: 'TROCA_BATERIA', description: 'Substituição de bateria estufada ou com baixa saúde', default_price: 120.00, estimated_time_minutes: 45, is_active: true, category_ids: ['cat-smartphone', 'cat-tablet'] },
-      { id: 'srv-conector-carga', name: 'Troca de Conector de Carga (Dock USB)', code: 'CONECTOR_CARGA', description: 'Substituição do conector Tipo-C / Lightning', default_price: 90.00, estimated_time_minutes: 60, is_active: true, category_ids: ['cat-smartphone', 'cat-tablet'] }
+      { id: 'srv-analise-cel', name: 'Análise & Orçamento em Bancada Mobile', code: 'ANALISE_CELULAR', description: 'Abertura técnica, medição de consumo na fonte e parecer', default_price: 50.00, estimated_time_minutes: 30, is_active: true, category_ids: ['smartphone', 'tablet', 'smartwatch'] },
+      { id: 'srv-troca-tela', name: 'Troca de Tela / Módulo Frontal', code: 'TROCA_TELA', description: 'Substituição completa do display touch OLED/IPS e vedação', default_price: 180.00, estimated_time_minutes: 60, is_active: true, category_ids: ['smartphone', 'tablet'] },
+      { id: 'srv-troca-bateria', name: 'Troca de Bateria', code: 'TROCA_BATERIA', description: 'Substituição de bateria estufada ou com baixa saúde', default_price: 120.00, estimated_time_minutes: 45, is_active: true, category_ids: ['smartphone', 'tablet', 'smartwatch'] },
+      { id: 'srv-conector-carga', name: 'Troca de Conector de Carga (Dock USB)', code: 'CONECTOR_CARGA', description: 'Substituição do conector Tipo-C / Lightning', default_price: 90.00, estimated_time_minutes: 60, is_active: true, category_ids: ['smartphone', 'tablet'] },
+      { id: 'srv-desoxidacao', name: 'Desoxidação & Banho Químico (Aparelho Molhado)', code: 'DESOXIDACAO', description: 'Limpeza ultrassônica em álcool isopropílico e recuperação de trilhas', default_price: 140.00, estimated_time_minutes: 120, is_active: true, category_ids: ['smartphone', 'tablet'] },
+      { id: 'srv-vidro-traseiro', name: 'Troca de Tampa / Vidro Traseiro', code: 'VIDRO_TRASEIRO', description: 'Remoção a laser e substituição da tampa traseira com cola original', default_price: 160.00, estimated_time_minutes: 90, is_active: true, category_ids: ['smartphone'] },
+      { id: 'srv-reparo-placa-cel', name: 'Micro-Solda / Reparo em Placa Mobile', code: 'REPARO_PLACA_CEL', description: 'Reparo de Tristar/Hydra, PMIC, back-light ou áudio IC', default_price: 240.00, estimated_time_minutes: 180, is_active: true, category_ids: ['smartphone', 'tablet'] }
     ],
     attributes: [
       { name: 'Cor do Aparelho', key: 'color', data_type: 'text', is_required: false, is_filterable: true, sort_order: 1, is_active: true },
@@ -285,9 +317,10 @@ export const BUSINESS_PRESETS: Record<BusinessTemplateKey, BusinessTemplate> = {
       states: [
         { id: 'st-cel-recebido', workflow_id: 'wf-celular', code: 'RECEBIDO', name: 'Recebido (Balcão)', color: 'slate', stage_type: 'RECEBIDO', sort_order: 1, is_initial: true, is_final: false },
         { id: 'st-cel-analise', workflow_id: 'wf-celular', code: 'EM_ANALISE', name: 'Em Análise', color: 'amber', stage_type: 'EM_ANDAMENTO', sort_order: 2, is_initial: false, is_final: false },
-        { id: 'st-cel-bancada', workflow_id: 'wf-celular', code: 'EM_REPARO', name: 'Na Bancada', color: 'blue', stage_type: 'EM_ANDAMENTO', sort_order: 3, is_initial: false, is_final: false },
-        { id: 'st-cel-testes', workflow_id: 'wf-celular', code: 'EM_TESTES', name: 'Testes de Câmera/Touch', color: 'teal', stage_type: 'EM_ANDAMENTO', sort_order: 4, is_initial: false, is_final: false },
-        { id: 'st-cel-pronto', workflow_id: 'wf-celular', code: 'FINALIZADO', name: 'Pronto p/ Entrega', color: 'emerald', stage_type: 'CONCLUIDO', sort_order: 5, is_initial: false, is_final: true }
+        { id: 'st-cel-aprov', workflow_id: 'wf-celular', code: 'AGUARDANDO_APROVACAO', name: 'Aguard. Aprovação', color: 'purple', stage_type: 'AGUARDANDO_APROVACAO', sort_order: 3, is_initial: false, is_final: false },
+        { id: 'st-cel-bancada', workflow_id: 'wf-celular', code: 'EM_REPARO', name: 'Na Bancada', color: 'blue', stage_type: 'EM_ANDAMENTO', sort_order: 4, is_initial: false, is_final: false },
+        { id: 'st-cel-testes', workflow_id: 'wf-celular', code: 'EM_TESTES', name: 'Testes Câmera/Touch', color: 'teal', stage_type: 'EM_ANDAMENTO', sort_order: 5, is_initial: false, is_final: false },
+        { id: 'st-cel-pronto', workflow_id: 'wf-celular', code: 'FINALIZADO', name: 'Pronto p/ Entrega', color: 'emerald', stage_type: 'CONCLUIDO', sort_order: 6, is_initial: false, is_final: true }
       ]
     },
     checklist: {
@@ -302,29 +335,97 @@ export const BUSINESS_PRESETS: Record<BusinessTemplateKey, BusinessTemplate> = {
     }
   },
 
+  VIDEOGAMES_ELETRONICOS: {
+    key: 'VIDEOGAMES_ELETRONICOS',
+    name: 'Videogames, TVs & Eletrônicos',
+    description: 'Manutenção de consoles PS5/PS4/Xbox/Switch, controles, Smart TVs e equipamentos de áudio.',
+    icon: 'Gamepad2',
+    categories: [
+      { id: 'cat-console', name: 'Console de Videogame', slug: 'console-videogame', icon: 'Gamepad2', identifier_label: 'Nº de Série / Lacre', inspection_type: 'CHECKLIST', checklist_items: ['Acompanha cabo HDMI / Força', 'Sem selo violado anteriormente', 'Porta HDMI visualmente intacta', 'Liga / Bipa na tomada'], is_system: true, is_active: true },
+      { id: 'cat-controle', name: 'Controle / Joystick', slug: 'controle-joystick', icon: 'Gamepad2', identifier_label: 'Serial / Modelo', inspection_type: 'STANDARD', is_system: true, is_active: true },
+      { id: 'cat-smart-tv', name: 'Smart TV / Display Grande', slug: 'smart-tv', icon: 'Tv', identifier_label: 'Nº de Série / Modelo', inspection_type: 'CHECKLIST', checklist_items: ['Tela sem trincos ou avarias no display', 'Acompanha controle remoto / pés', 'Standby acende normalmente'], is_system: true, is_active: true },
+      { id: 'cat-audio', name: 'Caixa de Som & Áudio', slug: 'caixa-som-audio', icon: 'Speaker', identifier_label: 'Nº de Série', inspection_type: 'STANDARD', is_system: true, is_active: true }
+    ],
+    brands: [
+      { id: 'brand-sony', name: 'Sony PlayStation', slug: 'sony-playstation', is_system: true, is_active: true },
+      { id: 'brand-microsoft', name: 'Microsoft Xbox', slug: 'microsoft-xbox', is_system: true, is_active: true },
+      { id: 'brand-nintendo', name: 'Nintendo', slug: 'nintendo', is_system: true, is_active: true },
+      { id: 'brand-lg-el', name: 'LG', slug: 'lg', is_system: true, is_active: true },
+      { id: 'brand-samsung-el', name: 'Samsung', slug: 'samsung', is_system: true, is_active: true },
+      { id: 'brand-jbl', name: 'JBL', slug: 'jbl', is_system: true, is_active: true }
+    ],
+    models: [
+      { id: 'mod-ps5', category_id: 'cat-console', brand_id: 'brand-sony', brand_name: 'Sony PlayStation', name: 'PlayStation 5 (PS5)', internal_code: 'PS5-FAT', description: 'Console Sony PS5 Standard / Digital', is_active: true },
+      { id: 'mod-ps4', category_id: 'cat-console', brand_id: 'brand-sony', brand_name: 'Sony PlayStation', name: 'PlayStation 4 Slim / Pro', internal_code: 'PS4', description: 'Console Sony PS4', is_active: true },
+      { id: 'mod-xbox-ss', category_id: 'cat-console', brand_id: 'brand-microsoft', brand_name: 'Microsoft Xbox', name: 'Xbox Series S', internal_code: 'XSS', description: 'Console Microsoft Xbox Series S 512GB/1TB', is_active: true },
+      { id: 'mod-switch-oled', category_id: 'cat-console', brand_id: 'brand-nintendo', brand_name: 'Nintendo', name: 'Nintendo Switch OLED', internal_code: 'NSW-OLED', description: 'Console Híbrido Nintendo Switch', is_active: true },
+      { id: 'mod-dualsense', category_id: 'cat-controle', brand_id: 'brand-sony', brand_name: 'Sony PlayStation', name: 'Controle DualSense PS5', internal_code: 'DS5', description: 'Controle sem fio PlayStation 5', is_active: true },
+      { id: 'mod-tv-lg-50', category_id: 'cat-smart-tv', brand_id: 'brand-lg-el', brand_name: 'LG', name: 'Smart TV LG 50" 4K UHD', internal_code: 'TV-LG50', description: 'Televisor LED / NanoCell', is_active: true }
+    ],
+    services: [
+      { id: 'srv-diag-game', name: 'Diagnóstico Eletrônico de Bancada', code: 'DIAG_ELETRONICO', description: 'Análise de curto-circuito, fonte, HDMI e temperatura', default_price: 60.00, estimated_time_minutes: 60, is_active: true, category_ids: ['console-videogame', 'controle-joystick', 'smart-tv', 'caixa-som-audio'] },
+      { id: 'srv-limpeza-ps5', name: 'Limpeza Térmica + Pasta / Metal Líquido', code: 'LIMPEZA_TERMICA', description: 'Higienização interna completa e aplicação de metal líquido / thermal pads', default_price: 180.00, estimated_time_minutes: 90, is_active: true, category_ids: ['console-videogame'] },
+      { id: 'srv-troca-hdmi', name: 'Troca de Conector HDMI (Micro-Solda)', code: 'TROCA_HDMI', description: 'Substituição de porta HDMI 2.1 em microscópio e reconstrução de trilhas', default_price: 250.00, estimated_time_minutes: 120, is_active: true, category_ids: ['console-videogame', 'smart-tv'] },
+      { id: 'srv-drift-controle', name: 'Reparo de Drift Analógico (Hall Effect)', code: 'REPARO_DRIFT', description: 'Troca de potenciômetro / módulo analógico com calibração', default_price: 95.00, estimated_time_minutes: 45, is_active: true, category_ids: ['controle-joystick'] },
+      { id: 'srv-reparo-fonte', name: 'Reparo de Fonte Interna / Barramento LED', code: 'REPARO_FONTE', description: 'Recuperação de fonte primária/secundária ou troca de barras de LED', default_price: 190.00, estimated_time_minutes: 150, is_active: true, category_ids: ['console-videogame', 'smart-tv', 'caixa-som-audio'] },
+      { id: 'srv-bga-game', name: 'Reparo de Placa Principal / CI Retimer', code: 'REPARO_CI_PLACA', description: 'Substituição de CI HDMI Panasonic, Wi-Fi/BT ou reballing APU', default_price: 320.00, estimated_time_minutes: 240, is_active: true, category_ids: ['console-videogame', 'smart-tv'] }
+    ],
+    attributes: [
+      { name: 'Armazenamento / Polegadas', key: 'specs', data_type: 'text', is_required: false, is_filterable: true, sort_order: 1, is_active: true },
+      { name: 'Edição / Versão', key: 'edition', data_type: 'text', is_required: false, is_filterable: true, sort_order: 2, is_active: true }
+    ],
+    fieldDefinitions: [
+      { label: 'Temperatura sob Stress (°C)', field_key: 'stress_temp', field_type: 'decimal', unit: '°C', is_required: false, sort_order: 1 },
+      { label: 'Parecer Eletrônico', field_key: 'tech_opinion', field_type: 'textarea', is_required: false, sort_order: 2 }
+    ],
+    results: [
+      { code: 'APROVADO', label: 'Testado 100% em Stress / Vídeo OK', color: 'emerald', is_approval: true, is_active: true },
+      { code: 'AGUARDANDO_APROVACAO', label: 'Aguardando Aprovação de Orçamento', color: 'amber', is_approval: false, is_active: true },
+      { code: 'SEM_REPARO', label: 'APU / Display em Curto (Inviável)', color: 'rose', is_approval: false, is_active: true }
+    ],
+    workflow: {
+      name: 'Fluxo Eletrônica & Videogames',
+      is_default: true,
+      states: [
+        { id: 'st-gam-recebido', workflow_id: 'wf-games', code: 'RECEBIDO', name: 'Recebido no Balcão', color: 'slate', stage_type: 'RECEBIDO', sort_order: 1, is_initial: true, is_final: false },
+        { id: 'st-gam-analise', workflow_id: 'wf-games', code: 'EM_DIAGNOSTICO', name: 'Em Análise Eletrônica', color: 'amber', stage_type: 'EM_ANDAMENTO', sort_order: 2, is_initial: false, is_final: false },
+        { id: 'st-gam-orcamento', workflow_id: 'wf-games', code: 'AGUARDANDO_APROVACAO', name: 'Aguard. Aprovação', color: 'purple', stage_type: 'AGUARDANDO_APROVACAO', sort_order: 3, is_initial: false, is_final: false },
+        { id: 'st-gam-bancada', workflow_id: 'wf-games', code: 'EM_REPARO', name: 'Bancada / Micro-Solda', color: 'blue', stage_type: 'EM_ANDAMENTO', sort_order: 4, is_initial: false, is_final: false },
+        { id: 'st-gam-testes', workflow_id: 'wf-games', code: 'EM_TESTES', name: 'Testes de Stress / HDMI', color: 'teal', stage_type: 'EM_ANDAMENTO', sort_order: 5, is_initial: false, is_final: false },
+        { id: 'st-gam-pronto', workflow_id: 'wf-games', code: 'FINALIZADO', name: 'Pronto p/ Retirada', color: 'emerald', stage_type: 'CONCLUIDO', sort_order: 6, is_initial: false, is_final: true }
+      ]
+    }
+  },
+
   FERRAMENTAS_MOTORES: {
     key: 'FERRAMENTAS_MOTORES',
     name: 'Motores Elétricos & Ferramentas',
-    description: 'Manutenção de furadeiras, serras, compressores e rebobinamento de motores.',
+    description: 'Manutenção de furadeiras, esmerilhadeiras, compressores e rebobinamento de motores elétricos.',
     icon: 'Wrench',
     categories: [
-      { id: 'cat-ferramenta', name: 'Ferramenta Elétrica', slug: 'ferramenta-eletrica', icon: 'Wrench', identifier_label: 'Nº de Série / Patrimônio', is_system: true, is_active: true },
-      { id: 'cat-motor', name: 'Motor Elétrico', slug: 'motor-eletrico', icon: 'Zap', identifier_label: 'Nº de Série / Identificador', is_system: true, is_active: true }
+      { id: 'cat-ferramenta', name: 'Ferramenta Elétrica', slug: 'ferramenta-eletrica', icon: 'Wrench', identifier_label: 'Nº de Série / Patrimônio', inspection_type: 'CHECKLIST', checklist_items: ['Cabo elétrico íntegro', 'Mandril / Porta-bits sem folga', 'Gatilho operacional'], is_system: true, is_active: true },
+      { id: 'cat-motor', name: 'Motor Elétrico', slug: 'motor-eletrico', icon: 'Zap', identifier_label: 'Nº de Série / Identificador', inspection_type: 'STANDARD', is_system: true, is_active: true },
+      { id: 'cat-lavadora', name: 'Compressor / Lavadora Alta Pressão', slug: 'compressor-lavadora', icon: 'Wrench', identifier_label: 'Nº de Série', inspection_type: 'STANDARD', is_system: true, is_active: true }
     ],
     brands: [
       { id: 'brand-makita', name: 'Makita', slug: 'makita', is_system: true, is_active: true },
       { id: 'brand-bosch', name: 'Bosch', slug: 'bosch', is_system: true, is_active: true },
       { id: 'brand-dewalt', name: 'DeWalt', slug: 'dewalt', is_system: true, is_active: true },
-      { id: 'brand-weg', name: 'WEG', slug: 'weg', is_system: true, is_active: true }
+      { id: 'brand-weg', name: 'WEG', slug: 'weg', is_system: true, is_active: true },
+      { id: 'brand-vonder', name: 'Vonder', slug: 'vonder', is_system: true, is_active: true },
+      { id: 'brand-karcher', name: 'Karcher', slug: 'karcher', is_system: true, is_active: true }
     ],
     models: [
       { id: 'mod-makita-hp1640', category_id: 'cat-ferramenta', brand_id: 'brand-makita', brand_name: 'Makita', name: 'Furadeira de Impacto HP1640', internal_code: 'HP1640', description: 'Furadeira 760W 13mm', is_active: true },
-      { id: 'mod-motor-weg-2cv', category_id: 'cat-motor', brand_id: 'brand-weg', brand_name: 'WEG', name: 'Motor WEG Trifásico 2CV', internal_code: 'WEG2CV', description: 'Motor 4 Polos 220/380V', is_active: true }
+      { id: 'mod-bosch-gbh224', category_id: 'cat-ferramenta', brand_id: 'brand-bosch', brand_name: 'Bosch', name: 'Martelete Perfurador GBH 2-24', internal_code: 'GBH224', description: 'Martelete SDS-Plus 800W', is_active: true },
+      { id: 'mod-motor-weg-2cv', category_id: 'cat-motor', brand_id: 'brand-weg', brand_name: 'WEG', name: 'Motor WEG Trifásico 2CV', internal_code: 'WEG2CV', description: 'Motor 4 Polos 220/380V', is_active: true },
+      { id: 'mod-karcher-hd585', category_id: 'cat-lavadora', brand_id: 'brand-karcher', brand_name: 'Karcher', name: 'Lavadora Karcher HD 585', internal_code: 'HD585', description: 'Lavadora Profissional Alta Pressão', is_active: true }
     ],
     services: [
-      { id: 'srv-rebobinamento', name: 'Rebobinamento de Estator/Induzido', code: 'REBOBINAMENTO', description: 'Rebobinamento completo com fio de cobre esmaltado classe H', default_price: 180.00, estimated_time_minutes: 180, is_active: true, category_ids: ['cat-motor', 'cat-ferramenta'] },
-      { id: 'srv-troca-escovas', name: 'Troca de Escovas de Carvão', code: 'TROCA_ESCOVAS', description: 'Substituição de carvões gastos e limpeza do coletor', default_price: 45.00, estimated_time_minutes: 30, is_active: true, category_ids: ['cat-ferramenta'] },
-      { id: 'srv-revisao-geral', name: 'Revisão Geral e Lubrificação', code: 'REVISAO_GERAL', description: 'Troca de graxa, rolamentos e teste de isolação', default_price: 80.00, estimated_time_minutes: 60, is_active: true, category_ids: ['cat-motor', 'cat-ferramenta'] }
+      { id: 'srv-rebobinamento', name: 'Rebobinamento de Estator/Induzido', code: 'REBOBINAMENTO', description: 'Rebobinamento completo com fio de cobre esmaltado classe H e verniz', default_price: 180.00, estimated_time_minutes: 180, is_active: true, category_ids: ['motor-eletrico', 'ferramenta-eletrica'] },
+      { id: 'srv-troca-escovas', name: 'Troca de Escovas de Carvão', code: 'TROCA_ESCOVAS', description: 'Substituição de carvões gastos e limpeza do coletor', default_price: 45.00, estimated_time_minutes: 30, is_active: true, category_ids: ['ferramenta-eletrica'] },
+      { id: 'srv-troca-rolamentos', name: 'Troca de Rolamentos, Selos & Retentores', code: 'TROCA_ROLAMENTOS', description: 'Substituição mecânica de rolamentos, gaxetas e óleo de bomba', default_price: 95.00, estimated_time_minutes: 90, is_active: true, category_ids: ['motor-eletrico', 'ferramenta-eletrica', 'compressor-lavadora'] },
+      { id: 'srv-revisao-geral', name: 'Revisão Geral e Lubrificação', code: 'REVISAO_GERAL', description: 'Troca de graxa, limpeza de caixa de engrenagem e teste de isolação', default_price: 80.00, estimated_time_minutes: 60, is_active: true, category_ids: ['motor-eletrico', 'ferramenta-eletrica', 'compressor-lavadora'] }
     ],
     attributes: [
       { name: 'Voltagem', key: 'voltage', data_type: 'select', options: ['110V', '220V', 'Bivolt', 'Trifásico 220/380V'], is_required: false, is_filterable: true, sort_order: 1, is_active: true },
@@ -353,20 +454,27 @@ export const BUSINESS_PRESETS: Record<BusinessTemplateKey, BusinessTemplate> = {
 
   OFICINA_GERAL: {
     key: 'OFICINA_GERAL',
-    name: 'Oficina Técnica Geral & Manutenção',
-    description: 'Configuração flexível para qualquer tipo de prestação de serviços técnicos.',
+    name: 'Oficina Técnica Geral & Eletro',
+    description: 'Estrutura enxuta e flexível para qualquer oficina de assistência técnica, eletrodomésticos e serviços gerais.',
     icon: 'Layers',
     categories: [
-      { id: 'cat-geral', name: 'Equipamento Geral', slug: 'equipamento-geral', icon: 'Layers', identifier_label: 'Código / Nº de Série', is_system: true, is_active: true }
+      { id: 'cat-geral', name: 'Equipamento Geral', slug: 'equipamento-geral', icon: 'Layers', identifier_label: 'Código / Nº de Série', inspection_type: 'STANDARD', is_system: true, is_active: true },
+      { id: 'cat-eletro', name: 'Eletrodoméstico / Portátil', slug: 'eletrodomestico-portatil', icon: 'Zap', identifier_label: 'Nº de Série / Modelo', inspection_type: 'CHECKLIST', checklist_items: ['Cabo de alimentação sem emendas', 'Acessórios completos'], is_system: true, is_active: true }
     ],
     brands: [
-      { id: 'brand-geral', name: 'Genérica / Outras', slug: 'generica', is_system: true, is_active: true }
+      { id: 'brand-geral', name: 'Genérica / Outras', slug: 'generica', is_system: true, is_active: true },
+      { id: 'brand-electrolux', name: 'Electrolux', slug: 'electrolux', is_system: true, is_active: true },
+      { id: 'brand-brastemp', name: 'Brastemp', slug: 'brastemp', is_system: true, is_active: true },
+      { id: 'brand-mondial', name: 'Mondial', slug: 'mondial', is_system: true, is_active: true }
     ],
     models: [
-      { id: 'mod-equipamento-padrao', category_id: 'cat-geral', brand_id: 'brand-geral', brand_name: 'Genérica', name: 'Equipamento Padrão', internal_code: 'EQP', description: 'Item genérico para manutenção', is_active: true }
+      { id: 'mod-equipamento-padrao', category_id: 'cat-geral', brand_id: 'brand-geral', brand_name: 'Genérica / Outras', name: 'Equipamento Padrão', internal_code: 'EQP', description: 'Item genérico para manutenção técnica', is_active: true },
+      { id: 'mod-eletro-microondas', category_id: 'cat-eletro', brand_id: 'brand-electrolux', brand_name: 'Electrolux', name: 'Micro-ondas / Eletro Portátil', internal_code: 'ELETRO-1', description: 'Atendimento linha branca / portáteis', is_active: true }
     ],
     services: [
-      { id: 'srv-manutencao-geral', name: 'Manutenção Preventiva / Corretiva', code: 'MANUTENCAO', description: 'Inspeção, reparo e testes de bancada', default_price: 100.00, estimated_time_minutes: 60, is_active: true, category_ids: ['cat-geral'] }
+      { id: 'srv-orcamento-geral', name: 'Avaliação & Orçamento Técnico', code: 'ORCAMENTO_GERAL', description: 'Inspeção técnica inicial para levantamento de defeito', default_price: 50.00, estimated_time_minutes: 30, is_active: true, category_ids: ['equipamento-geral', 'eletrodomestico-portatil'] },
+      { id: 'srv-manutencao-geral', name: 'Manutenção Preventiva / Corretiva', code: 'MANUTENCAO', description: 'Inspeção, reparo e testes de bancada', default_price: 100.00, estimated_time_minutes: 60, is_active: true, category_ids: ['equipamento-geral', 'eletrodomestico-portatil'] },
+      { id: 'srv-troca-peca-geral', name: 'Substituição de Componente / Peça', code: 'TROCA_PECA', description: 'Mão de obra de substituição de componente defeituoso', default_price: 120.00, estimated_time_minutes: 60, is_active: true, category_ids: ['equipamento-geral', 'eletrodomestico-portatil'] }
     ],
     attributes: [
       { name: 'Modelo / Referência', key: 'reference', data_type: 'text', is_required: false, is_filterable: true, sort_order: 1, is_active: true }
@@ -383,8 +491,9 @@ export const BUSINESS_PRESETS: Record<BusinessTemplateKey, BusinessTemplate> = {
       is_default: true,
       states: [
         { id: 'st-ger-recebido', workflow_id: 'wf-geral', code: 'RECEBIDO', name: 'Recebido', color: 'slate', stage_type: 'RECEBIDO', sort_order: 1, is_initial: true, is_final: false },
-        { id: 'st-ger-execucao', workflow_id: 'wf-geral', code: 'EM_EXECUCAO', name: 'Em Execução', color: 'blue', stage_type: 'EM_ANDAMENTO', sort_order: 2, is_initial: false, is_final: false },
-        { id: 'st-ger-pronto', workflow_id: 'wf-geral', code: 'FINALIZADO', name: 'Concluído', color: 'emerald', stage_type: 'CONCLUIDO', sort_order: 3, is_initial: false, is_final: true }
+        { id: 'st-ger-orcamento', workflow_id: 'wf-geral', code: 'AGUARDANDO_APROVACAO', name: 'Aguard. Aprovação', color: 'amber', stage_type: 'AGUARDANDO_APROVACAO', sort_order: 2, is_initial: false, is_final: false },
+        { id: 'st-ger-execucao', workflow_id: 'wf-geral', code: 'EM_EXECUCAO', name: 'Em Execução', color: 'blue', stage_type: 'EM_ANDAMENTO', sort_order: 3, is_initial: false, is_final: false },
+        { id: 'st-ger-pronto', workflow_id: 'wf-geral', code: 'FINALIZADO', name: 'Concluído', color: 'emerald', stage_type: 'CONCLUIDO', sort_order: 4, is_initial: false, is_final: true }
       ]
     }
   }
@@ -2455,6 +2564,11 @@ export class AppStore {
         description: newCategory.description || null,
         icon: newCategory.icon || 'Layers',
         identifier_label: newCategory.identifier_label || 'Nº de Série',
+        inspection_type: newCategory.inspection_type || 'STANDARD',
+        inspection_type_label: newCategory.inspection_type_label || null,
+        checklist_items: newCategory.checklist_items || [],
+        custom_fields: newCategory.custom_fields || [],
+        technical_verdicts: newCategory.technical_verdicts || [],
         is_system: newCategory.is_system || false,
         is_active: newCategory.is_active !== false
       },
@@ -2694,11 +2808,15 @@ export class AppStore {
         tenant_id: newModel.tenant_id,
         category_id: newModel.category_id,
         brand_id: newModel.brand_id || null,
+        brand_name: newModel.brand_name || null,
         name: newModel.name,
         internal_code: newModel.internal_code || null,
         description: newModel.description || null,
         technical_notes: newModel.technical_notes || null,
         attributes: newModel.attributes || {},
+        service_prices: newModel.service_prices || {},
+        empty_weight_grams: newModel.empty_weight_grams ?? null,
+        full_weight_grams: newModel.full_weight_grams ?? null,
         is_active: newModel.is_active !== false
       },
       tenant_id: newModel.tenant_id
@@ -2795,6 +2913,7 @@ export class AppStore {
         description: newService.description || null,
         default_price: newService.default_price || 0,
         estimated_time_minutes: newService.estimated_time_minutes || 60,
+        category_ids: newService.category_ids || [],
         is_active: newService.is_active !== false
       },
       tenant_id: newService.tenant_id
@@ -4749,11 +4868,14 @@ export class AppStore {
       const localOnlyCustomers = (current.customers || []).filter((c: Customer) => !remoteCustIds.has(c.id));
       current.customers = [...localOnlyCustomers, ...(customersData || [])];
 
-      current.categories = categoriesData || [];
-      current.brands = brandsData || [];
-      current.models = modelsData || [];
-      current.services = servicesData || [];
-      if (workflowStatesData && workflowStatesData.length > 0) current.workflowStates = workflowStatesData;
+      if (Array.isArray(categoriesData)) current.categories = categoriesData;
+      if (Array.isArray(brandsData)) current.brands = brandsData;
+      if (Array.isArray(modelsData)) current.models = modelsData;
+      if (Array.isArray(servicesData)) current.services = servicesData;
+      if (workflowStatesData && workflowStatesData.length > 0) {
+        const otherStates = (current.workflowStates || []).filter((s: WorkflowState) => s.tenant_id && s.tenant_id !== targetTenant);
+        current.workflowStates = [...otherStates, ...workflowStatesData];
+      }
 
       // Merge orders preserving locally created offline ones
       const remoteOrderIds = new Set(assembledOrders.map(o => o.id));
@@ -4908,6 +5030,329 @@ export class AppStore {
       checklist
     }, performedByName);
   }
+  static applyPresetSelection(
+    tenantId: string,
+    selection: PresetImportSelection,
+    performedByName?: string
+  ): PresetImportResult {
+    const slugify = (val: string) =>
+      val
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '');
+
+    const result: PresetImportResult = {
+      addedCategories: 0,
+      skippedCategories: 0,
+      addedBrands: 0,
+      skippedBrands: 0,
+      addedServices: 0,
+      skippedServices: 0,
+      addedModels: 0,
+      skippedModels: 0,
+      addedWorkflowStates: 0,
+      skippedWorkflowStates: 0
+    };
+
+    // 1. Categorias
+    const existingCats = this.getCategories(tenantId);
+    const categoryMapByKey = new Map<string, string>();
+    let firstCategoryId = existingCats[0]?.id || '';
+    existingCats.forEach(c => {
+      if (c.slug) categoryMapByKey.set(c.slug.toLowerCase(), c.id);
+      categoryMapByKey.set(c.name.trim().toLowerCase(), c.id);
+    });
+
+    for (const catInput of selection.categories || []) {
+      const name = catInput.name?.trim();
+      if (!name) continue;
+      const slug = catInput.slug?.trim() || slugify(name);
+      const foundId = categoryMapByKey.get(slug.toLowerCase()) || categoryMapByKey.get(name.toLowerCase());
+      if (foundId) {
+        result.skippedCategories += 1;
+        categoryMapByKey.set(slug.toLowerCase(), foundId);
+        categoryMapByKey.set(name.toLowerCase(), foundId);
+        if (!firstCategoryId) firstCategoryId = foundId;
+      } else {
+        const created = this.addCategory(
+          {
+            tenant_id: tenantId,
+            name,
+            slug,
+            description: catInput.description,
+            icon: catInput.icon || 'Layers',
+            identifier_label: catInput.identifier_label || 'Nº de Série',
+            inspection_type: catInput.inspection_type || 'STANDARD',
+            checklist_items: catInput.checklist_items || [],
+            technical_verdicts: catInput.technical_verdicts || [],
+            custom_fields: catInput.custom_fields || [],
+            is_system: false,
+            is_active: true
+          },
+          performedByName
+        );
+        result.addedCategories += 1;
+        categoryMapByKey.set(slug.toLowerCase(), created.id);
+        categoryMapByKey.set(name.toLowerCase(), created.id);
+        if (!firstCategoryId) firstCategoryId = created.id;
+      }
+    }
+
+    // 2. Fabricantes / Marcas
+    const existingBrands = this.getBrands(tenantId);
+    const brandMapByKey = new Map<string, Brand>();
+    existingBrands.forEach(b => {
+      if (b.slug) brandMapByKey.set(b.slug.toLowerCase(), b);
+      brandMapByKey.set(b.name.trim().toLowerCase(), b);
+    });
+
+    for (const brandInput of selection.brands || []) {
+      const name = brandInput.name?.trim();
+      if (!name) continue;
+      const slug = brandInput.slug?.trim() || slugify(name);
+      const existing = brandMapByKey.get(slug.toLowerCase()) || brandMapByKey.get(name.toLowerCase());
+      if (existing) {
+        result.skippedBrands += 1;
+        brandMapByKey.set(slug.toLowerCase(), existing);
+        brandMapByKey.set(name.toLowerCase(), existing);
+      } else {
+        const created = this.addBrand(
+          {
+            tenant_id: tenantId,
+            name,
+            slug,
+            is_system: false,
+            is_active: true
+          },
+          performedByName
+        );
+        result.addedBrands += 1;
+        brandMapByKey.set(slug.toLowerCase(), created);
+        brandMapByKey.set(name.toLowerCase(), created);
+      }
+    }
+
+    // 3. Tabela de Serviços
+    const existingServices = this.getServices(tenantId);
+    const serviceKeys = new Set<string>();
+    existingServices.forEach(s => {
+      if (s.code) serviceKeys.add(`code:${s.code.trim().toLowerCase()}`);
+      serviceKeys.add(`name:${s.name.trim().toLowerCase()}`);
+    });
+
+    for (const srvInput of selection.services || []) {
+      const name = srvInput.name?.trim();
+      if (!name) continue;
+      const code = (srvInput.code || slugify(name).replace(/-/g, '_').toUpperCase()).trim();
+      if (serviceKeys.has(`code:${code.toLowerCase()}`) || serviceKeys.has(`name:${name.toLowerCase()}`)) {
+        result.skippedServices += 1;
+        continue;
+      }
+
+      const resolvedCategoryIds = (srvInput.category_slugs || [])
+        .map(key => categoryMapByKey.get(key.toLowerCase()))
+        .filter((id): id is string => Boolean(id));
+
+      this.addService(
+        {
+          tenant_id: tenantId,
+          name,
+          code,
+          description: srvInput.description,
+          default_price: Number(srvInput.default_price) || 0,
+          estimated_time_minutes: Number(srvInput.estimated_time_minutes) || 60,
+          category_ids: resolvedCategoryIds,
+          is_active: true
+        },
+        performedByName
+      );
+      serviceKeys.add(`code:${code.toLowerCase()}`);
+      serviceKeys.add(`name:${name.toLowerCase()}`);
+      result.addedServices += 1;
+    }
+
+    // 4. Modelos & Produtos
+    const ensureFallbackCategoryId = () => {
+      if (firstCategoryId) return firstCategoryId;
+      const fallback = this.addCategory(
+        {
+          tenant_id: tenantId,
+          name: 'Equipamento Geral',
+          slug: 'equipamento-geral',
+          icon: 'Layers',
+          identifier_label: 'Nº de Série',
+          inspection_type: 'STANDARD',
+          is_system: false,
+          is_active: true
+        },
+        performedByName
+      );
+      firstCategoryId = fallback.id;
+      categoryMapByKey.set('equipamento-geral', fallback.id);
+      categoryMapByKey.set('equipamento geral', fallback.id);
+      return fallback.id;
+    };
+
+    const existingModels = this.getModels(tenantId);
+    const modelKeys = new Set<string>();
+    existingModels.forEach(m => {
+      modelKeys.add(`name:${m.name.trim().toLowerCase()}`);
+      if (m.internal_code) modelKeys.add(`code:${m.internal_code.trim().toLowerCase()}`);
+    });
+
+    for (const modInput of selection.models || []) {
+      const name = modInput.name?.trim();
+      if (!name) continue;
+      const code = modInput.internal_code?.trim();
+      if (
+        modelKeys.has(`name:${name.toLowerCase()}`) ||
+        (code && modelKeys.has(`code:${code.toLowerCase()}`))
+      ) {
+        result.skippedModels += 1;
+        continue;
+      }
+
+      const categoryId =
+        (modInput.category_slug && categoryMapByKey.get(modInput.category_slug.toLowerCase())) ||
+        ensureFallbackCategoryId();
+      const brandObj = modInput.brand_name
+        ? brandMapByKey.get(modInput.brand_name.trim().toLowerCase()) ||
+          brandMapByKey.get(slugify(modInput.brand_name))
+        : undefined;
+
+      this.addModel(
+        {
+          tenant_id: tenantId,
+          category_id: categoryId,
+          brand_id: brandObj?.id,
+          brand_name: brandObj?.name || modInput.brand_name?.trim(),
+          name,
+          internal_code: code,
+          description: modInput.description,
+          empty_weight_grams: modInput.empty_weight_grams,
+          full_weight_grams: modInput.full_weight_grams,
+          attributes: modInput.attributes || {},
+          is_active: true
+        },
+        performedByName
+      );
+      modelKeys.add(`name:${name.toLowerCase()}`);
+      if (code) modelKeys.add(`code:${code.toLowerCase()}`);
+      result.addedModels += 1;
+    }
+
+    // 5. Etapas Kanban (Workflow States)
+    if (selection.replaceWorkflowStates && (selection.workflowStates || []).length > 0) {
+      const currentTenantStates = this.getWorkflowStates(tenantId).filter(s => s.tenant_id === tenantId);
+      currentTenantStates.forEach(st => {
+        this.deleteWorkflowState(st.id, performedByName);
+      });
+    }
+
+    const currentStates = this.getWorkflowStates(tenantId);
+    const stateKeys = new Set<string>();
+    let maxSortOrder = 0;
+    currentStates.forEach(s => {
+      stateKeys.add(`code:${s.code.trim().toUpperCase()}`);
+      stateKeys.add(`name:${s.name.trim().toLowerCase()}`);
+      if (s.sort_order > maxSortOrder) maxSortOrder = s.sort_order;
+    });
+
+    for (const stInput of selection.workflowStates || []) {
+      const name = stInput.name?.trim();
+      if (!name) continue;
+      const code = (stInput.code || slugify(name).replace(/-/g, '_').toUpperCase()).trim();
+      if (stateKeys.has(`code:${code.toUpperCase()}`) || stateKeys.has(`name:${name.toLowerCase()}`)) {
+        result.skippedWorkflowStates += 1;
+        continue;
+      }
+
+      maxSortOrder += 1;
+      this.addWorkflowState(
+        tenantId,
+        {
+          tenant_id: tenantId,
+          workflow_id: 'a3000000-0000-0000-0000-000000000001',
+          code,
+          name,
+          color: stInput.color || 'slate',
+          stage_type: stInput.stage_type || 'EM_ANDAMENTO',
+          sort_order: selection.replaceWorkflowStates && stInput.sort_order ? stInput.sort_order : maxSortOrder,
+          is_initial: Boolean(stInput.is_initial),
+          is_final: Boolean(stInput.is_final)
+        },
+        performedByName
+      );
+      stateKeys.add(`code:${code.toUpperCase()}`);
+      stateKeys.add(`name:${name.toLowerCase()}`);
+      result.addedWorkflowStates += 1;
+    }
+
+    // 6. Atualizar flags da empresa e registrar auditoria
+    const data = this.getStoreData();
+    const now = new Date().toISOString();
+    const companyUpdates: Partial<Company> = {
+      presets_configured_at: now,
+      updated_at: now
+    };
+    if (selection.segments && selection.segments.length > 0) {
+      companyUpdates.active_template_keys = selection.segments;
+      companyUpdates.business_segment = selection.segments[0];
+    }
+
+    const compIdx = (data.companies || []).findIndex((c: Company) => c.id === tenantId);
+    if (compIdx !== -1) {
+      data.companies[compIdx] = { ...data.companies[compIdx], ...companyUpdates };
+    }
+    if (data.company && data.company.id === tenantId) {
+      data.company = { ...data.company, ...companyUpdates };
+    }
+    if (data.settings && data.settings.tenant_id === tenantId && selection.segments && selection.segments.length > 0) {
+      data.settings.active_templates = selection.segments;
+    }
+    this.saveStoreData(data);
+
+    this.enqueueOrExecuteMutation({
+      table: 'companies',
+      action: 'UPDATE',
+      payload: {
+        presets_configured_at: now,
+        ...(selection.segments && selection.segments.length > 0
+          ? { active_template_keys: selection.segments, business_segment: selection.segments[0] }
+          : {})
+      },
+      matchField: 'id',
+      matchValue: tenantId
+    });
+
+    this.logAudit({
+      tenant_id: tenantId,
+      user_name: performedByName || 'Administrador',
+      action: 'IMPORTACAO_PRE_CADASTROS',
+      resource: 'companies',
+      resource_id: tenantId,
+      details: `Pré-cadastros aplicados: +${result.addedCategories} cat., +${result.addedBrands} marcas, +${result.addedServices} serviços, +${result.addedModels} modelos, +${result.addedWorkflowStates} etapas Kanban.`
+    });
+
+    return result;
+  }
+
+  static dismissPresetOnboarding(tenantId: string, performedByName?: string): Company {
+    const now = new Date().toISOString();
+    const updated = this.updateCompany(tenantId, { presets_dismissed_at: now }, performedByName);
+    this.logAudit({
+      tenant_id: tenantId,
+      user_name: performedByName || 'Administrador',
+      action: 'ADIAMENTO_PRE_CADASTROS',
+      resource: 'companies',
+      resource_id: tenantId,
+      details: `Administrador optou por iniciar loja limpa e configurar pré-cadastros posteriormente.`
+    });
+    return updated;
+  }
+
   static getSegmentConfig(tenantId: string) {
     const company = this.getCompany(tenantId);
     const primaryKey = company.active_template_keys?.[0] || 'RECARGA_CARTUCHOS';

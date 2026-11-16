@@ -52,6 +52,7 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { DialogModal, DialogModalProps } from '@/components/ui/dialog-modal';
+import { PresetCatalogWizard } from '@/components/presets/PresetCatalogWizard';
 import { Profile, UserRole, CompanySettings, PermissionGroup, Company } from '@/types';
 import { toast } from '@/lib/toast';
 
@@ -94,9 +95,9 @@ function CompanySettingsContent() {
 
   const { currentCompany, currentUser, hasPermission, refreshUser } = useAuth();
   
-  // Navigation Tabs (Separated: regras vs impressao vs assinatura)
-  const [activeTab, setActiveTab] = useState<'equipe' | 'grupos' | 'empresa' | 'regras' | 'impressao' | 'assinatura'>(
-    ['equipe', 'grupos', 'empresa', 'regras', 'impressao', 'assinatura'].includes(initialTab) ? initialTab : 'equipe'
+  // Navigation Tabs (Separated: regras vs impressao vs assinatura vs precadastros)
+  const [activeTab, setActiveTab] = useState<'equipe' | 'grupos' | 'empresa' | 'regras' | 'impressao' | 'assinatura' | 'precadastros'>(
+    ['equipe', 'grupos', 'empresa', 'regras', 'impressao', 'assinatura', 'precadastros'].includes(initialTab) ? initialTab : 'equipe'
   );
 
   const [users, setUsers] = useState<Profile[]>([]);
@@ -946,6 +947,21 @@ function CompanySettingsContent() {
               )}
             </button>
           </>
+        )}
+
+        {(currentUser?.role === 'ADMINISTRADOR' || currentUser?.role === 'SUPER_ADMIN') && (
+          <button
+            type="button"
+            onClick={() => setActiveTab('precadastros')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shrink-0 ${
+              activeTab === 'precadastros'
+                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            <Sparkles className="w-4 h-4" />
+            <span>Pré-Cadastros & Bibliotecas</span>
+          </button>
         )}
       </div>
 
@@ -2930,6 +2946,16 @@ function CompanySettingsContent() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* TAB 7: BIBLIOTECA FLEXÍVEL DE PRÉ-CADASTROS (EXCLUSIVO ADMINISTRADOR) */}
+      {activeTab === 'precadastros' && (currentUser?.role === 'ADMINISTRADOR' || currentUser?.role === 'SUPER_ADMIN') && (
+        <div className="space-y-4">
+          <PresetCatalogWizard
+            mode="inline"
+            onComplete={() => refreshUser()}
+          />
         </div>
       )}
 

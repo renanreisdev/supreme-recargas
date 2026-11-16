@@ -70,6 +70,7 @@ export type BusinessTemplateKey =
   | 'RECARGA_CARTUCHOS' 
   | 'ASSISTENCIA_INFORMATICA' 
   | 'ASSISTENCIA_CELULARES' 
+  | 'VIDEOGAMES_ELETRONICOS'
   | 'FERRAMENTAS_MOTORES' 
   | 'OFICINA_GERAL';
 
@@ -118,6 +119,8 @@ export interface Company {
   terms_accepted_at?: string;
   terms_accepted_by?: string;
   terms_version?: string;
+  presets_configured_at?: string;
+  presets_dismissed_at?: string;
   created_at: string;
   updated_at: string;
 }
@@ -807,4 +810,78 @@ export interface CashRegisterSession {
   closing_calculated_cash?: number; // Calculado pelo sistema
   closing_difference?: number; // Diferença apurada
   movements: CashRegisterMovement[];
+}
+
+// ============================================================================
+// 9. CATALOG PRESETS SELECTION WIZARD
+// ============================================================================
+
+export interface PresetImportCategoryInput {
+  name: string;
+  slug?: string;
+  description?: string;
+  icon?: string;
+  identifier_label?: string;
+  inspection_type?: 'SCALE' | 'CHECKLIST' | 'STANDARD' | string;
+  checklist_items?: string[];
+  technical_verdicts?: string[];
+  custom_fields?: CategoryCustomField[];
+}
+
+export interface PresetImportBrandInput {
+  name: string;
+  slug?: string;
+}
+
+export interface PresetImportServiceInput {
+  name: string;
+  code: string;
+  description?: string;
+  default_price: number;
+  estimated_time_minutes?: number;
+  category_slugs?: string[];
+}
+
+export interface PresetImportModelInput {
+  name: string;
+  internal_code?: string;
+  brand_name?: string;
+  category_slug?: string;
+  description?: string;
+  attributes?: Record<string, any>;
+  empty_weight_grams?: number;
+  full_weight_grams?: number;
+}
+
+export interface PresetImportWorkflowStateInput {
+  code: string;
+  name: string;
+  color: KanbanColumnColor;
+  stage_type: StageType;
+  sort_order: number;
+  is_initial: boolean;
+  is_final: boolean;
+}
+
+export interface PresetImportSelection {
+  segments?: BusinessTemplateKey[];
+  categories: PresetImportCategoryInput[];
+  brands: PresetImportBrandInput[];
+  services: PresetImportServiceInput[];
+  models: PresetImportModelInput[];
+  workflowStates: PresetImportWorkflowStateInput[];
+  replaceWorkflowStates?: boolean;
+}
+
+export interface PresetImportResult {
+  addedCategories: number;
+  skippedCategories: number;
+  addedBrands: number;
+  skippedBrands: number;
+  addedServices: number;
+  skippedServices: number;
+  addedModels: number;
+  skippedModels: number;
+  addedWorkflowStates: number;
+  skippedWorkflowStates: number;
 }
