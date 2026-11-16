@@ -27,14 +27,21 @@ const securityHeaders = [
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
 ];
 
+const isCloudflareBuild = process.env.CLOUDFLARE_BUILD === "1";
+
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  ...(isCloudflareBuild ? { output: "export" as const } : {}),
   experimental: {
     agentUpgrade: "security",
   },
-  async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
-  },
+  ...(!isCloudflareBuild
+    ? {
+        async headers() {
+          return [{ source: "/:path*", headers: securityHeaders }];
+        },
+      }
+    : {}),
 };
 
 export default nextConfig;

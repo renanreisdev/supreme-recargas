@@ -39,7 +39,15 @@ function maskCustomerName(name?: string): string {
 export default function PublicTrackingPage() {
   const params = useParams();
   const rawToken = params?.token as string;
-  const token = rawToken ? decodeURIComponent(rawToken) : '';
+  const token = React.useMemo(() => {
+    if (typeof window !== 'undefined') {
+      const match = window.location.pathname.match(/^\/acompanhar\/([^/?#]+)/);
+      if (match?.[1] && match[1] !== 'placeholder') {
+        return decodeURIComponent(match[1]);
+      }
+    }
+    return rawToken && rawToken !== 'placeholder' ? decodeURIComponent(rawToken) : '';
+  }, [rawToken]);
   const [order, setOrder] = useState<ServiceOrder | null>(null);
   const [company, setCompany] = useState<Company>(MOCK_COMPANY_SUPREME);
   const [isLoading, setIsLoading] = useState(true);

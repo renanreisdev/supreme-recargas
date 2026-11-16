@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "cf:build": "node -e \"process.env.CLOUDFLARE_BUILD='1'; require('child_process').execSync('npx next build', {stdio: 'inherit'})\"",
+    "cf:deploy": "npm run cf:build && npx wrangler deploy"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.7.1",
@@ -35,6 +37,7 @@
     "eslint-config-next": "16.4.5",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "wrangler": "^4.162.0"
   }
 }
