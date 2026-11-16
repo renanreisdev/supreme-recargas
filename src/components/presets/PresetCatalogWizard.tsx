@@ -25,6 +25,7 @@ import { useAuth } from '@/lib/auth-context';
 import { AppStore, BUSINESS_PRESETS } from '@/lib/store';
 import {
   BusinessTemplateKey,
+  CategoryCustomField,
   KanbanColumnColor,
   PresetImportResult,
   PresetImportSelection,
@@ -56,6 +57,8 @@ interface DraftCategory {
   identifier_label: string;
   inspection_type?: string;
   checklist_items?: string[];
+  custom_fields?: CategoryCustomField[];
+  technical_verdicts?: string[];
   selected: boolean;
   alreadyExists: boolean;
   sourceSegments: string[];
@@ -93,6 +96,7 @@ interface DraftModel {
   empty_weight_grams?: number;
   full_weight_grams?: number;
   attributes?: Record<string, any>;
+  custom_attributes?: Record<string, any>;
   selected: boolean;
   alreadyExists: boolean;
   sourceSegments: string[];
@@ -287,6 +291,8 @@ export function PresetCatalogWizard({
             identifier_label: prevEdited ? prevEdited.identifier_label : c.identifier_label || 'Nº de Série',
             inspection_type: c.inspection_type || 'STANDARD',
             checklist_items: c.checklist_items || [],
+            custom_fields: c.custom_fields || [],
+            technical_verdicts: c.technical_verdicts || [],
             selected: prevEdited ? prevEdited.selected : !alreadyExists,
             alreadyExists,
             sourceSegments: [segKey]
@@ -359,6 +365,7 @@ export function PresetCatalogWizard({
             empty_weight_grams: m.empty_weight_grams ?? m.attributes?.empty_weight_grams,
             full_weight_grams: m.full_weight_grams ?? m.attributes?.full_weight_grams,
             attributes: m.attributes || {},
+            custom_attributes: m.custom_attributes || m.attributes || {},
             selected: prevEdited ? prevEdited.selected : !alreadyExists,
             alreadyExists,
             sourceSegments: [segKey]
@@ -661,7 +668,9 @@ export function PresetCatalogWizard({
             icon: c.icon,
             identifier_label: c.identifier_label,
             inspection_type: c.inspection_type,
-            checklist_items: c.checklist_items
+            checklist_items: c.checklist_items,
+            custom_fields: c.custom_fields,
+            technical_verdicts: c.technical_verdicts
           })),
         brands: brandsDraft
           .filter(b => b.selected)
@@ -689,7 +698,8 @@ export function PresetCatalogWizard({
             description: m.description,
             empty_weight_grams: m.empty_weight_grams,
             full_weight_grams: m.full_weight_grams,
-            attributes: m.attributes
+            attributes: m.attributes,
+            custom_attributes: m.custom_attributes
           })),
         workflowStates: workflowDraft
           .filter(w => w.selected)
@@ -1052,6 +1062,11 @@ export function PresetCatalogWizard({
                           className="w-36 h-8 text-xs"
                         />
                       </div>
+                      {(cat.custom_fields?.length || 0) > 0 && (
+                        <Badge className="bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 text-[10px] font-bold">
+                          {cat.custom_fields!.length} opcionais
+                        </Badge>
+                      )}
                       {cat.alreadyExists && (
                         <Badge className="bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[10px] font-bold">
                           Já cadastrado

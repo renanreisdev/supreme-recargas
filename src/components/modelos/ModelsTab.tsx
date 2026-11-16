@@ -347,7 +347,10 @@ export function ModelsTab({
             const cat = categories.find(c => c.id === model.category_id);
             const br = brands.find(b => b.id === model.brand_id);
             const hasCustomPrices = model.service_prices && Object.keys(model.service_prices).length > 0;
-            const dynamicAttrs = model.custom_attributes || {};
+            const dynamicAttrs = {
+              ...(model.attributes || {}),
+              ...(model.custom_attributes || {})
+            };
 
             return (
               <Card key={model.id} className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-emerald-500/40 transition-all shadow-sm group">
@@ -405,7 +408,14 @@ export function ModelsTab({
                   {/* Technical Specs & Dynamic Attributes */}
                   <div className="flex flex-wrap gap-1.5 text-[10px] text-slate-600 dark:text-slate-300">
                     {Object.entries(dynamicAttrs).map(([k, v]) => {
-                      if (v === undefined || v === '' || v === false) return null;
+                      if (
+                        v === undefined ||
+                        v === '' ||
+                        v === false ||
+                        k === 'empty_weight_grams' ||
+                        k === 'full_weight_grams' ||
+                        k === 'capacity_ml'
+                      ) return null;
                       const fieldDef = cat?.custom_fields?.find(f => f.name === k);
                       const displayVal = typeof v === 'boolean' ? (v ? 'Sim' : 'Não') : (fieldDef?.unit ? `${v}${fieldDef.unit}` : String(v));
 

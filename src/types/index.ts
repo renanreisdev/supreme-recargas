@@ -849,6 +849,7 @@ export interface PresetImportModelInput {
   category_slug?: string;
   description?: string;
   attributes?: Record<string, any>;
+  custom_attributes?: Record<string, any>;
   empty_weight_grams?: number;
   full_weight_grams?: number;
 }

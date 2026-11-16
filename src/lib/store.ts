@@ -42,7 +42,8 @@ import {
   CashRegisterMovement,
   PlatformSaasSettings,
   PresetImportSelection,
-  PresetImportResult
+  PresetImportResult,
+  CategoryCustomField
 } from '@/types';
 import { supabase } from './supabase';
 import { hashPassword, verifyPassword, isPasswordHashed, buildLgpdAnonymizedCustomer } from '@/lib/security';
@@ -109,16 +110,423 @@ function generateTrackingToken(): string {
 // 1. BUSINESS PRESETS & SEEDS (Zero Hardcoding - Config Driven)
 // ============================================================================
 
+// ============================================================================
+// CATEGORY DEFAULT SCHEMAS (Custom Fields & Verdicts) & CARTRIDGE CATALOG
+// ============================================================================
+
+const CARTRIDGE_DEFAULT_FIELDS: CategoryCustomField[] = [
+  { id: 'f-cor', name: 'Cor / Tipo de Tinta', type: 'select', options: ['Preto', 'Tricolor', 'Ciano', 'Magenta', 'Amarelo'], include_in_description: true },
+  { id: 'f-xl', name: 'Versão XL / Alta Capacidade', type: 'checkbox', include_in_description: true },
+  { id: 'f-cap', name: 'Capacidade', type: 'number', unit: 'ml', include_in_description: false }
+];
+
+const CARTRIDGE_DEFAULT_VERDICTS: string[] = [
+  '100% OK / Concluído',
+  'CID / Circuito Queimado',
+  'Queimado / Sem Reparo',
+  'Entupido Irrecuperável',
+  'Falha de Impressão Persistente',
+  'Recusado / Devolvido'
+];
+
+const TONER_DEFAULT_FIELDS: CategoryCustomField[] = [
+  { id: 'f-cor-toner', name: 'Cor do Toner', type: 'select', options: ['Preto (Black)', 'Ciano', 'Magenta', 'Amarelo'], include_in_description: true },
+  { id: 'f-xl-toner', name: 'Alto Rendimento (XL / X)', type: 'checkbox', include_in_description: true },
+  { id: 'f-gram', name: 'Carga de Pó', type: 'number', unit: 'g', include_in_description: false }
+];
+
+const TONER_DEFAULT_VERDICTS: string[] = [
+  '100% OK / Concluído',
+  'Cilindro / PCR Danificado',
+  'Chip Queimado / Bloqueado',
+  'Carcaça Danificada / Vazando',
+  'Sem Reparo (Inviável)'
+];
+
+const PRINTER_DEFAULT_FIELDS: CategoryCustomField[] = [
+  { id: 'f-imp-tec', name: 'Tecnologia de Impressão', type: 'select', options: ['Tanque de Tinta', 'Laser Mono', 'Laser Color', 'Jato de Tinta', 'Térmica'], include_in_description: true },
+  { id: 'f-imp-volt', name: 'Voltagem', type: 'select', options: ['110V', '220V', 'Bivolt'], include_in_description: false }
+];
+
+const IT_DEFAULT_FIELDS: CategoryCustomField[] = [
+  { id: 'f-ram', name: 'Memória RAM', type: 'select', options: ['4GB', '8GB', '16GB', '32GB', '64GB'], include_in_description: true },
+  { id: 'f-ssd', name: 'Armazenamento SSD/HD', type: 'select', options: ['SSD 120GB', 'SSD 240GB', 'SSD 480GB', 'SSD 1TB', 'HD 500GB', 'HD 1TB'], include_in_description: true },
+  { id: 'f-cpu', name: 'Processador / CPU', type: 'text', include_in_description: true },
+  { id: 'f-volt', name: 'Voltagem / Fonte', type: 'select', options: ['Bivolt', '110V', '220V', 'Bateria'], include_in_description: false }
+];
+
+const MOBILE_DEFAULT_FIELDS: CategoryCustomField[] = [
+  { id: 'f-cel-arm', name: 'Armazenamento', type: 'select', options: ['64GB', '128GB', '256GB', '512GB', '1TB'], include_in_description: true },
+  { id: 'f-cel-cor', name: 'Cor do Aparelho', type: 'text', include_in_description: true },
+  { id: 'f-cel-bat', name: 'Saúde da Bateria (%)', type: 'number', unit: '%', include_in_description: false }
+];
+
+const CONSOLE_DEFAULT_FIELDS: CategoryCustomField[] = [
+  { id: 'f-gam-arm', name: 'Armazenamento / Versão', type: 'select', options: ['512GB', '825GB', '1TB', 'Mídia Física', 'Digital'], include_in_description: true },
+  { id: 'f-gam-volt', name: 'Voltagem / Fonte', type: 'select', options: ['Bivolt', '110V', '220V'], include_in_description: false }
+];
+
+const TOOL_DEFAULT_FIELDS: CategoryCustomField[] = [
+  { id: 'f-fer-volt', name: 'Voltagem / Alimentação', type: 'select', options: ['Bivolt', '110V', '220V', 'Trifásico 220/380V', 'Bateria'], include_in_description: true },
+  { id: 'f-fer-pot', name: 'Potência', type: 'number', unit: 'W', include_in_description: true }
+];
+
+const GENERAL_DEFAULT_FIELDS: CategoryCustomField[] = [
+  { id: 'f-gen-volt', name: 'Voltagem / Alimentação', type: 'select', options: ['Bivolt', '110V', '220V', 'Bateria'], include_in_description: true },
+  { id: 'f-gen-pot', name: 'Potência', type: 'number', unit: 'W', include_in_description: false }
+];
+
+const WORKBENCH_DEFAULT_VERDICTS: string[] = [
+  '100% OK / Concluído',
+  'Reparo Concluído com Sucesso',
+  'Reparado com Ressalvas',
+  'Sem Reparo / Placa Inviável',
+  'Aguardando Peça do Cliente',
+  'Orçamento Reprovado / Devolvido'
+];
+
+export function enrichCategoryWithDefaults(cat: ItemCategory): ItemCategory {
+  const slug = (cat.slug || cat.name || '').toLowerCase();
+  let defaultFields = GENERAL_DEFAULT_FIELDS;
+  let defaultVerdicts = WORKBENCH_DEFAULT_VERDICTS;
+
+  if (slug.includes('cartucho')) {
+    defaultFields = CARTRIDGE_DEFAULT_FIELDS;
+    defaultVerdicts = CARTRIDGE_DEFAULT_VERDICTS;
+  } else if (slug.includes('toner')) {
+    defaultFields = TONER_DEFAULT_FIELDS;
+    defaultVerdicts = TONER_DEFAULT_VERDICTS;
+  } else if (slug.includes('impressora')) {
+    defaultFields = PRINTER_DEFAULT_FIELDS;
+  } else if (slug.includes('notebook') || slug.includes('computador') || slug.includes('desktop') || slug.includes('pc') || slug.includes('placa-video')) {
+    defaultFields = IT_DEFAULT_FIELDS;
+  } else if (slug.includes('smartphone') || slug.includes('tablet') || slug.includes('smartwatch') || slug.includes('celular')) {
+    defaultFields = MOBILE_DEFAULT_FIELDS;
+  } else if (slug.includes('console') || slug.includes('controle') || slug.includes('tv')) {
+    defaultFields = CONSOLE_DEFAULT_FIELDS;
+  } else if (slug.includes('ferramenta') || slug.includes('motor') || slug.includes('compressor')) {
+    defaultFields = TOOL_DEFAULT_FIELDS;
+  }
+
+  const needsFields = !Array.isArray(cat.custom_fields) || cat.custom_fields.length === 0;
+  const needsVerdicts = !Array.isArray(cat.technical_verdicts) || cat.technical_verdicts.length === 0;
+
+  if (!needsFields && !needsVerdicts) return cat;
+
+  return {
+    ...cat,
+    custom_fields: needsFields ? defaultFields.map(f => ({ ...f, options: f.options ? [...f.options] : undefined })) : cat.custom_fields,
+    technical_verdicts: needsVerdicts ? [...defaultVerdicts] : cat.technical_verdicts
+  };
+}
+
+interface CartridgeFamilySpec {
+  idBase: string;
+  brandId: string;
+  brandName: string;
+  blackName: string;
+  colorName?: string;
+  blackCode: string;
+  colorCode?: string;
+  compat: string;
+  black?: { ml: number; empty: number; full: number };
+  color?: { ml: number; empty: number; full: number };
+  blackXl?: { name?: string; code?: string; ml: number; empty: number; full: number };
+  colorXl?: { name?: string; code?: string; ml: number; empty: number; full: number };
+}
+
+function buildCartridgePresetModels(): Partial<ItemModel>[] {
+  const families: CartridgeFamilySpec[] = [
+    {
+      idBase: 'hp667', brandId: 'brand-hp', brandName: 'HP',
+      blackName: 'HP 667', colorName: 'HP 667', blackCode: 'HP667', colorCode: 'HP667',
+      compat: 'HP DeskJet Ink Advantage 2376 / 2776 / 6476',
+      black: { ml: 2.0, empty: 29.0, full: 31.0 },
+      color: { ml: 2.0, empty: 31.0, full: 33.0 },
+      blackXl: { ml: 6.5, empty: 30.0, full: 36.5 },
+      colorXl: { ml: 7.0, empty: 32.0, full: 39.0 }
+    },
+    {
+      idBase: 'hp664', brandId: 'brand-hp', brandName: 'HP',
+      blackName: 'HP 664', colorName: 'HP 664', blackCode: 'HP664', colorCode: 'HP664',
+      compat: 'HP DeskJet Ink Advantage 2136 / 2676 / 3776',
+      black: { ml: 2.0, empty: 28.5, full: 30.5 },
+      color: { ml: 2.0, empty: 30.5, full: 32.5 },
+      blackXl: { ml: 6.5, empty: 29.5, full: 36.0 },
+      colorXl: { ml: 7.0, empty: 31.5, full: 38.5 }
+    },
+    {
+      idBase: 'hp662', brandId: 'brand-hp', brandName: 'HP',
+      blackName: 'HP 662', colorName: 'HP 662', blackCode: 'HP662', colorCode: 'HP662',
+      compat: 'HP DeskJet 1516 / 2546 / 3516 / 3546',
+      black: { ml: 2.0, empty: 28.0, full: 30.0 },
+      color: { ml: 2.0, empty: 30.0, full: 32.0 },
+      blackXl: { ml: 6.5, empty: 29.0, full: 35.5 },
+      colorXl: { ml: 7.0, empty: 31.0, full: 38.0 }
+    },
+    {
+      idBase: 'hp122', brandId: 'brand-hp', brandName: 'HP',
+      blackName: 'HP 122', colorName: 'HP 122', blackCode: 'HP122', colorCode: 'HP122',
+      compat: 'HP DeskJet 1000 / 2000 / 2050 / 3050',
+      black: { ml: 2.0, empty: 27.0, full: 29.0 },
+      color: { ml: 2.0, empty: 29.0, full: 31.0 },
+      blackXl: { ml: 6.0, empty: 28.0, full: 34.0 },
+      colorXl: { ml: 6.0, empty: 30.0, full: 36.0 }
+    },
+    {
+      idBase: 'hp60', brandId: 'brand-hp', brandName: 'HP',
+      blackName: 'HP 60', colorName: 'HP 60', blackCode: 'HP60', colorCode: 'HP60',
+      compat: 'HP DeskJet D2530 / F4280 / F4480 / Photosmart C4680',
+      black: { ml: 4.0, empty: 31.0, full: 35.0 },
+      color: { ml: 4.0, empty: 33.0, full: 37.0 },
+      blackXl: { ml: 12.0, empty: 32.0, full: 44.0 },
+      colorXl: { ml: 10.0, empty: 34.0, full: 44.0 }
+    },
+    {
+      idBase: 'hp901', brandId: 'brand-hp', brandName: 'HP',
+      blackName: 'HP 901', colorName: 'HP 901', blackCode: 'HP901', colorCode: 'HP901',
+      compat: 'HP OfficeJet J4580 / J4660 / 4500',
+      black: { ml: 4.0, empty: 33.0, full: 37.0 },
+      color: { ml: 4.5, empty: 35.0, full: 39.5 },
+      blackXl: { ml: 14.0, empty: 35.0, full: 49.0 }
+    },
+    {
+      idBase: 'hp21-22', brandId: 'brand-hp', brandName: 'HP',
+      blackName: 'HP 21', colorName: 'HP 22', blackCode: 'HP21', colorCode: 'HP22',
+      compat: 'HP DeskJet D1360 / D1460 / F380 / F4180',
+      black: { ml: 5.0, empty: 32.0, full: 37.0 },
+      color: { ml: 5.0, empty: 34.0, full: 39.0 },
+      blackXl: { name: 'HP 21 Preto XL', code: 'HP21-XL', ml: 12.0, empty: 34.0, full: 46.0 },
+      colorXl: { name: 'HP 22 Colorido XL', code: 'HP22-XL', ml: 11.0, empty: 35.0, full: 46.0 }
+    },
+    {
+      idBase: 'hp27-28', brandId: 'brand-hp', brandName: 'HP',
+      blackName: 'HP 27', colorName: 'HP 28', blackCode: 'HP27', colorCode: 'HP28',
+      compat: 'HP DeskJet 3320 / 3420 / 3550 / PSC 1210',
+      black: { ml: 10.0, empty: 36.0, full: 46.0 },
+      color: { ml: 8.0, empty: 37.0, full: 45.0 }
+    },
+    {
+      idBase: 'hp56-57', brandId: 'brand-hp', brandName: 'HP',
+      blackName: 'HP 56', colorName: 'HP 57', blackCode: 'HP56', colorCode: 'HP57',
+      compat: 'HP DeskJet 5150 / 5650 / PSC 1315 / 2175',
+      black: { ml: 19.0, empty: 39.0, full: 58.0 },
+      color: { ml: 17.0, empty: 40.0, full: 57.0 }
+    },
+    {
+      idBase: 'hp74-75', brandId: 'brand-hp', brandName: 'HP',
+      blackName: 'HP 74', colorName: 'HP 75', blackCode: 'HP74', colorCode: 'HP75',
+      compat: 'HP DeskJet D4260 / Photosmart C4280 / C4480 / OfficeJet J5780',
+      black: { ml: 4.5, empty: 32.0, full: 36.5 },
+      color: { ml: 3.5, empty: 34.0, full: 37.5 },
+      blackXl: { name: 'HP 74 Preto XL', code: 'HP74-XL', ml: 18.0, empty: 35.0, full: 53.0 },
+      colorXl: { name: 'HP 75 Colorido XL', code: 'HP75-XL', ml: 12.0, empty: 36.0, full: 48.0 }
+    },
+    {
+      idBase: 'hp92-93', brandId: 'brand-hp', brandName: 'HP',
+      blackName: 'HP 92', colorName: 'HP 93', blackCode: 'HP92', colorCode: 'HP93',
+      compat: 'HP DeskJet 5440 / PSC 1510 / Photosmart C3180',
+      black: { ml: 5.0, empty: 33.0, full: 38.0 },
+      color: { ml: 5.0, empty: 35.0, full: 40.0 }
+    },
+    {
+      idBase: 'hp94-97', brandId: 'brand-hp', brandName: 'HP',
+      blackName: 'HP 94', colorName: 'HP 95', blackCode: 'HP94', colorCode: 'HP95',
+      compat: 'HP DeskJet 5740 / 6540 / Photosmart 8150 / OfficeJet 6210',
+      black: { ml: 11.0, empty: 36.0, full: 47.0 },
+      color: { ml: 7.0, empty: 36.0, full: 43.0 },
+      blackXl: { name: 'HP 96 Preto XL', code: 'HP96-XL', ml: 21.0, empty: 39.0, full: 60.0 },
+      colorXl: { name: 'HP 97 Colorido XL', code: 'HP97-XL', ml: 14.0, empty: 38.0, full: 52.0 }
+    },
+    {
+      idBase: 'hp675', brandId: 'brand-hp', brandName: 'HP',
+      blackName: 'HP 675', colorName: 'HP 675', blackCode: 'HP675', colorCode: 'HP675',
+      compat: 'HP DeskJet Ink Advantage K209 / K109 / F4480 Advantage',
+      black: { ml: 10.0, empty: 34.0, full: 44.0 },
+      color: { ml: 6.0, empty: 35.0, full: 41.0 }
+    },
+    {
+      idBase: 'canon-145-146', brandId: 'brand-canon', brandName: 'Canon',
+      blackName: 'Canon PG-145', colorName: 'Canon CL-146', blackCode: 'PG145', colorCode: 'CL146',
+      compat: 'Canon Pixma MG2410 / MG2510 / MG2910 / IP2810 / TS3110',
+      black: { ml: 8.0, empty: 32.0, full: 40.0 },
+      color: { ml: 9.0, empty: 35.0, full: 44.0 },
+      blackXl: { name: 'Canon PG-145 Preto XL', code: 'PG145-XL', ml: 12.0, empty: 33.0, full: 45.0 },
+      colorXl: { name: 'Canon CL-146 Colorido XL', code: 'CL146-XL', ml: 13.0, empty: 36.0, full: 49.0 }
+    },
+    {
+      idBase: 'canon-245-246', brandId: 'brand-canon', brandName: 'Canon',
+      blackName: 'Canon PG-245', colorName: 'Canon CL-246', blackCode: 'PG245', colorCode: 'CL246',
+      compat: 'Canon Pixma MG2520 / MX492 / TS3320 / TR4520',
+      black: { ml: 8.9, empty: 32.5, full: 41.4 },
+      color: { ml: 9.0, empty: 35.5, full: 44.5 },
+      blackXl: { name: 'Canon PG-245 Preto XL', code: 'PG245-XL', ml: 12.0, empty: 33.5, full: 45.5 },
+      colorXl: { name: 'Canon CL-246 Colorido XL', code: 'CL246-XL', ml: 13.0, empty: 36.5, full: 49.5 }
+    },
+    {
+      idBase: 'canon-210-211', brandId: 'brand-canon', brandName: 'Canon',
+      blackName: 'Canon PG-210', colorName: 'Canon CL-211', blackCode: 'PG210', colorCode: 'CL211',
+      compat: 'Canon Pixma MP250 / MP280 / MP490 / MX340',
+      black: { ml: 9.0, empty: 33.0, full: 42.0 },
+      color: { ml: 9.0, empty: 36.0, full: 45.0 },
+      blackXl: { name: 'Canon PG-210 Preto XL', code: 'PG210-XL', ml: 15.0, empty: 34.0, full: 49.0 },
+      colorXl: { name: 'Canon CL-211 Colorido XL', code: 'CL211-XL', ml: 13.0, empty: 37.0, full: 50.0 }
+    },
+    {
+      idBase: 'canon-40-41', brandId: 'brand-canon', brandName: 'Canon',
+      blackName: 'Canon PG-40', colorName: 'Canon CL-41', blackCode: 'PG40', colorCode: 'CL41',
+      compat: 'Canon Pixma iP1600 / iP1800 / MP150 / MP190',
+      black: { ml: 16.0, empty: 37.0, full: 53.0 },
+      color: { ml: 12.0, empty: 38.0, full: 50.0 }
+    }
+  ];
+
+  const models: Partial<ItemModel>[] = [];
+  const pushVariant = (
+    id: string,
+    brandId: string,
+    brandName: string,
+    name: string,
+    internal_code: string,
+    color: 'Preto' | 'Tricolor',
+    isXl: boolean,
+    compat: string,
+    spec: { ml: number; empty: number; full: number }
+  ) => {
+    const attrs = {
+      'Cor / Tipo de Tinta': color,
+      'Versão XL / Alta Capacidade': isXl,
+      'Capacidade': spec.ml
+    };
+    models.push({
+      id,
+      category_id: 'cat-cartucho-tinta',
+      brand_id: brandId,
+      brand_name: brandName,
+      name,
+      internal_code,
+      color,
+      is_xl: isXl,
+      capacity_ml: spec.ml,
+      description: `Cartucho jato de tinta ${name} (${compat})`,
+      empty_weight_grams: spec.empty,
+      full_weight_grams: spec.full,
+      attributes: attrs,
+      custom_attributes: attrs,
+      is_active: true
+    });
+  };
+
+  families.forEach(f => {
+    if (f.black) {
+      pushVariant(`mod-${f.idBase}-bk`, f.brandId, f.brandName, `${f.blackName} Preto`, `${f.blackCode}-BK`, 'Preto', false, f.compat, f.black);
+    }
+    if (f.color && f.colorName && f.colorCode) {
+      pushVariant(`mod-${f.idBase}-cl`, f.brandId, f.brandName, `${f.colorName} Colorido`, `${f.colorCode}-CL`, 'Tricolor', false, f.compat, f.color);
+    }
+    if (f.blackXl) {
+      pushVariant(`mod-${f.idBase}-bk-xl`, f.brandId, f.brandName, f.blackXl.name || `${f.blackName} Preto XL`, f.blackXl.code || `${f.blackCode}-BK-XL`, 'Preto', true, f.compat, f.blackXl);
+    }
+    if (f.colorXl && f.colorName && f.colorCode) {
+      pushVariant(`mod-${f.idBase}-cl-xl`, f.brandId, f.brandName, f.colorXl.name || `${f.colorName} Colorido XL`, f.colorXl.code || `${f.colorCode}-CL-XL`, 'Tricolor', true, f.compat, f.colorXl);
+    }
+  });
+
+  // Toners Laser Populares
+  const toners: Array<{ id: string; brandId: string; brandName: string; name: string; code: string; desc: string; empty: number; full: number; isXl?: boolean }> = [
+    { id: 'mod-toner-85a', brandId: 'brand-hp', brandName: 'HP', name: 'Toner HP CE285A (85A)', code: 'CE285A', desc: 'Toner HP LaserJet P1102w / M1132 / M1212', empty: 650, full: 730 },
+    { id: 'mod-toner-35a', brandId: 'brand-hp', brandName: 'HP', name: 'Toner HP CB435A / CB436A (35A/36A)', code: 'CB435A', desc: 'Toner HP P1005 / P1006 / M1522', empty: 640, full: 720 },
+    { id: 'mod-toner-83a', brandId: 'brand-hp', brandName: 'HP', name: 'Toner HP CF283A (83A)', code: 'CF283A', desc: 'Toner HP LaserJet M125a / M127fn / M201', empty: 630, full: 710 },
+    { id: 'mod-toner-17a', brandId: 'brand-hp', brandName: 'HP', name: 'Toner HP CF217A (17A)', code: 'CF217A', desc: 'Toner HP LaserJet Pro M102w / M130fn', empty: 490, full: 560 },
+    { id: 'mod-toner-105a', brandId: 'brand-hp', brandName: 'HP', name: 'Toner HP W1105A (105A)', code: 'W1105A', desc: 'Toner HP Laser 107a / 107w / MFP 135w', empty: 510, full: 580 },
+    { id: 'mod-toner-12a', brandId: 'brand-hp', brandName: 'HP', name: 'Toner HP Q2612A (12A)', code: 'Q2612A', desc: 'Toner HP LaserJet 1010 / 1018 / 1020 / M1005', empty: 780, full: 890 },
+    { id: 'mod-toner-tn1060', brandId: 'brand-brother', brandName: 'Brother', name: 'Toner Brother TN-1060', code: 'TN1060', desc: 'Toner Brother HL-1112 / HL-1212W / DCP-1512 / DCP-1617NW', empty: 420, full: 485 },
+    { id: 'mod-toner-tn2370', brandId: 'brand-brother', brandName: 'Brother', name: 'Toner Brother TN-2340 / TN-2370 XL', code: 'TN2370', desc: 'Toner Brother HL-L2320D / DCP-L2540DW', empty: 460, full: 560, isXl: true },
+    { id: 'mod-toner-tn450', brandId: 'brand-brother', brandName: 'Brother', name: 'Toner Brother TN-420 / TN-450', code: 'TN450', desc: 'Toner Brother HL-2240 / DCP-7065DN / MFC-7360', empty: 450, full: 545, isXl: true },
+    { id: 'mod-toner-d111s', brandId: 'brand-samsung', brandName: 'Samsung', name: 'Toner Samsung MLT-D111S', code: 'MLT-D111S', desc: 'Toner Samsung Xpress M2020 / M2070', empty: 520, full: 585 },
+    { id: 'mod-toner-d101s', brandId: 'brand-samsung', brandName: 'Samsung', name: 'Toner Samsung MLT-D101S', code: 'MLT-D101S', desc: 'Toner Samsung ML-2165 / SCX-3405', empty: 540, full: 615 }
+  ];
+
+  toners.forEach(t => {
+    const attrs = {
+      'Cor do Toner': 'Preto (Black)',
+      'Alto Rendimento (XL / X)': Boolean(t.isXl),
+      'Carga de Pó': t.full - t.empty
+    };
+    models.push({
+      id: t.id,
+      category_id: 'cat-toner-laser',
+      brand_id: t.brandId,
+      brand_name: t.brandName,
+      name: t.name,
+      internal_code: t.code,
+      description: t.desc,
+      empty_weight_grams: t.empty,
+      full_weight_grams: t.full,
+      attributes: attrs,
+      custom_attributes: attrs,
+      is_active: true
+    });
+  });
+
+  // Impressoras Populares
+  models.push(
+    { id: 'mod-epson-l3250-imp', category_id: 'cat-impressora-tanque', brand_id: 'brand-epson', brand_name: 'Epson', name: 'Epson EcoTank L3250', internal_code: 'L3250', description: 'Multifuncional Tanque de Tinta Wi-Fi', attributes: { 'Tecnologia de Impressão': 'Tanque de Tinta', 'Voltagem': 'Bivolt' }, is_active: true },
+    { id: 'mod-epson-l3150-imp', category_id: 'cat-impressora-tanque', brand_id: 'brand-epson', brand_name: 'Epson', name: 'Epson EcoTank L3150', internal_code: 'L3150', description: 'Multifuncional Tanque de Tinta Wi-Fi', attributes: { 'Tecnologia de Impressão': 'Tanque de Tinta', 'Voltagem': 'Bivolt' }, is_active: true },
+    { id: 'mod-hp-smarttank-581', category_id: 'cat-impressora-tanque', brand_id: 'brand-hp', brand_name: 'HP', name: 'HP Smart Tank 517 / 581', internal_code: 'ST581', description: 'Multifuncional Tanque de Tinta Wi-Fi', attributes: { 'Tecnologia de Impressão': 'Tanque de Tinta', 'Voltagem': 'Bivolt' }, is_active: true },
+    { id: 'mod-hp-p1102w-imp', category_id: 'cat-impressora-tanque', brand_id: 'brand-hp', brand_name: 'HP', name: 'HP LaserJet Pro P1102w / M1132', internal_code: 'P1102W', description: 'Impressora Laser Monocromática Wi-Fi', attributes: { 'Tecnologia de Impressão': 'Laser Mono', 'Voltagem': '110V' }, is_active: true },
+    { id: 'mod-brother-l2540', category_id: 'cat-impressora-tanque', brand_id: 'brand-brother', brand_name: 'Brother', name: 'Brother DCP-L2540DW', internal_code: 'L2540DW', description: 'Multifuncional Laser Mono Duplex Rede/Wi-Fi', attributes: { 'Tecnologia de Impressão': 'Laser Mono', 'Voltagem': '110V' }, is_active: true }
+  );
+
+  return models;
+}
+
 export const BUSINESS_PRESETS: Record<BusinessTemplateKey, BusinessTemplate> = {
   RECARGA_CARTUCHOS: {
     key: 'RECARGA_CARTUCHOS',
     name: 'Impressoras, Cartuchos & Toners',
-    description: 'Recarga rápida com controle de peso na balança, toners laser e manutenção de impressoras EcoTank/Laser.',
+    description: 'Recarga rápida com controle de peso na balança, catálogo completo de cartuchos e variações XL, toners laser e impressoras EcoTank/Laser.',
     icon: 'Printer',
     categories: [
-      { id: 'cat-cartucho-tinta', name: 'Cartucho de Tinta', slug: 'cartucho-tinta', icon: 'Printer', identifier_label: 'Final de Série', inspection_type: 'SCALE', is_system: true, is_active: true },
-      { id: 'cat-toner-laser', name: 'Toner Laser', slug: 'toner-laser', icon: 'Layers', identifier_label: 'Nº de Série', inspection_type: 'SCALE', is_system: true, is_active: true },
-      { id: 'cat-impressora-tanque', name: 'Impressora / Multifuncional', slug: 'impressora-tanque', icon: 'Printer', identifier_label: 'Nº de Série', inspection_type: 'CHECKLIST', checklist_items: ['Cabo de força incluso', 'Cabeça de impressão desentupida', 'Tanque sem vazamentos', 'Traciona papel corretamente'], is_system: true, is_active: true }
+      {
+        id: 'cat-cartucho-tinta',
+        name: 'Cartucho de Tinta',
+        slug: 'cartucho-tinta',
+        icon: 'Printer',
+        identifier_label: 'Final de Série',
+        inspection_type: 'SCALE',
+        checklist_items: ['Circuito eletrônico testado (sem curto)', 'Bicos injetores íntegros', 'Peso inicial conferido na balança'],
+        custom_fields: CARTRIDGE_DEFAULT_FIELDS,
+        technical_verdicts: CARTRIDGE_DEFAULT_VERDICTS,
+        is_system: true,
+        is_active: true
+      },
+      {
+        id: 'cat-toner-laser',
+        name: 'Toner Laser',
+        slug: 'toner-laser',
+        icon: 'Layers',
+        identifier_label: 'Nº de Série',
+        inspection_type: 'SCALE',
+        checklist_items: ['Cilindro OPC sem riscos', 'Chip verificado', 'Peso inicial conferido na balança'],
+        custom_fields: TONER_DEFAULT_FIELDS,
+        technical_verdicts: TONER_DEFAULT_VERDICTS,
+        is_system: true,
+        is_active: true
+      },
+      {
+        id: 'cat-impressora-tanque',
+        name: 'Impressora / Multifuncional',
+        slug: 'impressora-tanque',
+        icon: 'Printer',
+        identifier_label: 'Nº de Série',
+        inspection_type: 'CHECKLIST',
+        checklist_items: ['Cabo de força incluso', 'Cabeça de impressão desentupida', 'Tanque sem vazamentos', 'Traciona papel corretamente'],
+        custom_fields: PRINTER_DEFAULT_FIELDS,
+        technical_verdicts: WORKBENCH_DEFAULT_VERDICTS,
+        is_system: true,
+        is_active: true
+      }
     ],
     brands: [
       { id: 'brand-hp', name: 'HP', slug: 'hp', is_system: true, is_active: true },
@@ -129,15 +537,7 @@ export const BUSINESS_PRESETS: Record<BusinessTemplateKey, BusinessTemplate> = {
       { id: 'brand-xerox', name: 'Xerox', slug: 'xerox', is_system: true, is_active: true },
       { id: 'brand-lexmark', name: 'Lexmark', slug: 'lexmark', is_system: true, is_active: true }
     ],
-    models: [
-      { id: 'mod-hp-664', category_id: 'cat-cartucho-tinta', brand_id: 'brand-hp', brand_name: 'HP', name: 'HP 664', internal_code: 'HP664', description: 'Cartucho jato de tinta HP DeskJet 2136/2676', empty_weight_grams: 28.5, full_weight_grams: 30.5, attributes: { capacity_ml: 2.0, empty_weight_grams: 28.5, full_weight_grams: 30.5 }, is_active: true },
-      { id: 'mod-hp-667', category_id: 'cat-cartucho-tinta', brand_id: 'brand-hp', brand_name: 'HP', name: 'HP 667', internal_code: 'HP667', description: 'Cartucho HP Advantage 2376/2776', empty_weight_grams: 29.0, full_weight_grams: 31.0, attributes: { capacity_ml: 2.0, empty_weight_grams: 29.0, full_weight_grams: 31.0 }, is_active: true },
-      { id: 'mod-hp-122', category_id: 'cat-cartucho-tinta', brand_id: 'brand-hp', brand_name: 'HP', name: 'HP 122', internal_code: 'HP122', description: 'Cartucho HP DeskJet 1000/2000', empty_weight_grams: 27.0, full_weight_grams: 28.5, attributes: { capacity_ml: 1.5, empty_weight_grams: 27.0, full_weight_grams: 28.5 }, is_active: true },
-      { id: 'mod-canon-cl146', category_id: 'cat-cartucho-tinta', brand_id: 'brand-canon', brand_name: 'Canon', name: 'Canon CL-146 Color', internal_code: 'CL146', description: 'Cartucho Canon Pixma MG2410', empty_weight_grams: 35.0, full_weight_grams: 44.0, attributes: { capacity_ml: 9.0, empty_weight_grams: 35.0, full_weight_grams: 44.0 }, is_active: true },
-      { id: 'mod-toner-85a', category_id: 'cat-toner-laser', brand_id: 'brand-hp', brand_name: 'HP', name: 'Toner HP CE285A (85A)', internal_code: 'CE285A', description: 'Toner LaserJet P1102w/M1132', empty_weight_grams: 650.0, full_weight_grams: 730.0, attributes: { capacity_ml: 80.0, empty_weight_grams: 650.0, full_weight_grams: 730.0 }, is_active: true },
-      { id: 'mod-toner-tn1060', category_id: 'cat-toner-laser', brand_id: 'brand-brother', brand_name: 'Brother', name: 'Toner Brother TN-1060', internal_code: 'TN1060', description: 'Toner HL-1112 / DCP-1512 / DCP-1617NW', empty_weight_grams: 420.0, full_weight_grams: 485.0, is_active: true },
-      { id: 'mod-epson-l3250-imp', category_id: 'cat-impressora-tanque', brand_id: 'brand-epson', brand_name: 'Epson', name: 'Epson EcoTank L3250', internal_code: 'L3250', description: 'Multifuncional Tanque de Tinta Wi-Fi', is_active: true }
-    ],
+    models: buildCartridgePresetModels(),
     services: [
       { id: 'srv-recarga', name: 'Recarga de Tinta', code: 'RECARGA', description: 'Injeção de tinta pressurizada e despressurização', default_price: 30.00, estimated_time_minutes: 15, is_active: true, category_ids: ['cartucho-tinta', 'toner-laser'] },
       { id: 'srv-recarga-toner', name: 'Recarga de Toner Laser + Limpeza Cilindro', code: 'RECARGA_TONER', description: 'Desmontagem, remoção de resíduos, troca de pó gráfico e teste', default_price: 65.00, estimated_time_minutes: 30, is_active: true, category_ids: ['toner-laser'] },
@@ -185,11 +585,11 @@ export const BUSINESS_PRESETS: Record<BusinessTemplateKey, BusinessTemplate> = {
     description: 'Manutenção de notebooks, computadores desktop, monitores, placas-mãe e upgrades de hardware.',
     icon: 'Laptop',
     categories: [
-      { id: 'cat-notebook', name: 'Notebook', slug: 'notebook', icon: 'Laptop', identifier_label: 'Nº de Série / Service Tag', inspection_type: 'CHECKLIST', checklist_items: ['Acompanha Carregador / Fonte Original', 'Liga normalmente (Dá vídeo)', 'Carcaça / Dobradiça sem trincas', 'Teclado e Touchpad funcionais', 'Tela LCD sem manchas ou linhas'], is_system: true, is_active: true },
-      { id: 'cat-computador', name: 'Computador Desktop', slug: 'computador', icon: 'Monitor', identifier_label: 'Nº de Série / Identificador', inspection_type: 'CHECKLIST', checklist_items: ['Gabinete sem avarias', 'Fonte liga corretamente', 'Ventoinhas operando sem ruído'], is_system: true, is_active: true },
-      { id: 'cat-monitor', name: 'Monitor', slug: 'monitor', icon: 'Monitor', identifier_label: 'Nº de Série', inspection_type: 'STANDARD', is_system: true, is_active: true },
-      { id: 'cat-impressora', name: 'Impressora', slug: 'impressora', icon: 'Printer', identifier_label: 'Nº de Série', inspection_type: 'CHECKLIST', is_system: true, is_active: true },
-      { id: 'cat-gpu-placa', name: 'Placa de Vídeo / Hardware', slug: 'placa-video-hardware', icon: 'Cpu', identifier_label: 'Nº de Série', inspection_type: 'STANDARD', is_system: true, is_active: true }
+      { id: 'cat-notebook', name: 'Notebook', slug: 'notebook', icon: 'Laptop', identifier_label: 'Nº de Série / Service Tag', inspection_type: 'CHECKLIST', checklist_items: ['Acompanha Carregador / Fonte Original', 'Liga normalmente (Dá vídeo)', 'Carcaça / Dobradiça sem trincas', 'Teclado e Touchpad funcionais', 'Tela LCD sem manchas ou linhas'], custom_fields: IT_DEFAULT_FIELDS, technical_verdicts: WORKBENCH_DEFAULT_VERDICTS, is_system: true, is_active: true },
+      { id: 'cat-computador', name: 'Computador Desktop', slug: 'computador', icon: 'Monitor', identifier_label: 'Nº de Série / Identificador', inspection_type: 'CHECKLIST', checklist_items: ['Gabinete sem avarias', 'Fonte liga corretamente', 'Ventoinhas operando sem ruído'], custom_fields: IT_DEFAULT_FIELDS, technical_verdicts: WORKBENCH_DEFAULT_VERDICTS, is_system: true, is_active: true },
+      { id: 'cat-monitor', name: 'Monitor', slug: 'monitor', icon: 'Monitor', identifier_label: 'Nº de Série', inspection_type: 'STANDARD', custom_fields: GENERAL_DEFAULT_FIELDS, technical_verdicts: WORKBENCH_DEFAULT_VERDICTS, is_system: true, is_active: true },
+      { id: 'cat-impressora', name: 'Impressora', slug: 'impressora', icon: 'Printer', identifier_label: 'Nº de Série', inspection_type: 'CHECKLIST', custom_fields: PRINTER_DEFAULT_FIELDS, technical_verdicts: WORKBENCH_DEFAULT_VERDICTS, is_system: true, is_active: true },
+      { id: 'cat-gpu-placa', name: 'Placa de Vídeo / Hardware', slug: 'placa-video-hardware', icon: 'Cpu', identifier_label: 'Nº de Série', inspection_type: 'STANDARD', custom_fields: IT_DEFAULT_FIELDS, technical_verdicts: WORKBENCH_DEFAULT_VERDICTS, is_system: true, is_active: true }
     ],
     brands: [
       { id: 'brand-dell', name: 'Dell', slug: 'dell', is_system: true, is_active: true },
@@ -267,9 +667,9 @@ export const BUSINESS_PRESETS: Record<BusinessTemplateKey, BusinessTemplate> = {
     description: 'Troca de tela frontal, bateria, conector de carga, desoxidação e micro-solda em placas mobile.',
     icon: 'Smartphone',
     categories: [
-      { id: 'cat-smartphone', name: 'Smartphone', slug: 'smartphone', icon: 'Smartphone', identifier_label: 'IMEI / Nº de Série', inspection_type: 'CHECKLIST', checklist_items: ['Tela liga e dá touch em toda a área', 'Câmera Frontal e Traseira funcionam', 'Microfone e Alto-falantes operacionais', 'Reconhece chip SIM e Wi-Fi', 'Carcaça/Tampa sem marcas de queda'], is_system: true, is_active: true },
-      { id: 'cat-tablet', name: 'Tablet', slug: 'tablet', icon: 'Tablet', identifier_label: 'Nº de Série', inspection_type: 'CHECKLIST', checklist_items: ['Display íntegro', 'Conector de carga firme', 'Botões físicos operacionais'], is_system: true, is_active: true },
-      { id: 'cat-smartwatch', name: 'Smartwatch / Wearables', slug: 'smartwatch', icon: 'Watch', identifier_label: 'Nº de Série', inspection_type: 'STANDARD', is_system: true, is_active: true }
+      { id: 'cat-smartphone', name: 'Smartphone', slug: 'smartphone', icon: 'Smartphone', identifier_label: 'IMEI / Nº de Série', inspection_type: 'CHECKLIST', checklist_items: ['Tela liga e dá touch em toda a área', 'Câmera Frontal e Traseira funcionam', 'Microfone e Alto-falantes operacionais', 'Reconhece chip SIM e Wi-Fi', 'Carcaça/Tampa sem marcas de queda'], custom_fields: MOBILE_DEFAULT_FIELDS, technical_verdicts: WORKBENCH_DEFAULT_VERDICTS, is_system: true, is_active: true },
+      { id: 'cat-tablet', name: 'Tablet', slug: 'tablet', icon: 'Tablet', identifier_label: 'Nº de Série', inspection_type: 'CHECKLIST', checklist_items: ['Display íntegro', 'Conector de carga firme', 'Botões físicos operacionais'], custom_fields: MOBILE_DEFAULT_FIELDS, technical_verdicts: WORKBENCH_DEFAULT_VERDICTS, is_system: true, is_active: true },
+      { id: 'cat-smartwatch', name: 'Smartwatch / Wearables', slug: 'smartwatch', icon: 'Watch', identifier_label: 'Nº de Série', inspection_type: 'STANDARD', custom_fields: MOBILE_DEFAULT_FIELDS, technical_verdicts: WORKBENCH_DEFAULT_VERDICTS, is_system: true, is_active: true }
     ],
     brands: [
       { id: 'brand-apple-cel', name: 'Apple', slug: 'apple', is_system: true, is_active: true },
@@ -341,10 +741,10 @@ export const BUSINESS_PRESETS: Record<BusinessTemplateKey, BusinessTemplate> = {
     description: 'Manutenção de consoles PS5/PS4/Xbox/Switch, controles, Smart TVs e equipamentos de áudio.',
     icon: 'Gamepad2',
     categories: [
-      { id: 'cat-console', name: 'Console de Videogame', slug: 'console-videogame', icon: 'Gamepad2', identifier_label: 'Nº de Série / Lacre', inspection_type: 'CHECKLIST', checklist_items: ['Acompanha cabo HDMI / Força', 'Sem selo violado anteriormente', 'Porta HDMI visualmente intacta', 'Liga / Bipa na tomada'], is_system: true, is_active: true },
-      { id: 'cat-controle', name: 'Controle / Joystick', slug: 'controle-joystick', icon: 'Gamepad2', identifier_label: 'Serial / Modelo', inspection_type: 'STANDARD', is_system: true, is_active: true },
-      { id: 'cat-smart-tv', name: 'Smart TV / Display Grande', slug: 'smart-tv', icon: 'Tv', identifier_label: 'Nº de Série / Modelo', inspection_type: 'CHECKLIST', checklist_items: ['Tela sem trincos ou avarias no display', 'Acompanha controle remoto / pés', 'Standby acende normalmente'], is_system: true, is_active: true },
-      { id: 'cat-audio', name: 'Caixa de Som & Áudio', slug: 'caixa-som-audio', icon: 'Speaker', identifier_label: 'Nº de Série', inspection_type: 'STANDARD', is_system: true, is_active: true }
+      { id: 'cat-console', name: 'Console de Videogame', slug: 'console-videogame', icon: 'Gamepad2', identifier_label: 'Nº de Série / Lacre', inspection_type: 'CHECKLIST', checklist_items: ['Acompanha cabo HDMI / Força', 'Sem selo violado anteriormente', 'Porta HDMI visualmente intacta', 'Liga / Bipa na tomada'], custom_fields: CONSOLE_DEFAULT_FIELDS, technical_verdicts: WORKBENCH_DEFAULT_VERDICTS, is_system: true, is_active: true },
+      { id: 'cat-controle', name: 'Controle / Joystick', slug: 'controle-joystick', icon: 'Gamepad2', identifier_label: 'Serial / Modelo', inspection_type: 'STANDARD', custom_fields: CONSOLE_DEFAULT_FIELDS, technical_verdicts: WORKBENCH_DEFAULT_VERDICTS, is_system: true, is_active: true },
+      { id: 'cat-smart-tv', name: 'Smart TV / Display Grande', slug: 'smart-tv', icon: 'Tv', identifier_label: 'Nº de Série / Modelo', inspection_type: 'CHECKLIST', checklist_items: ['Tela sem trincos ou avarias no display', 'Acompanha controle remoto / pés', 'Standby acende normalmente'], custom_fields: CONSOLE_DEFAULT_FIELDS, technical_verdicts: WORKBENCH_DEFAULT_VERDICTS, is_system: true, is_active: true },
+      { id: 'cat-audio', name: 'Caixa de Som & Áudio', slug: 'caixa-som-audio', icon: 'Speaker', identifier_label: 'Nº de Série', inspection_type: 'STANDARD', custom_fields: GENERAL_DEFAULT_FIELDS, technical_verdicts: WORKBENCH_DEFAULT_VERDICTS, is_system: true, is_active: true }
     ],
     brands: [
       { id: 'brand-sony', name: 'Sony PlayStation', slug: 'sony-playstation', is_system: true, is_active: true },
@@ -403,9 +803,9 @@ export const BUSINESS_PRESETS: Record<BusinessTemplateKey, BusinessTemplate> = {
     description: 'Manutenção de furadeiras, esmerilhadeiras, compressores e rebobinamento de motores elétricos.',
     icon: 'Wrench',
     categories: [
-      { id: 'cat-ferramenta', name: 'Ferramenta Elétrica', slug: 'ferramenta-eletrica', icon: 'Wrench', identifier_label: 'Nº de Série / Patrimônio', inspection_type: 'CHECKLIST', checklist_items: ['Cabo elétrico íntegro', 'Mandril / Porta-bits sem folga', 'Gatilho operacional'], is_system: true, is_active: true },
-      { id: 'cat-motor', name: 'Motor Elétrico', slug: 'motor-eletrico', icon: 'Zap', identifier_label: 'Nº de Série / Identificador', inspection_type: 'STANDARD', is_system: true, is_active: true },
-      { id: 'cat-lavadora', name: 'Compressor / Lavadora Alta Pressão', slug: 'compressor-lavadora', icon: 'Wrench', identifier_label: 'Nº de Série', inspection_type: 'STANDARD', is_system: true, is_active: true }
+      { id: 'cat-ferramenta', name: 'Ferramenta Elétrica', slug: 'ferramenta-eletrica', icon: 'Wrench', identifier_label: 'Nº de Série / Patrimônio', inspection_type: 'CHECKLIST', checklist_items: ['Cabo elétrico íntegro', 'Mandril / Porta-bits sem folga', 'Gatilho operacional'], custom_fields: TOOL_DEFAULT_FIELDS, technical_verdicts: WORKBENCH_DEFAULT_VERDICTS, is_system: true, is_active: true },
+      { id: 'cat-motor', name: 'Motor Elétrico', slug: 'motor-eletrico', icon: 'Zap', identifier_label: 'Nº de Série / Identificador', inspection_type: 'STANDARD', custom_fields: TOOL_DEFAULT_FIELDS, technical_verdicts: WORKBENCH_DEFAULT_VERDICTS, is_system: true, is_active: true },
+      { id: 'cat-lavadora', name: 'Compressor / Lavadora Alta Pressão', slug: 'compressor-lavadora', icon: 'Wrench', identifier_label: 'Nº de Série', inspection_type: 'STANDARD', custom_fields: TOOL_DEFAULT_FIELDS, technical_verdicts: WORKBENCH_DEFAULT_VERDICTS, is_system: true, is_active: true }
     ],
     brands: [
       { id: 'brand-makita', name: 'Makita', slug: 'makita', is_system: true, is_active: true },
@@ -458,8 +858,8 @@ export const BUSINESS_PRESETS: Record<BusinessTemplateKey, BusinessTemplate> = {
     description: 'Estrutura enxuta e flexível para qualquer oficina de assistência técnica, eletrodomésticos e serviços gerais.',
     icon: 'Layers',
     categories: [
-      { id: 'cat-geral', name: 'Equipamento Geral', slug: 'equipamento-geral', icon: 'Layers', identifier_label: 'Código / Nº de Série', inspection_type: 'STANDARD', is_system: true, is_active: true },
-      { id: 'cat-eletro', name: 'Eletrodoméstico / Portátil', slug: 'eletrodomestico-portatil', icon: 'Zap', identifier_label: 'Nº de Série / Modelo', inspection_type: 'CHECKLIST', checklist_items: ['Cabo de alimentação sem emendas', 'Acessórios completos'], is_system: true, is_active: true }
+      { id: 'cat-geral', name: 'Equipamento Geral', slug: 'equipamento-geral', icon: 'Layers', identifier_label: 'Código / Nº de Série', inspection_type: 'STANDARD', custom_fields: GENERAL_DEFAULT_FIELDS, technical_verdicts: WORKBENCH_DEFAULT_VERDICTS, is_system: true, is_active: true },
+      { id: 'cat-eletro', name: 'Eletrodoméstico / Portátil', slug: 'eletrodomestico-portatil', icon: 'Zap', identifier_label: 'Nº de Série / Modelo', inspection_type: 'CHECKLIST', checklist_items: ['Cabo de alimentação sem emendas', 'Acessórios completos'], custom_fields: GENERAL_DEFAULT_FIELDS, technical_verdicts: WORKBENCH_DEFAULT_VERDICTS, is_system: true, is_active: true }
     ],
     brands: [
       { id: 'brand-geral', name: 'Genérica / Outras', slug: 'generica', is_system: true, is_active: true },
@@ -2537,7 +2937,9 @@ export class AppStore {
   static getCategories(tenantId?: string): ItemCategory[] {
     const data = this.getStoreData();
     const cats: ItemCategory[] = data.categories || INITIAL_CATEGORIES;
-    return cats.filter(c => !c.tenant_id || !tenantId || c.tenant_id === tenantId);
+    return cats
+      .filter(c => !c.tenant_id || !tenantId || c.tenant_id === tenantId)
+      .map(c => enrichCategoryWithDefaults(c));
   }
 
   static addCategory(category: Omit<ItemCategory, 'id' | 'created_at' | 'updated_at'>, performedByName?: string): ItemCategory {
@@ -2790,8 +3192,14 @@ export class AppStore {
   static addModel(model: Omit<ItemModel, 'id' | 'created_at' | 'updated_at'>, performedByName?: string): ItemModel {
     const data = this.getStoreData();
     const assignedCode = model.internal_code?.trim() || this.getNextSku(model.tenant_id) || undefined;
+    const mergedAttributes = {
+      ...(model.attributes || {}),
+      ...(model.custom_attributes || {})
+    };
     const newModel: ItemModel = {
       ...model,
+      attributes: mergedAttributes,
+      custom_attributes: mergedAttributes,
       internal_code: assignedCode,
       id: generateUUID(),
       created_at: new Date().toISOString(),
@@ -5057,10 +5465,16 @@ export class AppStore {
     };
 
     // 1. Categorias
+    const storeRawData = this.getStoreData();
+    const rawTenantCats: ItemCategory[] = (storeRawData.categories || INITIAL_CATEGORIES).filter(
+      (c: ItemCategory) => !c.tenant_id || c.tenant_id === tenantId
+    );
     const existingCats = this.getCategories(tenantId);
     const categoryMapByKey = new Map<string, string>();
+    const rawCategoryById = new Map<string, ItemCategory>();
     let firstCategoryId = existingCats[0]?.id || '';
-    existingCats.forEach(c => {
+    rawTenantCats.forEach(c => {
+      rawCategoryById.set(c.id, c);
       if (c.slug) categoryMapByKey.set(c.slug.toLowerCase(), c.id);
       categoryMapByKey.set(c.name.trim().toLowerCase(), c.id);
     });
@@ -5070,8 +5484,32 @@ export class AppStore {
       if (!name) continue;
       const slug = catInput.slug?.trim() || slugify(name);
       const foundId = categoryMapByKey.get(slug.toLowerCase()) || categoryMapByKey.get(name.toLowerCase());
+      const enrichedDefaults = enrichCategoryWithDefaults({
+        id: 'tmp',
+        name,
+        slug,
+        custom_fields: catInput.custom_fields,
+        technical_verdicts: catInput.technical_verdicts,
+        is_active: true
+      });
       if (foundId) {
         result.skippedCategories += 1;
+        const rawCat = rawCategoryById.get(foundId);
+        if (rawCat) {
+          const patch: Partial<ItemCategory> = {};
+          if ((!rawCat.custom_fields || rawCat.custom_fields.length === 0) && enrichedDefaults.custom_fields?.length) {
+            patch.custom_fields = enrichedDefaults.custom_fields;
+          }
+          if ((!rawCat.technical_verdicts || rawCat.technical_verdicts.length === 0) && enrichedDefaults.technical_verdicts?.length) {
+            patch.technical_verdicts = enrichedDefaults.technical_verdicts;
+          }
+          if ((!rawCat.checklist_items || rawCat.checklist_items.length === 0) && catInput.checklist_items?.length) {
+            patch.checklist_items = catInput.checklist_items;
+          }
+          if (Object.keys(patch).length > 0) {
+            this.updateCategory(foundId, patch, performedByName);
+          }
+        }
         categoryMapByKey.set(slug.toLowerCase(), foundId);
         categoryMapByKey.set(name.toLowerCase(), foundId);
         if (!firstCategoryId) firstCategoryId = foundId;
@@ -5086,8 +5524,8 @@ export class AppStore {
             identifier_label: catInput.identifier_label || 'Nº de Série',
             inspection_type: catInput.inspection_type || 'STANDARD',
             checklist_items: catInput.checklist_items || [],
-            technical_verdicts: catInput.technical_verdicts || [],
-            custom_fields: catInput.custom_fields || [],
+            technical_verdicts: enrichedDefaults.technical_verdicts || [],
+            custom_fields: enrichedDefaults.custom_fields || [],
             is_system: false,
             is_active: true
           },
@@ -5222,6 +5660,11 @@ export class AppStore {
           brandMapByKey.get(slugify(modInput.brand_name))
         : undefined;
 
+      const modAttrs = {
+        ...(modInput.attributes || {}),
+        ...(modInput.custom_attributes || {})
+      };
+
       this.addModel(
         {
           tenant_id: tenantId,
@@ -5233,7 +5676,8 @@ export class AppStore {
           description: modInput.description,
           empty_weight_grams: modInput.empty_weight_grams,
           full_weight_grams: modInput.full_weight_grams,
-          attributes: modInput.attributes || {},
+          attributes: modAttrs,
+          custom_attributes: modAttrs,
           is_active: true
         },
         performedByName
