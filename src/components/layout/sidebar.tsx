@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { 
@@ -69,10 +69,19 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passSuccess, setPassSuccess] = useState(false);
   const [passError, setPassError] = useState('');
+  const [, setStoreVersion] = useState(0);
+
+  useEffect(() => {
+    const onStoreUpdated = () => setStoreVersion((v) => v + 1);
+    window.addEventListener('supreme_store_updated', onStoreUpdated);
+    return () => window.removeEventListener('supreme_store_updated', onStoreUpdated);
+  }, []);
 
   if (!currentUser) return null;
 
   const roleConfig = getRoleBadgeConfig(currentUser.role);
+  const isGlobalSuperAdmin = currentUser.role === 'SUPER_ADMIN' && !impersonatedTenantId;
+  const companyLimits = currentCompany && !isGlobalSuperAdmin ? AppStore.getEffectiveLimits(currentCompany.id) : null;
 
   const handleOpenAccountModal = (tab: 'timeout' | 'password' = 'timeout') => {
     setAccountTab(tab);
@@ -279,8 +288,8 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
             <span>Sair do Modo Suporte</span>
           </button>
         )}
-        <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-800 flex items-center justify-between shadow-xs">
-          <div className="min-w-0 pr-2">
+        <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-800 flex items-center justify-between gap-2 shadow-xs">
+          <div className="min-w-0">
             <div className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-sm shadow-emerald-500/50" />
               <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Unidade Ativa</p>
@@ -288,10 +297,29 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
             <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate block mt-0.5" title={currentCompany.trade_name}>
               {currentCompany.trade_name}
             </span>
+            {companyLimits && (
+              <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 truncate block mt-0.5" title={companyLimits.plan.name}>
+                {companyLimits.plan.name}
+              </span>
+            )}
           </div>
-          <Badge variant="outline" className="text-[9px] font-mono border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 px-1.5 py-0 shrink-0">
-            Multissegmento
-          </Badge>
+          {companyLimits ? (
+            <Badge
+              variant="outline"
+              className={`text-[9px] font-mono px-1.5 py-0.5 shrink-0 ${
+                !companyLimits.canAddUser
+                  ? 'border-amber-200 dark:border-amber-800/70 bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300'
+                  : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300'
+              }`}
+              title={`${companyLimits.usedUsers} de ${companyLimits.maxUsers} usuários ativos no plano`}
+            >
+              {companyLimits.usedUsers}/{companyLimits.maxUsers} usu.
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="text-[9px] font-mono border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 px-1.5 py-0 shrink-0">
+              Multissegmento
+            </Badge>
+          )}
         </div>
       </div>
 

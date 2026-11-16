@@ -44,7 +44,7 @@ import {
 import QRCode from 'qrcode';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
-import { AppStore } from '@/lib/store';
+import { AppStore, SYSTEM_MODULES } from '@/lib/store';
 import { formatCurrency, getRoleBadgeConfig, cn, formatDateTime } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -53,7 +53,7 @@ import { Select } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { DialogModal, DialogModalProps } from '@/components/ui/dialog-modal';
 import { PresetCatalogWizard } from '@/components/presets/PresetCatalogWizard';
-import { Profile, UserRole, CompanySettings, PermissionGroup, Company } from '@/types';
+import { Profile, UserRole, CompanySettings, PermissionGroup, Company, Plan } from '@/types';
 import { toast } from '@/lib/toast';
 
 interface PermissionOption {
@@ -283,6 +283,9 @@ function CompanySettingsContent() {
   const [pixCopied, setPixCopied] = useState<boolean>(false);
 
   const [platformSettings, setPlatformSettings] = useState(() => AppStore.getPlatformSettings());
+  const [availablePlans, setAvailablePlans] = useState<Plan[]>(() =>
+    AppStore.getPlans().filter(p => p.is_active !== false)
+  );
 
   const handleCopyPix = () => {
     navigator.clipboard.writeText(platformSettings.pix_key || 'pix@supremeinformatica.com.br');
@@ -301,6 +304,7 @@ function CompanySettingsContent() {
 
   const limits = AppStore.getEffectiveLimits(currentCompany.id);
   const currentPlan = limits.plan;
+  const hasRbacModule = AppStore.isModuleEnabledForTenant(currentCompany.id, 'permissoes_rbac');
 
   const loadData = () => {
     const dataUsers = AppStore.getUsers(currentCompany.id);
@@ -359,10 +363,13 @@ function CompanySettingsContent() {
     setCompanyZipCode(comp.zip_code || '');
     setCompanyResponsible(comp.responsible_name || '');
     setPlatformSettings(AppStore.getPlatformSettings());
+    setAvailablePlans(AppStore.getPlans().filter(p => p.is_active !== false));
   };
 
   useEffect(() => {
     loadData();
+    AppStore.syncFromSupabase(currentCompany.id);
+    AppStore.syncPublicPlans();
     const handleUpdate = () => loadData();
     window.addEventListener('supreme_store_updated', handleUpdate);
     return () => window.removeEventListener('supreme_store_updated', handleUpdate);
@@ -1085,16 +1092,18 @@ function CompanySettingsContent() {
                       {hasPermission('manage_company') && (
                         <td className="p-3.5 text-right">
                           <div className="flex items-center justify-end gap-1">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleOpenPermissions(u)}
-                              className="h-7 text-[11px] px-2 rounded-lg gap-1 border-slate-200 dark:border-slate-700 hover:bg-slate-100"
-                              title="Configurar Permissões Individuais"
-                            >
-                              <Shield className="w-3 h-3 text-purple-600" />
-                              <span>Permissões</span>
-                            </Button>
+                            {hasRbacModule && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleOpenPermissions(u)}
+                                className="h-7 text-[11px] px-2 rounded-lg gap-1 border-slate-200 dark:border-slate-700 hover:bg-slate-100"
+                                title="Configurar Permissões Individuais"
+                              >
+                                <Shield className="w-3 h-3 text-purple-600" />
+                                <span>Permissões</span>
+                              </Button>
+                            )}
 
                             <Button
                               size="sm"
@@ -1124,6 +1133,28 @@ function CompanySettingsContent() {
       {/* TAB 2: GRUPOS DE PERMISSÕES */}
       {activeTab === 'grupos' && (
         <div className="space-y-4">
+          {!hasRbacModule && (
+            <div className="p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-start gap-2.5 text-xs text-amber-900 dark:text-amber-200">
+                <Lock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold">Permissões Granulares (RBAC) não incluídas no plano atual ({currentPlan.name})</p>
+                  <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-0.5">
+                    Você utiliza os grupos padrão de Administrador, Atendente e Técnico. Para criar grupos personalizados ou ajustar permissões por usuário, faça upgrade de plano.
+                  </p>
+                </div>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => setActiveTab('assinatura')}
+                className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shrink-0"
+              >
+                Ver Planos Disponíveis
+              </Button>
+            </div>
+          )}
+
           <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-white dark:bg-[#0e1626] rounded-2xl border border-slate-200 dark:border-slate-800 p-4 sm:p-5 shadow-sm gap-3">
             <div>
               <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
@@ -1135,7 +1166,7 @@ function CompanySettingsContent() {
               </p>
             </div>
 
-            {hasPermission('manage_company') && (
+            {hasPermission('manage_company') && hasRbacModule && (
               <Button
                 size="sm"
                 onClick={handleOpenCreateGroup}
@@ -1172,7 +1203,7 @@ function CompanySettingsContent() {
                         </CardDescription>
                       </div>
 
-                      {hasPermission('manage_company') && (
+                      {hasPermission('manage_company') && hasRbacModule && (
                         <div className="flex items-center gap-1">
                           <button
                             onClick={() => handleOpenEditGroup(g)}
@@ -2527,7 +2558,7 @@ function CompanySettingsContent() {
                 <div>
                   <div className="flex items-center gap-2">
                     <h3 className="text-base font-black text-slate-900 dark:text-slate-100">
-                      Período de Testes Grátis Ativo (14 Dias)
+                      Período de Testes Grátis Ativo
                     </h3>
                     <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border-amber-300 dark:border-amber-800 text-[10px] font-bold">
                       TRIAL
@@ -2565,14 +2596,14 @@ function CompanySettingsContent() {
                 <div>
                   <div className="flex items-center gap-2">
                     <h3 className="text-base font-black text-slate-900 dark:text-slate-100">
-                      Assinatura Regular Ativa
+                      {limits.subscription.status === 'EXPIRED' ? 'Assinatura Vencida' : limits.subscription.status === 'PAUSED' ? 'Assinatura Pausada' : 'Assinatura Regular Ativa'}
                     </h3>
-                    <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 text-[10px] font-bold">
-                      ATIVO
+                    <Badge className={limits.subscription.status === 'EXPIRED' || limits.subscription.status === 'PAUSED' ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border-rose-300 text-[10px] font-bold' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 text-[10px] font-bold'}>
+                      {limits.subscription.status || 'ATIVO'}
                     </Badge>
                   </div>
                   <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
-                    Sua empresa possui acesso integral a todos os módulos do <strong>{limits.plan.name}</strong>. Para renovações antecipadas ou upgrades, utilize a chave Pix abaixo.
+                    Sua empresa está vinculada ao <strong>{limits.plan.name}</strong> ({limits.maxUsers} usuário(s) contratados). Para renovações antecipadas ou upgrades, utilize a chave Pix abaixo.
                   </p>
                 </div>
               </div>
@@ -2581,7 +2612,7 @@ function CompanySettingsContent() {
 
           {/* Current Plan Overview Card & Manual Pix Section */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-1 bg-white dark:bg-[#0e1626] rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm flex flex-col justify-between">
+            <div className="lg:col-span-1 bg-white dark:bg-[#0e1626] rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm flex flex-col justify-between space-y-5">
               <div>
                 <span className="text-[11px] font-bold tracking-wider uppercase text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800">
                   Plano Atual Contratado
@@ -2593,37 +2624,74 @@ function CompanySettingsContent() {
                   {limits.plan.description || 'Sistema completo de gestão para assistência técnica e recargas'}
                 </p>
 
-                <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
                   <div className="flex items-baseline gap-1">
                     <span className="text-3xl font-black text-slate-900 dark:text-slate-100">
-                      {formatCurrency(limits.finalMonthlyPrice)}
+                      {limits.finalMonthlyPrice === 0 ? 'Gratuito' : formatCurrency(limits.finalMonthlyPrice)}
                     </span>
-                    <span className="text-xs font-semibold text-slate-500">/mês</span>
+                    {limits.finalMonthlyPrice > 0 && (
+                      <span className="text-xs font-semibold text-slate-500">/mês</span>
+                    )}
                   </div>
                   <p className="text-[11px] text-slate-400 mt-0.5">
                     Cobrança mensal avulsa ou manual via Pix
                   </p>
                 </div>
 
-                <div className="mt-5 space-y-2 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <div className="mt-4 space-y-2 pt-4 border-t border-slate-100 dark:border-slate-800">
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-slate-500">Usuários permitidos:</span>
-                    <strong className="text-slate-900 dark:text-slate-100">{limits.maxUsers} colaboradores</strong>
+                    <strong className="text-slate-900 dark:text-slate-100">
+                      {limits.maxUsers} colaboradores{limits.extraUsers > 0 ? ` (+${limits.extraUsers} extras)` : ''}
+                    </strong>
                   </div>
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-500">Usuários em uso:</span>
-                    <strong className="text-emerald-600 dark:text-emerald-400">{limits.usedUsers} ativos</strong>
+                    <span className="text-slate-500">Usuários ativos / livres:</span>
+                    <strong className="text-emerald-600 dark:text-emerald-400">
+                      {limits.usedUsers} ativos • {limits.availableUsers} vaga(s)
+                    </strong>
                   </div>
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-500">Ciclo de faturamento:</span>
-                    <strong className="text-slate-900 dark:text-slate-100">Mensal</strong>
+                    <span className="text-slate-500">Adicional por usuário:</span>
+                    <strong className="text-slate-900 dark:text-slate-100">{formatCurrency(limits.extraUserPrice)}/mês</strong>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-500">Ciclo / Vencimento:</span>
+                    <strong className="text-slate-900 dark:text-slate-100">
+                      {limits.subscription.billing_cycle === 'ANNUAL' ? 'Anual' : limits.subscription.billing_cycle === 'CUSTOM' ? 'Custom' : 'Mensal'}
+                      {limits.subscription.expires_at ? ` • ${new Date(limits.subscription.expires_at).toLocaleDateString('pt-BR')}` : ''}
+                    </strong>
+                  </div>
+                </div>
+
+                {/* Live Modules Breakdown */}
+                <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                    Módulos Liberados no Seu Plano ({SYSTEM_MODULES.filter(m => AppStore.isModuleEnabledForTenant(currentCompany.id, m.key)).length}/{SYSTEM_MODULES.length})
+                  </p>
+                  <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                    {SYSTEM_MODULES.map(mod => {
+                      const enabled = AppStore.isModuleEnabledForTenant(currentCompany.id, mod.key);
+                      return (
+                        <div key={mod.key} className="flex items-center gap-2 text-[11px]">
+                          {enabled ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                          ) : (
+                            <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          )}
+                          <span className={enabled ? 'text-slate-700 dark:text-slate-200 font-medium' : 'text-slate-400 line-through'}>
+                            {mod.label}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
 
-              <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
+              <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
                 <p className="text-[11px] text-slate-500 italic">
-                  💡 Precisa de mais colaboradores ou funções exclusivas? Consulte os planos de upgrade ao lado.
+                  Precisa de mais colaboradores ou novos módulos? Compare os planos disponíveis abaixo.
                 </p>
               </div>
             </div>
@@ -2751,7 +2819,7 @@ function CompanySettingsContent() {
             </div>
           </div>
 
-          {/* Upgrade Options Comparison */}
+          {/* Upgrade Options Comparison (Dynamic from Super Admin / Supabase Plans) */}
           <div className="bg-white dark:bg-[#0e1626] rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm space-y-5">
             <div>
               <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
@@ -2759,191 +2827,109 @@ function CompanySettingsContent() {
                 Opções de Planos & Upgrade Disponíveis
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                Escolha o plano ideal para a escala de atendimento da sua assistência técnica. Mudança com liberação no mesmo dia.
+                Escolha o plano ideal para a escala de atendimento da sua empresa. Valores e módulos sincronizados em tempo real.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-              {/* Starter */}
-              <div className={`rounded-xl border p-5 flex flex-col justify-between transition-all ${
-                limits.plan.code === 'ESSENCIAL'
-                  ? 'border-emerald-500 bg-emerald-50/20 dark:bg-emerald-950/20 ring-2 ring-emerald-500/20'
-                  : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'
-              }`}>
-                <div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-500">Plano Starter</span>
-                    {limits.plan.code === 'ESSENCIAL' && (
-                      <Badge className="bg-emerald-500 text-white text-[10px] font-bold">SEU PLANO</Badge>
+            <div className={cn(
+              'grid grid-cols-1 gap-5',
+              availablePlans.length === 1 ? 'md:grid-cols-1 max-w-md' : availablePlans.length === 2 ? 'md:grid-cols-2' : 'md:grid-cols-3'
+            )}>
+              {availablePlans.map((planOption, index) => {
+                const isCurrentPlan = planOption.id === limits.plan.id;
+                const isPopular = availablePlans.length >= 3 ? index === 1 : planOption.code === 'PROFISSIONAL';
+                const planFeatures = Array.isArray(planOption.features) ? planOption.features : [];
+                const waRaw = (platformSettings.support_whatsapp || '5511999999999').replace(/\D/g, '');
+                const waNum = waRaw.startsWith('55') ? waRaw : `55${waRaw}`;
+                const priceLabel = planOption.monthly_price === 0 ? 'Gratuito' : `${formatCurrency(planOption.monthly_price)}/mês`;
+                const waUpgradeUrl = `https://wa.me/${waNum}?text=${encodeURIComponent(
+                  `Olá! Sou da empresa *${currentCompany.trade_name}* (CNPJ: ${currentCompany.cnpj || 'Não informado'}) e gostaria de migrar para o *${planOption.name}* (${priceLabel}).`
+                )}`;
+
+                return (
+                  <div
+                    key={planOption.id}
+                    className={`rounded-xl border p-5 flex flex-col justify-between relative transition-all ${
+                      isCurrentPlan
+                        ? 'border-emerald-500 bg-emerald-50/20 dark:bg-emerald-950/20 ring-2 ring-emerald-500/20 shadow-sm'
+                        : isPopular
+                          ? 'border-emerald-600/30 dark:border-emerald-500/40 bg-slate-50/50 dark:bg-slate-900/50 shadow-sm'
+                          : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'
+                    }`}
+                  >
+                    {isPopular && !isCurrentPlan && (
+                      <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                        <span className="bg-emerald-600 text-white text-[10px] font-black uppercase tracking-wider px-3 py-0.5 rounded-full shadow-xs">
+                          Mais Popular
+                        </span>
+                      </div>
                     )}
-                  </div>
-                  <div className="mt-3 flex items-baseline gap-1">
-                    <span className="text-2xl font-black text-slate-900 dark:text-slate-100">R$ 69</span>
-                    <span className="text-xs text-slate-500 font-semibold">/mês</span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 mt-1">Ideal para pequenas lojas e oficinas individuais</p>
-                  
-                  <ul className="mt-4 space-y-2 text-xs text-slate-600 dark:text-slate-400">
-                    <li className="flex items-center gap-1.5">
-                      <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                      <span>Até 3 colaboradores</span>
-                    </li>
-                    <li className="flex items-center gap-1.5">
-                      <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                      <span>Emissão de Ordens de Serviço & Comandas</span>
-                    </li>
-                    <li className="flex items-center gap-1.5">
-                      <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                      <span>Bancada Kanban & Diagnóstico</span>
-                    </li>
-                    <li className="flex items-center gap-1.5">
-                      <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                      <span>Rastreio online por QR Code</span>
-                    </li>
-                  </ul>
-                </div>
 
-                <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800">
-                  {limits.plan.code === 'ESSENCIAL' ? (
-                    <Button disabled variant="outline" className="w-full text-xs font-bold rounded-xl">
-                      Plano Atual
-                    </Button>
-                  ) : (
-                    <a
-                      href={`https://wa.me/5511999999999?text=${encodeURIComponent(`Olá! Gostaria de migrar minha empresa *${currentCompany.trade_name}* para o Plano Starter (R$ 69/mês).`)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block text-center w-full py-2 px-3 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200"
-                    >
-                      Mudar para Starter
-                    </a>
-                  )}
-                </div>
-              </div>
+                    <div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">
+                          {planOption.name}
+                        </span>
+                        {isCurrentPlan && (
+                          <Badge className="bg-emerald-500 text-white text-[10px] font-bold">
+                            SEU PLANO
+                          </Badge>
+                        )}
+                      </div>
 
-              {/* Pro (Recommended) */}
-              <div className={`rounded-xl border p-5 flex flex-col justify-between relative shadow-sm transition-all ${
-                limits.plan.code === 'PROFISSIONAL'
-                  ? 'border-emerald-500 bg-emerald-50/20 dark:bg-emerald-950/20 ring-2 ring-emerald-500/20'
-                  : 'border-emerald-600/30 dark:border-emerald-500/40 bg-slate-50/50 dark:bg-slate-900/50'
-              }`}>
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <span className="bg-emerald-600 text-white text-[10px] font-black uppercase tracking-wider px-3 py-0.5 rounded-full shadow-xs">
-                    Mais Popular
-                  </span>
-                </div>
+                      <div className="mt-3 flex items-baseline gap-1">
+                        <span className="text-2xl font-black text-slate-900 dark:text-slate-100">
+                          {planOption.monthly_price === 0 ? 'Grátis' : formatCurrency(planOption.monthly_price)}
+                        </span>
+                        {planOption.monthly_price > 0 && (
+                          <span className="text-xs text-slate-500 font-semibold">/mês</span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-1">
+                        {planOption.description || 'Plano completo para gestão de atendimentos e oficina.'}
+                      </p>
 
-                <div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">Plano Profissional</span>
-                    {limits.plan.code === 'PROFISSIONAL' && (
-                      <Badge className="bg-emerald-500 text-white text-[10px] font-bold">SEU PLANO</Badge>
-                    )}
+                      <ul className="mt-4 space-y-2 text-xs text-slate-600 dark:text-slate-400">
+                        <li className="flex items-center gap-1.5">
+                          <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                          <strong>Até {planOption.max_users} colaboradores inclusos</strong>
+                        </li>
+                        <li className="flex items-center gap-1.5">
+                          <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                          <span>Adicional: {formatCurrency(planOption.extra_user_price || 15)}/mês por usuário extra</span>
+                        </li>
+                        {planFeatures.map((feat, fIdx) => (
+                          <li key={fIdx} className="flex items-start gap-1.5">
+                            <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                            <span>{feat}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800">
+                      {isCurrentPlan ? (
+                        <Button disabled variant="outline" className="w-full text-xs font-bold rounded-xl">
+                          Plano Atual
+                        </Button>
+                      ) : (
+                        <a
+                          href={waUpgradeUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={`block text-center w-full py-2 px-3 rounded-xl text-xs font-bold transition-all ${
+                            isPopular
+                              ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/20'
+                              : 'border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200'
+                          }`}
+                        >
+                          Solicitar {planOption.name}
+                        </a>
+                      )}
+                    </div>
                   </div>
-                  <div className="mt-3 flex items-baseline gap-1">
-                    <span className="text-2xl font-black text-slate-900 dark:text-slate-100">R$ 129</span>
-                    <span className="text-xs text-slate-500 font-semibold">/mês</span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 mt-1">Para assistências com volume médio/alto e frente de caixa</p>
-                  
-                  <ul className="mt-4 space-y-2 text-xs text-slate-600 dark:text-slate-400">
-                    <li className="flex items-center gap-1.5">
-                      <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                      <strong>Até 8 colaboradores inclusos</strong>
-                    </li>
-                    <li className="flex items-center gap-1.5">
-                      <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                      <span>Frente de Caixa (PDV) com Sangrias & Fechamento Cego</span>
-                    </li>
-                    <li className="flex items-center gap-1.5">
-                      <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                      <span>Disparo 1-Clique de Recibos no WhatsApp</span>
-                    </li>
-                    <li className="flex items-center gap-1.5">
-                      <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                      <span>Relatórios Financeiros & Métricas de Faturamento</span>
-                    </li>
-                    <li className="flex items-center gap-1.5">
-                      <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                      <span>Logs de Auditoria & Segurança de Sessões</span>
-                    </li>
-                  </ul>
-                </div>
-
-                <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800">
-                  {limits.plan.code === 'PROFISSIONAL' ? (
-                    <Button disabled variant="outline" className="w-full text-xs font-bold rounded-xl">
-                      Plano Atual
-                    </Button>
-                  ) : (
-                    <a
-                      href={`https://wa.me/5511999999999?text=${encodeURIComponent(`Olá! Gostaria de migrar minha empresa *${currentCompany.trade_name}* para o Plano Profissional (R$ 129/mês).`)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block text-center w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20"
-                    >
-                      Fazer Upgrade para Pro
-                    </a>
-                  )}
-                </div>
-              </div>
-
-              {/* Enterprise */}
-              <div className={`rounded-xl border p-5 flex flex-col justify-between transition-all ${
-                limits.plan.code === 'ENTERPRISE'
-                  ? 'border-emerald-500 bg-emerald-50/20 dark:bg-emerald-950/20 ring-2 ring-emerald-500/20'
-                  : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'
-              }`}>
-                <div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-500">Plano Enterprise</span>
-                    {limits.plan.code === 'ENTERPRISE' && (
-                      <Badge className="bg-emerald-500 text-white text-[10px] font-bold">SEU PLANO</Badge>
-                    )}
-                  </div>
-                  <div className="mt-3 flex items-baseline gap-1">
-                    <span className="text-2xl font-black text-slate-900 dark:text-slate-100">R$ 199</span>
-                    <span className="text-xs text-slate-500 font-semibold">/mês</span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 mt-1">Para grandes oficinas, redes e centros com múltiplos técnicos</p>
-                  
-                  <ul className="mt-4 space-y-2 text-xs text-slate-600 dark:text-slate-400">
-                    <li className="flex items-center gap-1.5">
-                      <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                      <strong>Até 25 colaboradores inclusos</strong>
-                    </li>
-                    <li className="flex items-center gap-1.5">
-                      <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                      <span>Todos os recursos do Plano Profissional</span>
-                    </li>
-                    <li className="flex items-center gap-1.5">
-                      <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                      <span>Exportação Completa de Dados & Backups</span>
-                    </li>
-                    <li className="flex items-center gap-1.5">
-                      <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                      <span>Suporte VIP Prioritário com Gerente de Conta</span>
-                    </li>
-                  </ul>
-                </div>
-
-                <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800">
-                  {limits.plan.code === 'ENTERPRISE' ? (
-                    <Button disabled variant="outline" className="w-full text-xs font-bold rounded-xl">
-                      Plano Atual
-                    </Button>
-                  ) : (
-                    <a
-                      href={`https://wa.me/5511999999999?text=${encodeURIComponent(`Olá! Gostaria de migrar minha empresa *${currentCompany.trade_name}* para o Plano Enterprise (R$ 199/mês).`)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block text-center w-full py-2 px-3 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200"
-                    >
-                      Mudar para Enterprise
-                    </a>
-                  )}
-                </div>
-              </div>
+                );
+              })}
             </div>
           </div>
         </div>

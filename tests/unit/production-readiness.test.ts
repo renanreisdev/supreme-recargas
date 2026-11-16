@@ -221,5 +221,143 @@ describe('Production Readiness: Tenant Onboarding, Plans & Cash Register Persist
     expect(clamped.default_trial_days).toBe(1);
     expect(clamped.annual_discount_percent).toBe(90);
   });
+
+  it('handles null custom_max_users and custom_price from DB subscriptions on Plano Profissional without limiting to 1 user', () => {
+    const email = `workprint.${Date.now()}@impressora.com.br`;
+    const profPlanId = 'a1000000-0000-0000-0000-000000000003';
+    const company = AppStore.addCompany(
+      {
+        trade_name: 'WorkPrint Impressoras',
+        corporate_name: 'WorkPrint LTDA',
+        cnpj: '44.555.666/0001-77',
+        phone: '(11) 95555-4444',
+        email
+      },
+      {
+        fullName: 'Fábio de Souza',
+        email,
+        password: 'SenhaForte@2026',
+        phone: '(11) 95555-4444'
+      },
+      profPlanId,
+      'Super Admin',
+      'ASSISTENCIA_INFORMATICA'
+    );
+
+    AppStore.assignPlanToCompany(
+      company.id,
+      profPlanId,
+      {
+        custom_max_users: null as unknown as number,
+        custom_price: null as unknown as number
+      },
+      'Super Admin'
+    );
+
+    if (typeof localStorage !== 'undefined') {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key) continue;
+        const raw = localStorage.getItem(key);
+        if (raw && raw.includes(company.id) && raw.includes('subscriptions')) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed.subscriptions)) {
+            parsed.subscriptions = parsed.subscriptions.map((sub: Record<string, unknown>) =>
+              sub.tenant_id === company.id
+                ? { ...sub, custom_max_users: null, custom_price: null }
+                : sub
+            );
+            localStorage.setItem(key, JSON.stringify(parsed));
+          }
+        }
+      }
+    }
+
+    const limits = AppStore.getEffectiveLimits(company.id);
+    expect(limits.plan.id).toBe(profPlanId);
+    expect(limits.maxUsers).toBe(10);
+    expect(limits.usedUsers).toBe(1);
+    expect(limits.availableUsers).toBe(9);
+    expect(limits.canAddUser).toBe(true);
+    expect(limits.finalMonthlyPrice).toBe(59.9);
+
+    for (let u = 2; u <= 10; u++) {
+      AppStore.addUser(
+        {
+          tenant_id: company.id,
+          full_name: `Técnico ${u}`,
+          email: `tec${u}.${Date.now()}@impressora.com.br`,
+          role: 'TECNICO',
+          is_active: true
+        },
+        'Fábio de Souza'
+      );
+    }
+
+    const fullLimits = AppStore.getEffectiveLimits(company.id);
+    expect(fullLimits.usedUsers).toBe(10);
+    expect(fullLimits.availableUsers).toBe(0);
+    expect(fullLimits.canAddUser).toBe(false);
+
+    expect(() =>
+      AppStore.addUser(
+        {
+          tenant_id: company.id,
+          full_name: 'Técnico Excedente',
+          email: `tec11.${Date.now()}@impressora.com.br`,
+          role: 'TECNICO',
+          is_active: true
+        },
+        'Fábio de Souza'
+      )
+    ).toThrow(/Limite máximo de usuários atingido/);
+  });
+
+  it('reflects plan modules dynamically across Inicial, Básico and Profissional tiers', () => {
+    const email = `modulos.${Date.now()}@assistencia.com.br`;
+    const inicialId = 'a1000000-0000-0000-0000-000000000001';
+    const basicoId = 'a1000000-0000-0000-0000-000000000002';
+    const profId = 'a1000000-0000-0000-0000-000000000003';
+
+    const company = AppStore.addCompany(
+      {
+        trade_name: 'Loja Modulos Teste',
+        corporate_name: 'Loja Modulos Teste LTDA',
+        cnpj: '55.666.777/0001-88',
+        phone: '(11) 94444-3333',
+        email
+      },
+      {
+        fullName: 'Ana Admin',
+        email,
+        password: 'SenhaForte@2026',
+        phone: '(11) 94444-3333'
+      },
+      inicialId,
+      'Super Admin',
+      'ASSISTENCIA_INFORMATICA'
+    );
+
+    expect(AppStore.getEffectiveLimits(company.id).maxUsers).toBe(3);
+    expect(AppStore.isModuleEnabledForTenant(company.id, 'balcao_os')).toBe(true);
+    expect(AppStore.isModuleEnabledForTenant(company.id, 'frente_caixa')).toBe(false);
+    expect(AppStore.isModuleEnabledForTenant(company.id, 'relatorios_financeiros')).toBe(false);
+    expect(AppStore.isModuleEnabledForTenant(company.id, 'permissoes_rbac')).toBe(false);
+    expect(AppStore.isModuleEnabledForTenant(company.id, 'auditoria_lgpd')).toBe(false);
+    expect(AppStore.isModuleEnabledForTenant(company.id, 'multi_segmento')).toBe(false);
+
+    AppStore.assignPlanToCompany(company.id, basicoId, {}, 'Super Admin');
+    expect(AppStore.getEffectiveLimits(company.id).maxUsers).toBe(5);
+    expect(AppStore.isModuleEnabledForTenant(company.id, 'frente_caixa')).toBe(true);
+    expect(AppStore.isModuleEnabledForTenant(company.id, 'permissoes_rbac')).toBe(false);
+    expect(AppStore.isModuleEnabledForTenant(company.id, 'auditoria_lgpd')).toBe(false);
+    expect(AppStore.isModuleEnabledForTenant(company.id, 'multi_segmento')).toBe(false);
+
+    AppStore.assignPlanToCompany(company.id, profId, {}, 'Super Admin');
+    expect(AppStore.getEffectiveLimits(company.id).maxUsers).toBe(10);
+    for (const mod of SYSTEM_MODULES) {
+      expect(AppStore.isModuleEnabledForTenant(company.id, mod.key)).toBe(true);
+    }
+  });
 });
 

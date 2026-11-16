@@ -19,7 +19,8 @@ import {
   CheckCircle2,
   ArrowUp,
   ArrowDown,
-  RotateCcw
+  RotateCcw,
+  Lock
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { AppStore, BUSINESS_PRESETS } from '@/lib/store';
@@ -426,10 +427,17 @@ export function PresetCatalogWizard({
   if (!canAccess) return null;
   if (mode === 'modal' && !isOpen) return null;
 
+  const hasMultiSegmentModule = currentCompany
+    ? AppStore.isModuleEnabledForTenant(currentCompany.id, 'multi_segmento')
+    : true;
+
   const toggleSegment = (segKey: BusinessTemplateKey) => {
-    const next = selectedSegments.includes(segKey)
+    const isSelected = selectedSegments.includes(segKey);
+    const next = isSelected
       ? selectedSegments.filter(k => k !== segKey)
-      : [...selectedSegments, segKey];
+      : hasMultiSegmentModule
+        ? [...selectedSegments, segKey]
+        : [segKey];
     setSelectedSegments(next);
     buildDraftsFromSegments(next, true, {
       cats: categoriesDraft,
@@ -441,6 +449,10 @@ export function PresetCatalogWizard({
   };
 
   const selectAllSegments = () => {
+    if (!hasMultiSegmentModule) {
+      toast.warning('Módulo Múltiplos Segmentos Simultâneos não está incluído no plano atual.');
+      return;
+    }
     const all = Object.keys(BUSINESS_PRESETS) as BusinessTemplateKey[];
     setSelectedSegments(all);
     buildDraftsFromSegments(all, true, {
@@ -818,22 +830,38 @@ export function PresetCatalogWizard({
         <div className="space-y-2.5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <p className="text-xs font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-200">
-                1. Escolha um ou mais Segmentos para Combinar
-              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-xs font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-200">
+                  {hasMultiSegmentModule
+                    ? '1. Escolha um ou mais Segmentos para Combinar'
+                    : '1. Escolha o Segmento do Catálogo'}
+                </p>
+                {!hasMultiSegmentModule && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/70 px-2 py-0.5 text-[10px] font-bold">
+                    <Lock className="w-3 h-3" />
+                    1 segmento por vez neste plano
+                  </span>
+                )}
+              </div>
               <p className="text-[11px] text-slate-500">
-                Você pode marcar vários ramos simultaneamente para montar uma lista personalizada sem engessamento.
+                {hasMultiSegmentModule
+                  ? 'Você pode marcar vários ramos simultaneamente para montar uma lista personalizada sem engessamento.'
+                  : 'Planos com o módulo Múltiplos Segmentos Simultâneos permitem combinar vários ramos em uma única importação.'}
               </p>
             </div>
             <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={selectAllSegments}
-                className="text-[11px] font-bold text-emerald-600 hover:underline px-2 py-1"
-              >
-                Combinar Todos
-              </button>
-              <span className="text-slate-300 dark:text-slate-700">•</span>
+              {hasMultiSegmentModule && (
+                <>
+                  <button
+                    type="button"
+                    onClick={selectAllSegments}
+                    className="text-[11px] font-bold text-emerald-600 hover:underline px-2 py-1"
+                  >
+                    Combinar Todos
+                  </button>
+                  <span className="text-slate-300 dark:text-slate-700">•</span>
+                </>
+              )}
               <button
                 type="button"
                 onClick={clearSegments}

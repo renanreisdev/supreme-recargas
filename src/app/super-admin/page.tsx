@@ -693,9 +693,21 @@ export default function SuperAdminPage() {
     const limits = AppStore.getEffectiveLimits(c.id);
     setTenantForPlanManage(c);
     setSubSelectedPlanId(limits.subscription.plan_id || limits.plan.id);
-    setSubExtraUsers(limits.subscription.extra_users || 0);
-    setSubCustomPrice(limits.subscription.custom_price !== undefined ? String(limits.subscription.custom_price) : '');
-    setSubCustomMaxUsers(limits.subscription.custom_max_users !== undefined ? String(limits.subscription.custom_max_users) : '');
+    setSubExtraUsers(Number(limits.subscription.extra_users) || 0);
+    setSubCustomPrice(
+      limits.subscription.custom_price !== undefined &&
+      limits.subscription.custom_price !== null &&
+      String(limits.subscription.custom_price).trim() !== ''
+        ? String(limits.subscription.custom_price)
+        : ''
+    );
+    setSubCustomMaxUsers(
+      limits.subscription.custom_max_users !== undefined &&
+      limits.subscription.custom_max_users !== null &&
+      String(limits.subscription.custom_max_users).trim() !== ''
+        ? String(limits.subscription.custom_max_users)
+        : ''
+    );
     setSubStatus(limits.subscription.status || 'ACTIVE');
     setSubExpiresAt(
       limits.subscription.expires_at

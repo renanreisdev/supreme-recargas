@@ -1,16 +1,28 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
-import { AppStore } from '@/lib/store';
+import { AppStore, SYSTEM_MODULES } from '@/lib/store';
 import { Sidebar } from './sidebar';
 import { Header } from './header';
 import { BottomNav } from './bottom-nav';
 import { MustChangePasswordModal } from '@/components/auth/MustChangePasswordModal';
 import { PresetCatalogWizard } from '@/components/presets/PresetCatalogWizard';
 import { BrandIcon } from '@/components/ui/brand-logo';
-import { Zap, Crown, Megaphone, X, ArrowLeft } from 'lucide-react';
+import { Zap, Crown, Megaphone, X, ArrowLeft, Lock, Sparkles } from 'lucide-react';
+
+const ROUTE_MODULE_MAP: Array<{ prefix: string; moduleKey: string }> = [
+  { prefix: '/entradas', moduleKey: 'balcao_os' },
+  { prefix: '/caixa', moduleKey: 'frente_caixa' },
+  { prefix: '/bancada', moduleKey: 'bancada_kanban' },
+  { prefix: '/clientes', moduleKey: 'clientes_whatsapp' },
+  { prefix: '/modelos', moduleKey: 'catalogo_modelos' },
+  { prefix: '/impressao', moduleKey: 'comandas_qr' },
+  { prefix: '/relatorios', moduleKey: 'relatorios_financeiros' },
+  { prefix: '/auditoria', moduleKey: 'auditoria_lgpd' },
+];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -20,15 +32,35 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [platformSettings, setPlatformSettings] = useState(() => AppStore.getPlatformSettings());
   const [announcementDismissed, setAnnouncementDismissed] = useState(false);
   const [showPresetWizard, setShowPresetWizard] = useState(false);
+  const [, setStoreVersion] = useState(0);
 
   useEffect(() => {
     const syncPlatformBanner = () => {
       setPlatformSettings(AppStore.getPlatformSettings());
       setAnnouncementDismissed(false);
+      setStoreVersion((v) => v + 1);
     };
     window.addEventListener('supreme_store_updated', syncPlatformBanner);
     return () => window.removeEventListener('supreme_store_updated', syncPlatformBanner);
   }, []);
+
+  const isGlobalSuperAdmin = currentUser?.role === 'SUPER_ADMIN' && !impersonatedTenantId;
+  const matchedRouteRule = pathname
+    ? ROUTE_MODULE_MAP.find((rule) => pathname === rule.prefix || pathname.startsWith(`${rule.prefix}/`))
+    : undefined;
+  const isRouteModuleBlocked = Boolean(
+    matchedRouteRule &&
+      currentCompany &&
+      currentUser &&
+      !isGlobalSuperAdmin &&
+      !AppStore.isModuleEnabledForTenant(currentCompany.id, matchedRouteRule.moduleKey)
+  );
+  const blockedModuleDef = isRouteModuleBlocked && matchedRouteRule
+    ? SYSTEM_MODULES.find((mod) => mod.key === matchedRouteRule.moduleKey)
+    : undefined;
+  const blockedTenantPlan = isRouteModuleBlocked && currentCompany
+    ? AppStore.getEffectiveLimits(currentCompany.id).plan
+    : undefined;
 
   const isPublicPage = pathname === '/' ||
                        pathname === '/login' ||
@@ -188,7 +220,43 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Scrollable Main Content with responsive padding (bottom padding on mobile for BottomNav) */}
         <main className="flex-1 overflow-y-auto p-3 sm:p-5 lg:p-6 pb-20 lg:pb-6 print:p-0 print:m-0 print:overflow-visible print:h-auto print:block">
-          {children}
+          {isRouteModuleBlocked ? (
+            <div className="max-w-xl mx-auto mt-10 rounded-2xl border border-amber-200 dark:border-amber-800/60 bg-white dark:bg-slate-900 p-6 sm:p-8 shadow-sm text-center space-y-4">
+              <div className="w-14 h-14 mx-auto rounded-2xl bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                <Lock className="w-7 h-7" />
+              </div>
+              <div className="space-y-1.5">
+                <p className="text-xs font-extrabold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                  Módulo não incluído no {blockedTenantPlan?.name || 'plano atual'}
+                </p>
+                <h2 className="text-xl font-extrabold text-slate-900 dark:text-slate-100">
+                  {blockedModuleDef?.label || 'Recurso exclusivo de planos superiores'}
+                </h2>
+                <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                  {blockedModuleDef?.description ||
+                    'A assinatura ativa desta empresa não contempla o acesso direto a este módulo.'}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center justify-center gap-2.5 pt-2">
+                <Link
+                  href="/empresa?tab=assinatura"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold shadow-sm transition-colors"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  Ver Planos &amp; Upgrade
+                </Link>
+                <Link
+                  href="/dashboard"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-sm font-semibold transition-colors"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Voltar ao Painel
+                </Link>
+              </div>
+            </div>
+          ) : (
+            children
+          )}
         </main>
 
         {/* Mobile Bottom Navigation Bar */}

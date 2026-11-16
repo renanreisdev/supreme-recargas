@@ -1051,9 +1051,9 @@ export const MOCK_PLANS: Plan[] = [
     id: 'a1000000-0000-0000-0000-000000000001',
     name: 'Plano Inicial',
     code: 'INICIAL',
-    description: 'Ideal para profissionais autônomos e pequenas assistências em início de operação.',
-    max_users: 5,
-    monthly_price: 0.00,
+    description: '1 Administrador, 3 Atendentes, 1 Técnico',
+    max_users: 3,
+    monthly_price: 19.90,
     extra_user_price: 15.00,
     features: SYSTEM_MODULES.filter(m => ESSENTIAL_MODULE_KEYS.includes(m.key)).map(m => m.label),
     is_active: true
@@ -1062,9 +1062,9 @@ export const MOCK_PLANS: Plan[] = [
     id: 'a1000000-0000-0000-0000-000000000002',
     name: 'Plano Básico',
     code: 'BASICO',
-    description: 'O mais escolhido por lojas de recarga e assistências com balcão e bancada ativa.',
+    description: '1 Administrador, 5 Atendentes, 2 Técnicos',
     max_users: 5,
-    monthly_price: 79.90,
+    monthly_price: 39.90,
     extra_user_price: 15.00,
     features: SYSTEM_MODULES.filter(m => BASIC_MODULE_KEYS.includes(m.key)).map(m => m.label),
     is_active: true
@@ -1073,9 +1073,9 @@ export const MOCK_PLANS: Plan[] = [
     id: 'a1000000-0000-0000-0000-000000000003',
     name: 'Plano Profissional',
     code: 'PROFISSIONAL',
-    description: 'Para centros de serviço de alto volume, redes de suprimentos e oficinas multissetor.',
-    max_users: 5,
-    monthly_price: 149.90,
+    description: '2 Administradores, 10 Atendentes, 5 Técnicos',
+    max_users: 10,
+    monthly_price: 59.90,
     extra_user_price: 15.00,
     features: SYSTEM_MODULES.map(m => m.label),
     is_active: true
@@ -2111,17 +2111,26 @@ export class AppStore {
 
     if (idx !== -1) {
       const existing = data.subscriptions[idx];
+      const nextCustomMaxUsers =
+        extras && 'custom_max_users' in extras
+          ? (extras.custom_max_users !== null && extras.custom_max_users !== undefined ? Number(extras.custom_max_users) : undefined)
+          : (existing.custom_max_users !== null && existing.custom_max_users !== undefined ? Number(existing.custom_max_users) : undefined);
+      const nextCustomPrice =
+        extras && 'custom_price' in extras
+          ? (extras.custom_price !== null && extras.custom_price !== undefined ? Number(extras.custom_price) : undefined)
+          : (existing.custom_price !== null && existing.custom_price !== undefined ? Number(existing.custom_price) : undefined);
+
       sub = {
         ...existing,
         plan_id: planId,
         plan,
-        extra_users: extras?.extra_users !== undefined ? extras.extra_users : existing.extra_users || 0,
-        custom_max_users: extras?.custom_max_users !== undefined ? extras.custom_max_users : existing.custom_max_users,
-        custom_price: extras?.custom_price !== undefined ? extras.custom_price : existing.custom_price,
+        extra_users: extras?.extra_users !== undefined ? Number(extras.extra_users) || 0 : Number(existing.extra_users) || 0,
+        custom_max_users: nextCustomMaxUsers,
+        custom_price: nextCustomPrice,
         status: extras?.status || existing.status || 'ACTIVE',
-        expires_at: extras?.expires_at !== undefined ? extras.expires_at : existing.expires_at,
+        expires_at: extras && 'expires_at' in extras ? extras.expires_at : existing.expires_at,
         billing_cycle: extras?.billing_cycle || existing.billing_cycle || 'MONTHLY',
-        notes: extras?.notes !== undefined ? extras.notes : existing.notes
+        notes: extras && 'notes' in extras ? extras.notes : existing.notes
       };
       data.subscriptions[idx] = sub;
       const dbSubUpdates = {
@@ -2150,9 +2159,9 @@ export class AppStore {
         status: extras?.status || 'ACTIVE',
         starts_at: startsAt,
         expires_at: extras?.expires_at,
-        extra_users: extras?.extra_users || 0,
-        custom_max_users: extras?.custom_max_users,
-        custom_price: extras?.custom_price,
+        extra_users: Number(extras?.extra_users) || 0,
+        custom_max_users: extras?.custom_max_users !== null && extras?.custom_max_users !== undefined ? Number(extras.custom_max_users) : undefined,
+        custom_price: extras?.custom_price !== null && extras?.custom_price !== undefined ? Number(extras.custom_price) : undefined,
         billing_cycle: extras?.billing_cycle || 'MONTHLY',
         notes: extras?.notes
       };
@@ -2317,10 +2326,10 @@ export class AppStore {
 
   static getEffectiveLimits(tenantId: string) {
     const data = this.getStoreData();
-    const plans: Plan[] = data.plans || MOCK_PLANS;
+    const plans: Plan[] = this.getPlans();
     const subscriptions: Subscription[] = data.subscriptions || MOCK_SUBSCRIPTIONS;
     const profiles: Profile[] = data.profiles || MOCK_PROFILES;
-    
+
     const sub = subscriptions.find(s => s.tenant_id === tenantId) || {
       id: 'default',
       tenant_id: tenantId,
@@ -2331,15 +2340,27 @@ export class AppStore {
     };
 
     const plan = plans.find(p => p.id === sub.plan_id) || plans[0] || MOCK_PLANS[0];
-    const extraUsers = sub.extra_users || 0;
-    const maxUsers = sub.custom_max_users !== undefined ? sub.custom_max_users : (plan.max_users || 5) + extraUsers;
+    const extraUsers = Number(sub.extra_users) || 0;
+    const basePlanUsers = Number(plan.max_users ?? plan.max_total_users ?? 5) || 5;
+    const hasCustomMaxUsers =
+      sub.custom_max_users !== undefined &&
+      sub.custom_max_users !== null &&
+      String(sub.custom_max_users).trim() !== '' &&
+      Number(sub.custom_max_users) > 0;
+    const maxUsers = hasCustomMaxUsers ? Number(sub.custom_max_users) : basePlanUsers + extraUsers;
+
     const tenantProfiles = profiles.filter(p => p.tenant_id === tenantId && p.is_active !== false && p.role !== 'SUPER_ADMIN');
     const usedUsers = tenantProfiles.length;
     const availableUsers = Math.max(0, maxUsers - usedUsers);
     const canAddUser = usedUsers < maxUsers;
-    const extraUserPrice = plan.extra_user_price || 15.00;
-    const calculatedPrice = (plan.monthly_price || 0) + (extraUsers * extraUserPrice);
-    const finalMonthlyPrice = sub.custom_price !== undefined ? sub.custom_price : calculatedPrice;
+    const extraUserPrice = Number(plan.extra_user_price ?? 15) || 15;
+    const calculatedPrice = (Number(plan.monthly_price) || 0) + (extraUsers * extraUserPrice);
+    const hasCustomPrice =
+      sub.custom_price !== undefined &&
+      sub.custom_price !== null &&
+      String(sub.custom_price).trim() !== '' &&
+      !Number.isNaN(Number(sub.custom_price));
+    const finalMonthlyPrice = hasCustomPrice ? Number(sub.custom_price) : calculatedPrice;
 
     return {
       subscription: sub,
@@ -5013,11 +5034,12 @@ export class AppStore {
           }
 
           if (remoteUser.tenant_id) {
-            const { data: remoteCompany } = await supabase
-              .from('companies')
-              .select('*')
-              .eq('id', remoteUser.tenant_id)
-              .maybeSingle();
+            const [{ data: remoteCompany }, { data: remotePlans }, { data: remoteSub }] = await Promise.all([
+              supabase.from('companies').select('*').eq('id', remoteUser.tenant_id).maybeSingle(),
+              supabase.from('plans').select('*').order('monthly_price', { ascending: true }),
+              supabase.from('subscriptions').select('*').eq('tenant_id', remoteUser.tenant_id).maybeSingle()
+            ]);
+
             if (remoteCompany) {
               if (!Array.isArray(data.companies)) data.companies = [];
               const compIdx = data.companies.findIndex((c: Company) => c.id === remoteCompany.id);
@@ -5025,6 +5047,20 @@ export class AppStore {
                 data.companies[compIdx] = { ...data.companies[compIdx], ...remoteCompany };
               } else {
                 data.companies.push(remoteCompany as Company);
+              }
+            }
+
+            if (Array.isArray(remotePlans) && remotePlans.length > 0) {
+              data.plans = remotePlans.map((p: any) => this.normalizePlan(p));
+            }
+
+            if (remoteSub) {
+              if (!Array.isArray(data.subscriptions)) data.subscriptions = [];
+              const subIdx = data.subscriptions.findIndex((s: Subscription) => s.tenant_id === remoteUser.tenant_id);
+              if (subIdx !== -1) {
+                data.subscriptions[subIdx] = { ...data.subscriptions[subIdx], ...remoteSub };
+              } else {
+                data.subscriptions.push(remoteSub as Subscription);
               }
             }
           }
