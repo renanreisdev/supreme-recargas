@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { AppStore } from '@/lib/store';
+import { AppStore, SYSTEM_MODULES } from '@/lib/store';
 import { isPasswordHashed, verifyPassword } from '@/lib/security';
 
 describe('Production Readiness: Tenant Onboarding, Plans & Cash Register Persistence', () => {
@@ -88,6 +88,39 @@ describe('Production Readiness: Tenant Onboarding, Plans & Cash Register Persist
     expect(closed.closing_calculated_cash).toBe(200);
     expect(closed.closing_counted_cash).toBe(200);
     expect(closed.closing_difference).toBe(0);
+  });
+
+  it('extracts plan modules from features and enforces module visibility per tenant plan', () => {
+    const selectedLabels = [
+      SYSTEM_MODULES.find(m => m.key === 'balcao_os')!.label,
+      SYSTEM_MODULES.find(m => m.key === 'comandas_qr')!.label,
+      'Suporte VIP WhatsApp'
+    ];
+    const extracted = AppStore.extractPlanModules(selectedLabels);
+    expect(extracted.moduleKeys).toEqual(['balcao_os', 'comandas_qr']);
+    expect(extracted.extraFeatures).toEqual(['Suporte VIP WhatsApp']);
+
+    const customPlan = AppStore.addPlan({
+      name: 'Plano Restrito Balcão',
+      code: 'RESTRITO_BALCAO',
+      description: 'Somente balcão e comandas',
+      monthly_price: 49.9,
+      max_users: 2,
+      extra_user_price: 15,
+      features: selectedLabels,
+      is_active: true
+    });
+
+    const company = AppStore.addCompany(
+      { trade_name: 'Loja Módulo Restrito', email: `restrito.${Date.now()}@loja.com` },
+      undefined,
+      customPlan.id
+    );
+
+    expect(AppStore.isModuleEnabledForTenant(company.id, 'balcao_os')).toBe(true);
+    expect(AppStore.isModuleEnabledForTenant(company.id, 'comandas_qr')).toBe(true);
+    expect(AppStore.isModuleEnabledForTenant(company.id, 'frente_caixa')).toBe(false);
+    expect(AppStore.isModuleEnabledForTenant(company.id, 'relatorios_financeiros')).toBe(false);
   });
 });
 

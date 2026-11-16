@@ -38,7 +38,7 @@ import {
   LogOut
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
-import { AppStore, SEGMENT_PRESETS, BUSINESS_PRESETS } from '@/lib/store';
+import { AppStore, SEGMENT_PRESETS, BUSINESS_PRESETS, SYSTEM_MODULES } from '@/lib/store';
 import { formatCurrency, formatDate, getRoleBadgeConfig, cn } from '@/lib/utils';
 import { toast } from '@/lib/toast';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -122,6 +122,13 @@ export default function SuperAdminPage() {
   const [planMonthlyPrice, setPlanMonthlyPrice] = useState(0);
   const [planMaxUsers, setPlanMaxUsers] = useState(5);
   const [planExtraUserPrice, setPlanExtraUserPrice] = useState(15);
+  const [selectedPlanModules, setSelectedPlanModules] = useState<string[]>([
+    'balcao_os',
+    'comandas_qr',
+    'clientes_whatsapp',
+    'catalogo_modelos',
+    'bancada_kanban'
+  ]);
   const [planFeatures, setPlanFeatures] = useState('');
 
   // Calculator / Simulator State
@@ -384,6 +391,15 @@ export default function SuperAdminPage() {
   };
 
   // Handlers: Plans CRUD
+  const ESSENTIAL_KEYS = ['balcao_os', 'comandas_qr', 'clientes_whatsapp', 'catalogo_modelos', 'bancada_kanban'];
+  const BASIC_KEYS = [...ESSENTIAL_KEYS, 'pesagem_precisao', 'frente_caixa', 'relatorios_financeiros'];
+
+  const togglePlanModule = (moduleKey: string) => {
+    setSelectedPlanModules(prev =>
+      prev.includes(moduleKey) ? prev.filter(k => k !== moduleKey) : [...prev, moduleKey]
+    );
+  };
+
   const handleOpenCreatePlan = () => {
     setEditingPlan(null);
     setPlanName('');
@@ -392,7 +408,8 @@ export default function SuperAdminPage() {
     setPlanMonthlyPrice(79.90);
     setPlanMaxUsers(5);
     setPlanExtraUserPrice(15);
-    setPlanFeatures('Emissão de Comandas\nBancada Técnica Kanban\nRelatórios Financeiros\nRastreio via QR Code');
+    setSelectedPlanModules(ESSENTIAL_KEYS);
+    setPlanFeatures('');
     setShowPlanFormModal(true);
   };
 
@@ -404,7 +421,9 @@ export default function SuperAdminPage() {
     setPlanMonthlyPrice(p.monthly_price);
     setPlanMaxUsers(p.max_users || p.max_total_users || 5);
     setPlanExtraUserPrice(p.extra_user_price || 15);
-    setPlanFeatures(p.features ? p.features.join('\n') : '');
+    const { moduleKeys, extraFeatures } = AppStore.extractPlanModules(p.features);
+    setSelectedPlanModules(moduleKeys.length > 0 ? moduleKeys : ESSENTIAL_KEYS);
+    setPlanFeatures(extraFeatures.join('\n'));
     setShowPlanFormModal(true);
   };
 
@@ -414,11 +433,21 @@ export default function SuperAdminPage() {
       showToast('Informe o nome do plano.', 'error');
       return;
     }
+    if (selectedPlanModules.length === 0) {
+      showToast('Selecione ao menos um módulo para o plano.', 'error');
+      return;
+    }
 
-    const featureList = planFeatures
+    const moduleLabels = SYSTEM_MODULES
+      .filter(m => selectedPlanModules.includes(m.key))
+      .map(m => m.label);
+
+    const extraFeatureList = planFeatures
       .split('\n')
       .map(f => f.trim())
       .filter(Boolean);
+
+    const featureList = [...moduleLabels, ...extraFeatureList];
 
     try {
       if (editingPlan) {
@@ -1002,10 +1031,12 @@ Incluso: Emissão de Comandas, Bancada Técnica Kanban, Rastreio e Impressão T�
                         </div>
                       </div>
 
-                      {/* Features List */}
+                      {/* Modules & Features List */}
                       {p.features && p.features.length > 0 && (
                         <div>
-                          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Recursos Inclusos</p>
+                          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                            Módulos Contemplados ({AppStore.extractPlanModules(p.features).moduleKeys.length}/{SYSTEM_MODULES.length})
+                          </p>
                           <ul className="space-y-1.5 text-xs text-slate-600 dark:text-slate-300">
                             {p.features.map((feat, fIdx) => (
                               <li key={fIdx} className="flex items-center gap-2">
@@ -1656,7 +1687,7 @@ Incluso: Emissão de Comandas, Bancada Técnica Kanban, Rastreio e Impressão T�
       {/* ===================================================================== */}
       {showPlanFormModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-2xl p-6 shadow-2xl space-y-4 my-8 animate-in fade-in zoom-in-95">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-2xl p-6 shadow-2xl space-y-4 my-8 max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <Layers className="w-5 h-5 text-purple-600" />
@@ -1742,13 +1773,103 @@ Incluso: Emissão de Comandas, Bancada Técnica Kanban, Rastreio e Impressão T�
                 </div>
               </div>
 
+              {/* Modules Selection */}
+              <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider text-[11px] flex items-center gap-2">
+                      <span>Módulos do Sistema Contemplados no Plano</span>
+                      <Badge className="bg-purple-600 text-white text-[10px]">
+                        {selectedPlanModules.length} de {SYSTEM_MODULES.length} módulos ativos
+                      </Badge>
+                    </p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Define quais funcionalidades as empresas assinantes deste plano terão acesso no menu e operação.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setSelectedPlanModules(ESSENTIAL_KEYS)}
+                      className="h-7 px-2 text-[10px] font-bold"
+                    >
+                      Essencial (5)
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setSelectedPlanModules(BASIC_KEYS)}
+                      className="h-7 px-2 text-[10px] font-bold"
+                    >
+                      Básico (8)
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setSelectedPlanModules(SYSTEM_MODULES.map(m => m.key))}
+                      className="h-7 px-2 text-[10px] font-bold text-emerald-600 border-emerald-500/40"
+                    >
+                      Completo (12)
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
+                  {(['Atendimento & Balcão', 'Oficina & Bancada', 'Financeiro & Gestão', 'Segurança & Multi-Loja'] as const).map(cat => {
+                    const catModules = SYSTEM_MODULES.filter(m => m.category === cat);
+                    return (
+                      <div key={cat} className="space-y-1.5">
+                        <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                          {cat}
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {catModules.map(mod => {
+                            const checked = selectedPlanModules.includes(mod.key);
+                            return (
+                              <label
+                                key={mod.key}
+                                className={cn(
+                                  "flex items-start gap-2.5 p-2.5 rounded-lg border cursor-pointer transition-all select-none",
+                                  checked
+                                    ? "bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-400 dark:border-emerald-700"
+                                    : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300"
+                                )}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() => togglePlanModule(mod.key)}
+                                  className="mt-0.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                                />
+                                <div className="min-w-0">
+                                  <span className="font-bold text-[11px] text-slate-800 dark:text-slate-100 block leading-tight">
+                                    {mod.label}
+                                  </span>
+                                  <span className="text-[10px] text-slate-500 dark:text-slate-400 block mt-0.5 leading-snug">
+                                    {mod.description}
+                                  </span>
+                                </div>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div>
-                <label className="font-bold mb-1 block">Recursos Inclusos (Um por linha)</label>
+                <label className="font-bold mb-1 block">Diferenciais / Benefícios Extras (Opcional — 1 por linha)</label>
                 <textarea
-                  rows={4}
+                  rows={3}
                   value={planFeatures}
                   onChange={e => setPlanFeatures(e.target.value)}
-                  placeholder="Emissão de Comandas com QR Code&#10;Bancada Técnica Kanban&#10;Relatórios Financeiros"
+                  placeholder="Ex: Treinamento de equipe por vídeo&#10;Suporte VIP via WhatsApp&#10;Migração assistida de dados"
                   className="w-full text-xs p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
               </div>

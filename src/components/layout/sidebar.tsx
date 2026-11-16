@@ -30,6 +30,7 @@ import {
   Banknote
 } from 'lucide-react';
 import { useAuth, getBrowserDeviceDescription } from '@/lib/auth-context';
+import { AppStore } from '@/lib/store';
 import { cn, getRoleBadgeConfig } from '@/lib/utils';
 import { toast } from '@/lib/toast';
 import { Badge } from '@/components/ui/badge';
@@ -161,25 +162,25 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
           href: '/entradas/nova',
           icon: PlusCircle,
           highlight: true,
-          show: hasPermission('create_entry')
+          show: hasPermission('create_entry') && AppStore.isModuleEnabledForTenant(currentCompany.id, 'balcao_os')
         },
         {
           title: 'Frente de Caixa (PDV)',
           href: '/caixa',
           icon: Banknote,
-          show: ['ADMINISTRADOR', 'ATENDENTE'].includes(currentUser.role)
+          show: ['ADMINISTRADOR', 'ATENDENTE'].includes(currentUser.role) && AppStore.isModuleEnabledForTenant(currentCompany.id, 'frente_caixa')
         },
         {
           title: 'Bancada Técnica (Kanban)',
           href: '/bancada',
           icon: Wrench,
-          show: hasPermission('technical_workbench')
+          show: hasPermission('technical_workbench') && AppStore.isModuleEnabledForTenant(currentCompany.id, 'bancada_kanban')
         },
         {
           title: 'Entradas & Histórico',
           href: '/entradas',
           icon: ClipboardList,
-          show: hasPermission('view_entries')
+          show: hasPermission('view_entries') && AppStore.isModuleEnabledForTenant(currentCompany.id, 'balcao_os')
         }
       ]
     },
@@ -190,19 +191,19 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
           title: 'Clientes',
           href: '/clientes',
           icon: Users,
-          show: hasPermission('view_customers')
+          show: hasPermission('view_customers') && AppStore.isModuleEnabledForTenant(currentCompany.id, 'clientes_whatsapp')
         },
         {
           title: 'Modelos & Serviços',
           href: '/modelos',
           icon: Receipt,
-          show: hasPermission('manage_models')
+          show: hasPermission('manage_models') && AppStore.isModuleEnabledForTenant(currentCompany.id, 'catalogo_modelos')
         },
         {
           title: 'Impressão de Comandas',
           href: '/impressao',
           icon: Printer,
-          show: hasPermission('print_ticket')
+          show: hasPermission('print_ticket') && AppStore.isModuleEnabledForTenant(currentCompany.id, 'comandas_qr')
         }
       ]
     },
@@ -213,13 +214,13 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
           title: 'Relatórios & Indicadores',
           href: '/relatorios',
           icon: BarChart3,
-          show: hasPermission('view_financial_reports')
+          show: hasPermission('view_financial_reports') && AppStore.isModuleEnabledForTenant(currentCompany.id, 'relatorios_financeiros')
         },
         {
           title: 'Logs de Auditoria',
           href: '/auditoria',
           icon: ShieldCheck,
-          show: hasPermission('view_audit_logs')
+          show: hasPermission('view_audit_logs') && AppStore.isModuleEnabledForTenant(currentCompany.id, 'auditoria_lgpd')
         },
         {
           title: 'Minha Empresa & Ajustes',

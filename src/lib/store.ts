@@ -438,6 +438,104 @@ export const MOCK_COMPANIES: Company[] = [
   MOCK_COMPANY_ALFA
 ];
 
+export interface SystemModuleDef {
+  key: string;
+  label: string;
+  description: string;
+  category: 'Atendimento & Balcão' | 'Oficina & Bancada' | 'Financeiro & Gestão' | 'Segurança & Multi-Loja';
+  keywords: string[];
+}
+
+export const SYSTEM_MODULES: SystemModuleDef[] = [
+  {
+    key: 'balcao_os',
+    label: 'Recepção de Balcão & Ordens de Serviço',
+    description: 'Abertura rápida de OS 1:N, histórico de entradas e baixa de entregas.',
+    category: 'Atendimento & Balcão',
+    keywords: ['ordens de serviço', 'recepção de balcão', 'atendimentos ilimitados', 'emissão de comandas']
+  },
+  {
+    key: 'comandas_qr',
+    label: 'Comandas Térmicas (58mm e 80mm) & QR Code',
+    description: 'Impressão térmica em 1 ou 2 vias e rastreio online público via QR Code.',
+    category: 'Atendimento & Balcão',
+    keywords: ['comandas térmicas', 'qr code', 'rastreio online']
+  },
+  {
+    key: 'clientes_whatsapp',
+    label: 'Gestão de Clientes & Notificação WhatsApp',
+    description: 'Cadastro rápido de clientes e disparo de aviso de OS pronta em 1 clique.',
+    category: 'Atendimento & Balcão',
+    keywords: ['cadastro rápido de clientes', 'gestão de clientes', 'notificação whatsapp']
+  },
+  {
+    key: 'catalogo_modelos',
+    label: 'Catálogo de Modelos, Marcas & Serviços',
+    description: 'Tabela padronizada de equipamentos, insumos, marcas e preços sugeridos.',
+    category: 'Atendimento & Balcão',
+    keywords: ['tabela de modelos', 'catálogo de modelos']
+  },
+  {
+    key: 'bancada_kanban',
+    label: 'Bancada Técnica Kanban & Laudos',
+    description: 'Fila visual em tempo real para técnicos, checklists e diagnóstico.',
+    category: 'Oficina & Bancada',
+    keywords: ['kanban técnico', 'bancada técnica']
+  },
+  {
+    key: 'pesagem_precisao',
+    label: 'Pesagem de Precisão (Entrada vs Saída)',
+    description: 'Cálculo automático de gramas injetados e controle de circuito (CID).',
+    category: 'Oficina & Bancada',
+    keywords: ['pesagem de precisão']
+  },
+  {
+    key: 'frente_caixa',
+    label: 'Frente de Caixa Diário (PDV)',
+    description: 'Abertura de turno, fundo de troco, sangrias, suprimentos e fechamento.',
+    category: 'Financeiro & Gestão',
+    keywords: ['frente de caixa', 'pdv']
+  },
+  {
+    key: 'relatorios_financeiros',
+    label: 'Relatórios de Faturamento & Comissões',
+    description: 'Indicadores financeiros por forma de pagamento e produtividade técnica.',
+    category: 'Financeiro & Gestão',
+    keywords: ['relatórios de faturamento', 'relatórios financeiros']
+  },
+  {
+    key: 'permissoes_rbac',
+    label: 'Gestão de Permissões Granulares (RBAC)',
+    description: 'Grupos de acesso personalizados e alçada máxima de desconto por operador.',
+    category: 'Segurança & Multi-Loja',
+    keywords: ['permissões granulares', 'rbac']
+  },
+  {
+    key: 'auditoria_lgpd',
+    label: 'Auditoria Imutável & Backup Completo LGPD',
+    description: 'Trilha de auditoria de ações críticas, exportação de dados e anonimização.',
+    category: 'Segurança & Multi-Loja',
+    keywords: ['auditoria imutável', 'backup completo lgpd', 'auditoria completa']
+  },
+  {
+    key: 'multi_segmento',
+    label: 'Múltiplos Segmentos Simultâneos',
+    description: 'Atuação combinada em recargas, informática, celulares e oficinas.',
+    category: 'Segurança & Multi-Loja',
+    keywords: ['múltiplos segmentos']
+  },
+  {
+    key: 'sessao_unica',
+    label: 'Sessão Única e Segurança Avançada',
+    description: 'Proteção contra logins simultâneos na mesma conta e auto-logout por inatividade.',
+    category: 'Segurança & Multi-Loja',
+    keywords: ['sessão única', 'segurança avançada']
+  }
+];
+
+const ESSENTIAL_MODULE_KEYS = ['balcao_os', 'comandas_qr', 'clientes_whatsapp', 'catalogo_modelos', 'bancada_kanban'];
+const BASIC_MODULE_KEYS = [...ESSENTIAL_MODULE_KEYS, 'pesagem_precisao', 'frente_caixa', 'relatorios_financeiros'];
+
 export const MOCK_PLANS: Plan[] = [
   {
     id: 'a1000000-0000-0000-0000-000000000001',
@@ -447,13 +545,7 @@ export const MOCK_PLANS: Plan[] = [
     max_users: 5,
     monthly_price: 0.00,
     extra_user_price: 15.00,
-    features: [
-      'Comandas Térmicas (58mm e 80mm)',
-      'Rastreio Online via QR Code',
-      'Cadastro Rápido de Clientes',
-      'Tabela de Modelos e Serviços',
-      'Kanban Técnico da Bancada'
-    ],
+    features: SYSTEM_MODULES.filter(m => ESSENTIAL_MODULE_KEYS.includes(m.key)).map(m => m.label),
     is_active: true
   },
   {
@@ -464,14 +556,7 @@ export const MOCK_PLANS: Plan[] = [
     max_users: 5,
     monthly_price: 79.90,
     extra_user_price: 15.00,
-    features: [
-      'Ordens de Serviço & Atendimentos Ilimitados',
-      'Pesagem de Precisão (Entrada vs Saída)',
-      'Kanban Técnico Customizável',
-      'Notificação WhatsApp em 1 Clique',
-      'Frente de Caixa Diário (PDV)',
-      'Relatórios de Faturamento & Comissões'
-    ],
+    features: SYSTEM_MODULES.filter(m => BASIC_MODULE_KEYS.includes(m.key)).map(m => m.label),
     is_active: true
   },
   {
@@ -482,14 +567,7 @@ export const MOCK_PLANS: Plan[] = [
     max_users: 5,
     monthly_price: 149.90,
     extra_user_price: 15.00,
-    features: [
-      'Ordens e Checklists Ilimitados',
-      'Múltiplos Segmentos Simultâneos',
-      'Gestão de Permissões Granulares (RBAC)',
-      'Auditoria Imutável de Operações',
-      'Sessão Única e Segurança Avançada',
-      'Exportação & Backup Completo LGPD'
-    ],
+    features: SYSTEM_MODULES.map(m => m.label),
     is_active: true
   }
 ];
@@ -1326,6 +1404,46 @@ export class AppStore {
   // --------------------------------------------------------------------------
   // PLANS & SUBSCRIPTIONS (Unified User Capacity)
   // --------------------------------------------------------------------------
+  static extractPlanModules(features?: string[]): { moduleKeys: string[]; extraFeatures: string[] } {
+    const moduleKeys: string[] = [];
+    const extraFeatures: string[] = [];
+    const list = Array.isArray(features) ? features : [];
+
+    for (const rawItem of list) {
+      const item = String(rawItem || '').trim();
+      if (!item) continue;
+      const lower = item.toLowerCase();
+
+      const matchedMod = SYSTEM_MODULES.find(
+        m =>
+          m.label.toLowerCase() === lower ||
+          m.keywords.some(kw => lower.includes(kw.toLowerCase()))
+      );
+
+      if (matchedMod) {
+        if (!moduleKeys.includes(matchedMod.key)) {
+          moduleKeys.push(matchedMod.key);
+        }
+      } else {
+        extraFeatures.push(item);
+      }
+    }
+
+    return { moduleKeys, extraFeatures };
+  }
+
+  static isModuleEnabledForTenant(tenantId: string, moduleKey: string): boolean {
+    const { plan } = this.getEffectiveLimits(tenantId);
+    if (!plan.features || plan.features.length === 0) {
+      return true;
+    }
+    const { moduleKeys } = this.extractPlanModules(plan.features);
+    if (moduleKeys.length === 0) {
+      return true;
+    }
+    return moduleKeys.includes(moduleKey);
+  }
+
   private static normalizePlan(p: any): Plan {
     return {
       ...p,
