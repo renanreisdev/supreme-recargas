@@ -137,6 +137,21 @@ export interface Subscription {
   plan?: Plan;
 }
 
+export interface PlatformSaasSettings {
+  id?: string;
+  platform_name: string;
+  support_whatsapp: string;
+  support_email: string;
+  pix_key: string;
+  pix_beneficiary: string;
+  pix_city: string;
+  default_trial_days: number;
+  annual_discount_percent: number;
+  global_announcement: string;
+  global_announcement_type: 'info' | 'warning' | 'emerald';
+  updated_at?: string;
+}
+
 export interface PermissionGroup {
   id: string;
   tenant_id?: string;

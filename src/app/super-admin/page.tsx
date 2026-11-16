@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { 
   Crown, 
   Building2, 
@@ -35,7 +36,19 @@ import {
   Inbox,
   Wrench,
   Smartphone,
-  LogOut
+  LogOut,
+  Eye,
+  CalendarClock,
+  Download,
+  FileSpreadsheet,
+  Settings,
+  Megaphone,
+  UserPlus,
+  Ban,
+  BarChart3,
+  Activity,
+  ArrowUpRight,
+  Timer
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { AppStore, SEGMENT_PRESETS, BUSINESS_PRESETS, SYSTEM_MODULES } from '@/lib/store';
@@ -47,28 +60,52 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { DialogModal, DialogModalProps } from '@/components/ui/dialog-modal';
-import { Company, Plan, Subscription, Profile, UserRole, BusinessSegment } from '@/types';
+import { Company, Plan, Subscription, Profile, UserRole, BusinessSegment, SubscriptionStatus, PlatformSaasSettings } from '@/types';
 
 export default function SuperAdminPage() {
-  const { currentUser } = useAuth();
+  const router = useRouter();
+  const { currentUser, impersonateCompany } = useAuth();
 
   // State
-  const [activeTab, setActiveTab] = useState<'tenants' | 'plans' | 'users' | 'calculator'>('tenants');
+  const [activeTab, setActiveTab] = useState<'tenants' | 'plans' | 'users' | 'calculator' | 'settings'>('tenants');
   const [companies, setCompanies] = useState<Company[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [allUsers, setAllUsers] = useState<Profile[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'PAUSED'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'TRIAL' | 'EXPIRED' | 'PAUSED'>('ALL');
+  const [planFilter, setPlanFilter] = useState<string>('ALL');
+  const [segmentFilter, setSegmentFilter] = useState<string>('ALL');
+  const [showAnalyticsPanel, setShowAnalyticsPanel] = useState<boolean>(false);
   const [overview, setOverview] = useState<any>(null);
+
+  // Global Users Filter & CRUD State
+  const [userSearchTerm, setUserSearchTerm] = useState('');
+  const [userCompanyFilter, setUserCompanyFilter] = useState<string>('ALL');
+  const [userRoleFilter, setUserRoleFilter] = useState<string>('ALL');
+  const [userStatusFilter, setUserStatusFilter] = useState<'ALL' | 'ONLINE' | 'ACTIVE' | 'BLOCKED'>('ALL');
+  const [showUserFormModal, setShowUserFormModal] = useState(false);
+  const [editingGlobalUser, setEditingGlobalUser] = useState<Profile | null>(null);
+  const [userFormName, setUserFormName] = useState('');
+  const [userFormEmail, setUserFormEmail] = useState('');
+  const [userFormPhone, setUserFormPhone] = useState('');
+  const [userFormPassword, setUserFormPassword] = useState('');
+  const [userFormRole, setUserFormRole] = useState<UserRole>('ATENDENTE');
+  const [userFormTenantId, setUserFormTenantId] = useState('');
+  const [userFormMustChange, setUserFormMustChange] = useState<boolean>(true);
+  const [userFormActive, setUserFormActive] = useState<boolean>(true);
 
   // Modals
   const [showAddTenantModal, setShowAddTenantModal] = useState(false);
   const [showEditTenantModal, setShowEditTenantModal] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
+  const [xrayCompany, setXrayCompany] = useState<Company | null>(null);
 
   const [showManagePlanModal, setShowManagePlanModal] = useState(false);
   const [tenantForPlanManage, setTenantForPlanManage] = useState<Company | null>(null);
+  const [subStatus, setSubStatus] = useState<SubscriptionStatus>('ACTIVE');
+  const [subExpiresAt, setSubExpiresAt] = useState<string>('');
+  const [subBillingCycle, setSubBillingCycle] = useState<'MONTHLY' | 'ANNUAL' | 'CUSTOM'>('MONTHLY');
 
   const [showPlanFormModal, setShowPlanFormModal] = useState(false);
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
@@ -76,6 +113,9 @@ export default function SuperAdminPage() {
   const [showResetUserPassModal, setShowResetUserPassModal] = useState(false);
   const [userToReset, setUserToReset] = useState<Profile | null>(null);
   const [newAdminPassword, setNewAdminPassword] = useState('');
+
+  // Platform Settings State (Tab 5)
+  const [platformSettings, setPlatformSettings] = useState<PlatformSaasSettings>(() => AppStore.getPlatformSettings());
 
   // Global Dialog Modal (Replaces browser alert & confirm)
   const [dialogModal, setDialogModal] = useState<DialogModalProps | null>(null);
@@ -150,6 +190,7 @@ export default function SuperAdminPage() {
     setSubscriptions(sList);
     setAllUsers(uList);
     setOverview(ov);
+    setPlatformSettings(AppStore.getPlatformSettings());
 
     if (pList.length > 0 && !newPlanId) {
       setNewPlanId(pList[0].id);
@@ -161,6 +202,7 @@ export default function SuperAdminPage() {
 
   useEffect(() => {
     loadPlatformData();
+    AppStore.syncFromSupabase().then(() => loadPlatformData()).catch(() => {});
     const handleUpdate = () => loadPlatformData();
     window.addEventListener('supreme_store_updated', handleUpdate);
     return () => window.removeEventListener('supreme_store_updated', handleUpdate);
@@ -219,12 +261,303 @@ export default function SuperAdminPage() {
       c.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (c.city && c.city.toLowerCase().includes(searchTerm.toLowerCase()))
     );
-
     if (!matchQuery) return false;
-    if (statusFilter === 'ACTIVE') return c.is_active !== false;
-    if (statusFilter === 'PAUSED') return c.is_active === false;
+
+    const limits = AppStore.getEffectiveLimits(c.id);
+    const subStatus = limits.subscription?.status || 'ACTIVE';
+    const isExpired = subStatus === 'EXPIRED' || (limits.subscription?.expires_at ? new Date(limits.subscription.expires_at).getTime() < Date.now() : false);
+
+    if (statusFilter === 'ACTIVE' && (c.is_active === false || subStatus === 'TRIAL' || isExpired)) return false;
+    if (statusFilter === 'TRIAL' && (c.is_active === false || subStatus !== 'TRIAL')) return false;
+    if (statusFilter === 'EXPIRED' && !isExpired) return false;
+    if (statusFilter === 'PAUSED' && c.is_active !== false) return false;
+
+    if (planFilter !== 'ALL' && limits.plan.id !== planFilter) return false;
+    const compSegment = c.business_segment || c.active_template_keys?.[0] || 'RECARGA_CARTUCHOS';
+    if (segmentFilter !== 'ALL' && compSegment !== segmentFilter) return false;
+
     return true;
   });
+
+  // Filtered Global Users
+  const filteredUsers = allUsers.filter(u => {
+    const q = userSearchTerm.trim().toLowerCase();
+    if (q) {
+      const match =
+        u.full_name.toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q) ||
+        (u.phone && u.phone.toLowerCase().includes(q));
+      if (!match) return false;
+    }
+    if (userCompanyFilter !== 'ALL' && u.tenant_id !== userCompanyFilter) return false;
+    if (userRoleFilter !== 'ALL' && u.role !== userRoleFilter) return false;
+
+    const isOnline = Boolean(u.active_session_token);
+    if (userStatusFilter === 'ONLINE' && !isOnline) return false;
+    if (userStatusFilter === 'ACTIVE' && u.is_active === false) return false;
+    if (userStatusFilter === 'BLOCKED' && u.is_active !== false) return false;
+
+    return true;
+  });
+
+  // Handlers: Support Mode, Renewal, X-Ray, WhatsApp Billing
+  const handleEnterSupportMode = (c: Company) => {
+    impersonateCompany(c.id);
+    showToast(`Modo Suporte ativado para a loja "${c.trade_name}".`);
+    router.push('/dashboard');
+  };
+
+  const handleRenewSubscriptionQuick = (c: Company, days: number = 30) => {
+    try {
+      AppStore.renewSubscription(c.id, days, currentUser.full_name);
+      loadPlatformData();
+      showToast(`Assinatura de "${c.trade_name}" renovada por +${days} dias!`);
+    } catch (err: any) {
+      showToast(err?.message || 'Erro ao renovar assinatura.', 'error');
+    }
+  };
+
+  const handleExtendTrialQuick = (c: Company, days: number = 7) => {
+    try {
+      AppStore.extendTrialSubscription(c.id, days, currentUser.full_name);
+      loadPlatformData();
+      showToast(`Trial de "${c.trade_name}" estendido por +${days} dias!`);
+    } catch (err: any) {
+      showToast(err?.message || 'Erro ao estender trial.', 'error');
+    }
+  };
+
+  const getCompanyBillingWhatsAppUrl = (c: Company) => {
+    const limits = AppStore.getEffectiveLimits(c.id);
+    const rawPhone = (c.whatsapp || c.phone || '').replace(/\D/g, '');
+    const waPhone = rawPhone.startsWith('55') ? rawPhone : `55${rawPhone}`;
+    const expText = limits.subscription?.expires_at
+      ? new Date(limits.subscription.expires_at).toLocaleDateString('pt-BR')
+      : 'este mês';
+    const msg = `Olá *${c.responsible_name || c.trade_name}*!\n\nAqui é da equipe *${platformSettings.platform_name || 'Agil OS'}*.\n\nPassando para alinhar a assinatura do plano *${limits.plan.name}* (${formatCurrency(limits.finalMonthlyPrice)}/mês • vencimento ${expText}).\n\nChave Pix para renovação:\n*${platformSettings.pix_key}*\nFavorecido: ${platformSettings.pix_beneficiary}\n\nQualquer dúvida, estamos à disposição!`;
+    return `https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`;
+  };
+
+  // Handlers: Global Users CRUD
+  const handleOpenCreateGlobalUser = () => {
+    setEditingGlobalUser(null);
+    setUserFormName('');
+    setUserFormEmail('');
+    setUserFormPhone('');
+    setUserFormPassword('Mudar@123');
+    setUserFormRole('ATENDENTE');
+    setUserFormTenantId(companies[0]?.id || '');
+    setUserFormMustChange(true);
+    setUserFormActive(true);
+    setShowUserFormModal(true);
+  };
+
+  const handleOpenEditGlobalUser = (u: Profile) => {
+    setEditingGlobalUser(u);
+    setUserFormName(u.full_name);
+    setUserFormEmail(u.email);
+    setUserFormPhone(u.phone || '');
+    setUserFormPassword('');
+    setUserFormRole(u.role);
+    setUserFormTenantId(u.tenant_id || companies[0]?.id || '');
+    setUserFormMustChange(Boolean(u.must_change_password));
+    setUserFormActive(u.is_active !== false);
+    setShowUserFormModal(true);
+  };
+
+  const handleSaveGlobalUser = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userFormName.trim() || !userFormEmail.trim()) {
+      showToast('Preencha o nome e o e-mail do usuário.', 'error');
+      return;
+    }
+
+    try {
+      if (editingGlobalUser) {
+        AppStore.updateUser(
+          editingGlobalUser.id,
+          {
+            full_name: userFormName.trim(),
+            email: userFormEmail.trim(),
+            phone: userFormPhone.trim() || undefined,
+            role: userFormRole,
+            tenant_id: userFormTenantId || editingGlobalUser.tenant_id,
+            must_change_password: userFormMustChange,
+            is_active: userFormActive
+          },
+          currentUser.full_name
+        );
+        showToast(`Usuário "${userFormName.trim()}" atualizado com sucesso!`);
+      } else {
+        if (!userFormPassword || userFormPassword.length < 8) {
+          showToast('A senha inicial deve ter no mínimo 8 caracteres.', 'error');
+          return;
+        }
+        AppStore.addUser(
+          {
+            tenant_id: userFormTenantId || companies[0]?.id || '',
+            full_name: userFormName.trim(),
+            email: userFormEmail.trim(),
+            phone: userFormPhone.trim() || undefined,
+            password: userFormPassword,
+            role: userFormRole,
+            must_change_password: userFormMustChange,
+            is_active: userFormActive
+          },
+          currentUser.full_name
+        );
+        showToast(`Novo usuário "${userFormName.trim()}" cadastrado!`);
+      }
+      loadPlatformData();
+      setShowUserFormModal(false);
+    } catch (err: any) {
+      showToast(err?.message || 'Erro ao salvar usuário.', 'error');
+    }
+  };
+
+  const handleToggleUserStatus = (u: Profile) => {
+    if (u.id === currentUser.id) {
+      showToast('Você não pode bloquear sua própria conta.', 'error');
+      return;
+    }
+    try {
+      const nextActive = u.is_active === false;
+      AppStore.updateUser(u.id, { is_active: nextActive }, currentUser.full_name);
+      loadPlatformData();
+      showToast(`Usuário "${u.full_name}" ${nextActive ? 'reativado' : 'bloqueado'} com sucesso!`);
+    } catch (err: any) {
+      showToast(err?.message || 'Erro ao alterar status do usuário.', 'error');
+    }
+  };
+
+  const handleToggleForcePassChange = (u: Profile) => {
+    try {
+      const next = !u.must_change_password;
+      AppStore.updateUser(u.id, { must_change_password: next }, currentUser.full_name);
+      loadPlatformData();
+      showToast(
+        next
+          ? `"${u.full_name}" será obrigado a alterar a senha no próximo login.`
+          : `Obrigatoriedade de troca de senha removida para "${u.full_name}".`
+      );
+    } catch (err: any) {
+      showToast(err?.message || 'Erro ao atualizar configuração de senha.', 'error');
+    }
+  };
+
+  const handleDeleteGlobalUser = (u: Profile) => {
+    if (u.id === currentUser.id) {
+      showToast('Você não pode excluir sua própria conta.', 'error');
+      return;
+    }
+    setDialogModal({
+      isOpen: true,
+      type: 'danger',
+      title: 'Excluir Usuário Permanentemente?',
+      message: `Deseja excluir a conta de "${u.full_name}" (${u.email})? Esta ação não poderá ser desfeita.`,
+      confirmLabel: 'Sim, Excluir Usuário',
+      cancelLabel: 'Cancelar',
+      onCancel: () => setDialogModal(null),
+      onConfirm: () => {
+        try {
+          AppStore.deleteUser(u.id, currentUser.full_name);
+          loadPlatformData();
+          showToast(`Usuário "${u.full_name}" excluído.`);
+        } catch (err: any) {
+          showToast(err?.message || 'Erro ao excluir usuário.', 'error');
+        } finally {
+          setDialogModal(null);
+        }
+      }
+    });
+  };
+
+  // Handlers: Platform Settings & Export
+  const handleSavePlatformSettings = (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const saved = AppStore.updatePlatformSettings(platformSettings, currentUser.full_name);
+      setPlatformSettings(saved);
+      showToast('Configurações globais do SaaS salvas com sucesso!');
+    } catch (err: any) {
+      showToast(err?.message || 'Erro ao salvar configurações da plataforma.', 'error');
+    }
+  };
+
+  const handleExportTenantsCsv = () => {
+    const headers = [
+      'Empresa',
+      'Razao_Social',
+      'CNPJ',
+      'Segmento',
+      'Plano',
+      'Status_Empresa',
+      'Status_Assinatura',
+      'Vencimento',
+      'Usuarios_Usados',
+      'Limite_Usuarios',
+      'Mensalidade_R$',
+      'Total_OS',
+      'WhatsApp',
+      'Email'
+    ];
+    const rows = companies.map(c => {
+      const limits = AppStore.getEffectiveLimits(c.id);
+      const stats = AppStore.getTenantStats(c.id);
+      const seg = c.business_segment || c.active_template_keys?.[0] || 'RECARGA_CARTUCHOS';
+      return [
+        `"${(c.trade_name || '').replace(/"/g, '""')}"`,
+        `"${(c.corporate_name || '').replace(/"/g, '""')}"`,
+        `"${c.cnpj || ''}"`,
+        seg,
+        `"${limits.plan.name}"`,
+        c.is_active !== false ? 'ATIVA' : 'BLOQUEADA',
+        limits.subscription?.status || 'ACTIVE',
+        limits.subscription?.expires_at ? new Date(limits.subscription.expires_at).toLocaleDateString('pt-BR') : 'Sem vencimento',
+        limits.usedUsers,
+        limits.maxUsers,
+        limits.finalMonthlyPrice.toFixed(2),
+        stats.totalOrders || 0,
+        `"${c.whatsapp || c.phone || ''}"`,
+        `"${c.email || ''}"`
+      ].join(';');
+    });
+    const csv = '\uFEFF' + [headers.join(';'), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `agilos_empresas_mrr_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast(`Exportadas ${companies.length} empresa(s) para CSV!`);
+  };
+
+  const handleExportPlatformJson = () => {
+    const safeUsers = allUsers.map(({ password: _p, ...rest }) => rest);
+    const payload = {
+      exported_at: new Date().toISOString(),
+      platform: platformSettings.platform_name || 'Agil OS',
+      overview,
+      platformSettings,
+      plans,
+      companies,
+      subscriptions,
+      users: safeUsers
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `agilos_backup_master_saas_${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast('Backup Master da Plataforma (JSON) gerado com sucesso!');
+  };
 
   // Handlers: Companies
   const handleCreateCompany = (e: React.FormEvent) => {
@@ -363,6 +696,13 @@ export default function SuperAdminPage() {
     setSubExtraUsers(limits.subscription.extra_users || 0);
     setSubCustomPrice(limits.subscription.custom_price !== undefined ? String(limits.subscription.custom_price) : '');
     setSubCustomMaxUsers(limits.subscription.custom_max_users !== undefined ? String(limits.subscription.custom_max_users) : '');
+    setSubStatus(limits.subscription.status || 'ACTIVE');
+    setSubExpiresAt(
+      limits.subscription.expires_at
+        ? new Date(limits.subscription.expires_at).toISOString().slice(0, 10)
+        : ''
+    );
+    setSubBillingCycle(limits.subscription.billing_cycle || 'MONTHLY');
     setShowManagePlanModal(true);
   };
 
@@ -375,6 +715,9 @@ export default function SuperAdminPage() {
         tenantForPlanManage.id,
         subSelectedPlanId,
         {
+          status: subStatus,
+          expires_at: subExpiresAt ? new Date(`${subExpiresAt}T23:59:59Z`).toISOString() : undefined,
+          billing_cycle: subBillingCycle,
           extra_users: Number(subExtraUsers) || 0,
           custom_price: subCustomPrice !== '' ? Number(subCustomPrice) : undefined,
           custom_max_users: subCustomMaxUsers !== '' ? Number(subCustomMaxUsers) : undefined
@@ -655,73 +998,174 @@ Incluso: Emissão de Comandas, Bancada Técnica Kanban, Rastreio e Impressão T�
         </div>
       </div>
 
-      {/* Global SaaS Platform KPIs */}
+      {/* Global SaaS Platform KPIs (6 Executive Metrics) */}
       {overview && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="p-4 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Empresas (Tenants)</span>
-              <div className="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center">
-                <Building2 className="w-4 h-4" />
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <Card className="p-4 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Empresas (Tenants)</span>
+                <div className="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                  <Building2 className="w-4 h-4" />
+                </div>
               </div>
-            </div>
-            <div className="flex items-baseline gap-2 mt-2">
-              <span className="text-3xl font-extrabold text-slate-900 dark:text-slate-100">{overview.totalCompanies}</span>
-              <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">{overview.activeCompanies} ativas</span>
-            </div>
-            <p className="text-[11px] text-slate-400 mt-1">
-              {overview.pausedCompanies > 0 ? `${overview.pausedCompanies} suspensas/bloqueadas` : '100% de clientes ativos'}
-            </p>
-          </Card>
+              <div className="flex items-baseline gap-2 mt-2">
+                <span className="text-3xl font-extrabold text-slate-900 dark:text-slate-100">{overview.totalCompanies}</span>
+                <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">{overview.activeCompanies} ativas</span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">
+                {overview.trialCompanies || 0} em trial • {overview.pausedCompanies > 0 ? `${overview.pausedCompanies} suspensas` : '0 suspensas'}
+              </p>
+            </Card>
 
-          <Card className="p-4 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">MRR Recorrente SaaS</span>
-              <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-                <DollarSign className="w-4 h-4" />
+            <Card className="p-4 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">MRR & ARR Projetado</span>
+                <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                  <DollarSign className="w-4 h-4" />
+                </div>
               </div>
-            </div>
-            <div className="flex items-baseline gap-2 mt-2">
-              <span className="text-3xl font-extrabold text-emerald-600 dark:text-emerald-400">{formatCurrency(overview.totalMRR)}</span>
-              <span className="text-[10px] text-slate-400">/ mês</span>
-            </div>
-            <p className="text-[11px] text-slate-400 mt-1">Base de planos + usuários extras</p>
-          </Card>
+              <div className="flex items-baseline gap-2 mt-2">
+                <span className="text-3xl font-extrabold text-emerald-600 dark:text-emerald-400">{formatCurrency(overview.totalMRR)}</span>
+                <span className="text-[10px] text-slate-400">/ mês</span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">
+                ARR: <strong className="text-slate-600 dark:text-slate-300">{formatCurrency(overview.totalARR || 0)}</strong>/ano ({overview.paidCompanies || 0} pagantes)
+              </p>
+            </Card>
 
-          <Card className="p-4 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Usuários Gerenciados</span>
-              <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-                <Users className="w-4 h-4" />
+            <Card className="p-4 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Ticket Médio (ARPU)</span>
+                <div className="w-8 h-8 rounded-lg bg-teal-100 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 flex items-center justify-center">
+                  <TrendingUp className="w-4 h-4" />
+                </div>
               </div>
-            </div>
-            <div className="flex items-baseline gap-2 mt-2">
-              <span className="text-3xl font-extrabold text-slate-900 dark:text-slate-100">{overview.totalUsers}</span>
-              <span className="text-xs font-semibold text-slate-500">em {overview.totalCompanies} empresas</span>
-            </div>
-            <p className="text-[11px] text-slate-400 mt-1">
-              {overview.attendantsCount} atendentes | {overview.techsCount} técnicos | {overview.adminsCount} admins
-            </p>
-          </Card>
+              <div className="flex items-baseline gap-2 mt-2">
+                <span className="text-3xl font-extrabold text-slate-900 dark:text-slate-100">{formatCurrency(overview.arpu || 0)}</span>
+                <span className="text-[10px] text-slate-400">/ loja ativa</span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">Base de planos + adicionais contratados</p>
+            </Card>
 
-          <Card className="p-4 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Planos & Assinaturas SaaS</span>
-              <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-                <Layers className="w-4 h-4" />
+            <Card className="p-4 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Usuários Gerenciados</span>
+                <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                  <Users className="w-4 h-4" />
+                </div>
               </div>
+              <div className="flex items-baseline gap-2 mt-2">
+                <span className="text-3xl font-extrabold text-slate-900 dark:text-slate-100">{overview.totalUsers}</span>
+                <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                  {overview.onlineUsersCount || 0} online agora
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">
+                {overview.adminsCount || 0} admins • {overview.attendantsCount || 0} atend. • {overview.techsCount || 0} técnicos
+              </p>
+            </Card>
+
+            <Card className="p-4 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Planos & Contratos</span>
+                <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                  <Layers className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="flex items-baseline gap-2 mt-2">
+                <span className="text-3xl font-extrabold text-slate-900 dark:text-slate-100">{overview.plansCount || plans.length}</span>
+                <span className="text-xs font-semibold text-slate-500">planos ativos</span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">
+                {overview.subscriptionsCount || 0} assinaturas • {overview.expiredCompanies > 0 ? (
+                  <span className="text-rose-600 font-bold">{overview.expiredCompanies} vencida(s)</span>
+                ) : '0 vencidas'}
+              </p>
+            </Card>
+
+            <Card className="p-4 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Movimentação Global (GMV)</span>
+                <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                  <Activity className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="flex items-baseline gap-2 mt-2">
+                <span className="text-3xl font-extrabold text-slate-900 dark:text-slate-100">{formatCurrency(overview.totalGMVGlobal || 0)}</span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">
+                {overview.totalOrdersGlobal || 0} OS emitidas • {overview.totalItemsGlobal || 0} itens processados
+              </p>
+            </Card>
+          </div>
+
+          {/* Toggle Analytics Distribution Strip */}
+          <div className="flex items-center justify-between bg-white dark:bg-slate-900 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-200">
+              <BarChart3 className="w-4 h-4 text-purple-600" />
+              <span>Distribuição Executiva (Receita por Plano & Lojas por Segmento)</span>
             </div>
-            <div className="flex items-baseline gap-2 mt-2">
-              <span className="text-3xl font-extrabold text-slate-900 dark:text-slate-100">{overview.plansCount}</span>
-              <span className="text-xs font-semibold text-slate-500">planos ativos</span>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setShowAnalyticsPanel(!showAnalyticsPanel)}
+              className="text-xs font-bold text-purple-600 dark:text-purple-400 h-7"
+            >
+              {showAnalyticsPanel ? 'Ocultar Gráficos' : 'Expandir Gráficos'}
+            </Button>
+          </div>
+
+          {showAnalyticsPanel && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 animate-in fade-in">
+              <Card className="p-4 border-slate-200 dark:border-slate-800 space-y-3">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Receita Recorrente (MRR) por Plano</h3>
+                <div className="space-y-3">
+                  {(overview.planDistribution || []).map((pd: any) => {
+                    const pct = overview.totalMRR > 0 ? Math.round((pd.mrr / overview.totalMRR) * 100) : 0;
+                    return (
+                      <div key={pd.id} className="space-y-1 text-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-slate-800 dark:text-slate-200">
+                            {pd.name} <span className="text-[10px] font-normal text-slate-400">({pd.count} loja(s))</span>
+                          </span>
+                          <span className="font-extrabold text-emerald-600">{formatCurrency(pd.mrr)} ({pct}%)</span>
+                        </div>
+                        <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                          <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${Math.max(4, pct)}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
+
+              <Card className="p-4 border-slate-200 dark:border-slate-800 space-y-3">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Lojas por Segmento de Atuação</h3>
+                <div className="space-y-3">
+                  {(overview.segmentDistribution || []).map((sd: any) => {
+                    const pct = overview.totalCompanies > 0 ? Math.round((sd.count / overview.totalCompanies) * 100) : 0;
+                    return (
+                      <div key={sd.key} className="space-y-1 text-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-slate-800 dark:text-slate-200">{sd.name}</span>
+                          <span className="font-extrabold text-purple-600 dark:text-purple-400">{sd.count} loja(s) ({pct}%)</span>
+                        </div>
+                        <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                          <div className="h-full bg-purple-500 rounded-full transition-all" style={{ width: `${Math.max(4, pct)}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
             </div>
-            <p className="text-[11px] text-slate-400 mt-1">{overview.subscriptionsCount} contratos vinculados a empresas</p>
-          </Card>
+          )}
         </div>
       )}
 
       {/* Tabs Navigation */}
-      <div className="flex border-b border-slate-200 dark:border-slate-800 space-x-2">
+      <div className="flex flex-wrap border-b border-slate-200 dark:border-slate-800 gap-1 sm:gap-2">
         <button
           onClick={() => setActiveTab('tenants')}
           className={cn(
@@ -745,7 +1189,7 @@ Incluso: Emissão de Comandas, Bancada Técnica Kanban, Rastreio e Impressão T�
           )}
         >
           <Layers className="w-4 h-4" />
-          <span>Planos SaaS & Precificação de Extras ({plans.length})</span>
+          <span>Planos & Módulos ({plans.length})</span>
         </button>
 
         <button
@@ -758,7 +1202,7 @@ Incluso: Emissão de Comandas, Bancada Técnica Kanban, Rastreio e Impressão T�
           )}
         >
           <Users className="w-4 h-4" />
-          <span>Visão Geral de Usuários ({allUsers.length})</span>
+          <span>Usuários Globais ({allUsers.length})</span>
         </button>
 
         <button
@@ -771,7 +1215,20 @@ Incluso: Emissão de Comandas, Bancada Técnica Kanban, Rastreio e Impressão T�
           )}
         >
           <Calculator className="w-4 h-4" />
-          <span>Simulador de Propostas SaaS</span>
+          <span>Simulador SaaS</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('settings')}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all",
+            activeTab === 'settings'
+              ? "border-purple-600 text-purple-600 dark:text-purple-400"
+              : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+          )}
+        >
+          <Settings className="w-4 h-4" />
+          <span>Configurações SaaS & Pix</span>
         </button>
       </div>
 
@@ -780,28 +1237,51 @@ Incluso: Emissão de Comandas, Bancada Técnica Kanban, Rastreio e Impressão T�
       {/* ===================================================================== */}
       {activeTab === 'tenants' && (
         <div className="space-y-4">
-          {/* Search & Status Filters */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800">
-            <div className="relative w-full sm:w-80">
+          {/* Search & Multi Filters */}
+          <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800">
+            <div className="relative w-full lg:w-72">
               <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
               <Input
-                placeholder="Buscar empresa por nome, CNPJ, cidade..."
+                placeholder="Buscar empresa, CNPJ, cidade, e-mail..."
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
                 className="pl-9 text-xs h-9"
               />
             </div>
 
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <span className="text-xs font-semibold text-slate-500">Filtrar:</span>
+            <div className="flex flex-wrap items-center gap-2">
               <Select
                 value={statusFilter}
                 onChange={e => setStatusFilter(e.target.value as any)}
                 className="text-xs h-9 w-40"
               >
-                <option value="ALL">Todas as Empresas</option>
-                <option value="ACTIVE">Apenas Ativas</option>
-                <option value="PAUSED">Apenas Suspensas</option>
+                <option value="ALL">Todos os Status</option>
+                <option value="ACTIVE">Pagantes Ativas</option>
+                <option value="TRIAL">Em Trial (Teste)</option>
+                <option value="EXPIRED">Vencidas / Expiradas</option>
+                <option value="PAUSED">Suspensas / Bloqueadas</option>
+              </Select>
+
+              <Select
+                value={planFilter}
+                onChange={e => setPlanFilter(e.target.value)}
+                className="text-xs h-9 w-40"
+              >
+                <option value="ALL">Todos os Planos</option>
+                {plans.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </Select>
+
+              <Select
+                value={segmentFilter}
+                onChange={e => setSegmentFilter(e.target.value)}
+                className="text-xs h-9 w-44"
+              >
+                <option value="ALL">Todos os Segmentos</option>
+                {Object.values(BUSINESS_PRESETS).map(seg => (
+                  <option key={seg.key} value={seg.key}>{seg.name}</option>
+                ))}
               </Select>
             </div>
           </div>
@@ -814,10 +1294,10 @@ Incluso: Emissão de Comandas, Bancada Técnica Kanban, Rastreio e Impressão T�
                   <tr>
                     <th className="p-3.5">Empresa / Contato</th>
                     <th className="p-3.5">Plano Contratado</th>
-                    <th className="p-3.5">Limites de Usuários (Ocupação)</th>
-                    <th className="p-3.5">Mensalidade Total</th>
+                    <th className="p-3.5">Assinatura & Vencimento</th>
+                    <th className="p-3.5">Usuários</th>
+                    <th className="p-3.5">Mensalidade</th>
                     <th className="p-3.5">Volume</th>
-                    <th className="p-3.5">Status</th>
                     <th className="p-3.5 text-right">Ações do Super Admin</th>
                   </tr>
                 </thead>
@@ -833,17 +1313,22 @@ Incluso: Emissão de Comandas, Bancada Técnica Kanban, Rastreio e Impressão T�
                       const limits = AppStore.getEffectiveLimits(c.id);
                       const stats = AppStore.getTenantStats(c.id);
                       const isCompanyActive = c.is_active !== false;
+                      const subStatus = limits.subscription?.status || 'ACTIVE';
+                      const expiresAt = limits.subscription?.expires_at ? new Date(limits.subscription.expires_at) : null;
+                      const daysRemaining = expiresAt ? Math.ceil((expiresAt.getTime() - Date.now()) / 86400000) : null;
+                      const isExpired = subStatus === 'EXPIRED' || (daysRemaining !== null && daysRemaining < 0);
+                      const segKey = c.business_segment || c.active_template_keys?.[0] || 'RECARGA_CARTUCHOS';
+                      const segName = (BUSINESS_PRESETS as any)[segKey]?.name || segKey;
 
                       return (
                         <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
                           <td className="p-3.5">
                             <div className="font-bold text-slate-900 dark:text-slate-100 text-sm">{c.trade_name}</div>
                             <div className="text-[11px] text-slate-500 font-mono">CNPJ: {c.cnpj || 'Não informado'}</div>
-                            <div className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-2">
-                              {c.city && <span>📍 {c.city}/{c.state}</span>}
-                              {c.whatsapp && (
-                                <span className="text-emerald-600 font-semibold">📞 {c.whatsapp}</span>
-                              )}
+                            <div className="text-[10px] text-slate-400 mt-0.5 flex flex-wrap items-center gap-2">
+                              <span className="text-purple-600 dark:text-purple-400 font-semibold">{segName}</span>
+                              {c.city && <span>• {c.city}/{c.state}</span>}
+                              {c.whatsapp && <span className="text-emerald-600 font-semibold">• {c.whatsapp}</span>}
                             </div>
                           </td>
 
@@ -851,61 +1336,115 @@ Incluso: Emissão de Comandas, Bancada Técnica Kanban, Rastreio e Impressão T�
                             <Badge className="bg-purple-600/10 text-purple-700 dark:text-purple-300 border border-purple-500/20 font-bold">
                               {limits.plan.name}
                             </Badge>
-                            {limits.subscription.billing_cycle && (
-                              <p className="text-[10px] text-slate-400 mt-1">Ciclo: Mensal</p>
-                            )}
+                            <p className="text-[10px] text-slate-400 mt-1">
+                              Ciclo: {limits.subscription?.billing_cycle === 'ANNUAL' ? 'Anual' : limits.subscription?.billing_cycle === 'CUSTOM' ? 'Custom' : 'Mensal'}
+                            </p>
                           </td>
 
                           <td className="p-3.5">
-                            <div className="space-y-1 max-w-[200px]">
-                              <div className="flex justify-between text-[11px]">
-                                <span className="text-slate-500">Operadores Ativos:</span>
-                                <span className={cn("font-bold", limits.usedUsers >= limits.maxUsers ? "text-amber-600" : "text-slate-700 dark:text-slate-300")}>
-                                  {limits.usedUsers} / {limits.maxUsers}
-                                  {limits.extraUsers > 0 ? ` (+${limits.extraUsers} extras)` : ''}
-                                </span>
-                              </div>
-                              <div className="text-[10px] text-slate-400">
-                                Capacidade unificada
-                              </div>
+                            <div className="space-y-1">
+                              {!isCompanyActive ? (
+                                <Badge variant="destructive" className="font-bold text-[10px]">BLOQUEADA</Badge>
+                              ) : isExpired ? (
+                                <Badge className="bg-rose-600 text-white font-bold text-[10px]">VENCIDA</Badge>
+                              ) : subStatus === 'TRIAL' ? (
+                                <Badge className="bg-amber-500 text-slate-950 font-bold text-[10px]">EM TRIAL</Badge>
+                              ) : (
+                                <Badge className="bg-emerald-600 text-white font-bold text-[10px]">ATIVA</Badge>
+                              )}
+                              {expiresAt ? (
+                                <p className={cn(
+                                  "text-[10px] font-medium",
+                                  daysRemaining !== null && daysRemaining <= 3 ? "text-rose-600 font-bold" : "text-slate-400"
+                                )}>
+                                  Vence {expiresAt.toLocaleDateString('pt-BR')} (
+                                  {daysRemaining === 0
+                                    ? 'Hoje'
+                                    : daysRemaining && daysRemaining > 0
+                                    ? `faltam ${daysRemaining}d`
+                                    : `há ${Math.abs(daysRemaining || 0)}d`}
+                                  )
+                                </p>
+                              ) : (
+                                <p className="text-[10px] text-slate-400">Recorrente contínua</p>
+                              )}
                             </div>
+                          </td>
+
+                          <td className="p-3.5">
+                            <span className={cn("font-bold text-xs", limits.usedUsers >= limits.maxUsers ? "text-amber-600" : "text-slate-700 dark:text-slate-300")}>
+                              {limits.usedUsers} / {limits.maxUsers}
+                            </span>
+                            {limits.extraUsers > 0 && (
+                              <span className="block text-[10px] text-purple-600 font-semibold">+{limits.extraUsers} extras</span>
+                            )}
                           </td>
 
                           <td className="p-3.5">
                             <div className="font-extrabold text-emerald-600 dark:text-emerald-400 text-sm">
                               {formatCurrency(limits.finalMonthlyPrice)}
                             </div>
-                            {limits.extraUsers > 0 && (
-                              <p className="text-[10px] text-slate-400 mt-0.5">
-                                Base: {formatCurrency(limits.plan.monthly_price)} + Extras ({limits.extraUsers}): {formatCurrency(limits.extraUserPrice * limits.extraUsers)}
-                              </p>
-                            )}
                           </td>
 
                           <td className="p-3.5">
-                            <div className="font-bold text-slate-800 dark:text-slate-200">{stats.totalItems || 0} itens</div>
-                            <div className="text-[10px] text-slate-400">{stats.totalOrders || stats.totalEntries || 0} ordens</div>
-                          </td>
-
-                          <td className="p-3.5">
-                            {isCompanyActive ? (
-                              <Badge className="bg-emerald-600 text-white font-bold text-[10px]">ATIVA</Badge>
-                            ) : (
-                              <Badge variant="destructive" className="font-bold text-[10px]">BLOQUEADA</Badge>
-                            )}
+                            <div className="font-bold text-slate-800 dark:text-slate-200">{stats.totalOrders || stats.totalEntries || 0} OS</div>
+                            <div className="text-[10px] text-slate-400">{stats.totalItems || 0} itens • {stats.totalCustomers || 0} cli.</div>
                           </td>
 
                           <td className="p-3.5 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
+                            <div className="flex flex-wrap items-center justify-end gap-1">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleEnterSupportMode(c)}
+                                title="Acessar painel operacional desta loja (Modo Suporte)"
+                                className="h-7 text-[11px] px-2 font-bold text-sky-600 dark:text-sky-400 border-sky-500/30 hover:bg-sky-50 dark:hover:bg-sky-950/40"
+                              >
+                                <ArrowUpRight className="w-3.5 h-3.5 mr-0.5" />
+                                <span>Acessar</span>
+                              </Button>
+
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setXrayCompany(c)}
+                                title="Raio-X 360º da Empresa"
+                                className="h-7 text-[11px] px-2 font-bold text-slate-700 dark:text-slate-200"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                              </Button>
+
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleRenewSubscriptionQuick(c, 30)}
+                                title="Dar baixa e renovar assinatura +30 dias"
+                                className="h-7 text-[11px] px-2 font-bold text-emerald-600 border-emerald-500/30 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                              >
+                                <CalendarClock className="w-3.5 h-3.5 mr-0.5" />
+                                <span>+30d</span>
+                              </Button>
+
+                              {(c.whatsapp || c.phone) && (
+                                <a
+                                  href={getCompanyBillingWhatsAppUrl(c)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  title="Enviar cobrança / contato no WhatsApp"
+                                  className="inline-flex items-center justify-center h-7 px-2 rounded-md border border-emerald-500/30 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors"
+                                >
+                                  <Smartphone className="w-3.5 h-3.5" />
+                                </a>
+                              )}
+
                               <Button
                                 size="sm"
                                 variant="outline"
                                 onClick={() => handleOpenManagePlan(c)}
-                                title="Gerenciar Plano, Usuários Extras e Limites"
+                                title="Gerenciar Plano, Vencimento e Limites"
                                 className="h-7 text-[11px] px-2 font-bold text-purple-600 dark:text-purple-300 border-purple-500/30 hover:bg-purple-50 dark:hover:bg-purple-950/50"
                               >
-                                <Sliders className="w-3.5 h-3.5 mr-1" />
-                                <span>Plano & Limites</span>
+                                <Sliders className="w-3.5 h-3.5" />
                               </Button>
 
                               <Button
@@ -1079,19 +1618,75 @@ Incluso: Emissão de Comandas, Bancada Técnica Kanban, Rastreio e Impressão T�
       )}
 
       {/* ===================================================================== */}
-      {/* TAB 3: VISÃO GERAL DE USUÁRIOS                                        */}
+      {/* TAB 3: GESTÃO COMPLETA DE USUÁRIOS GLOBAIS                            */}
       {/* ===================================================================== */}
       {activeTab === 'users' && (
         <div className="space-y-4">
-          <Card className="p-4 border-slate-200 dark:border-slate-800">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+          <Card className="p-4 border-slate-200 dark:border-slate-800 space-y-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <div>
-                <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">Todos os Usuários Cadastrados na Plataforma</h3>
-                <p className="text-xs text-slate-500">Visualização de credenciais, empresas vinculadas e controle de senhas de operadores.</p>
+                <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">Gestão Global de Usuários da Plataforma</h3>
+                <p className="text-xs text-slate-500">Crie, edite cargos, bloqueie acessos, force troca de senha e desconecte sessões em tempo real.</p>
               </div>
-              <Badge className="bg-blue-600 text-white font-bold text-xs">
-                Total: {allUsers.length} usuários
-              </Badge>
+              <div className="flex items-center gap-2">
+                <Badge className="bg-blue-600 text-white font-bold text-xs">
+                  {filteredUsers.length} de {allUsers.length} usuários
+                </Badge>
+                <Button
+                  size="sm"
+                  onClick={handleOpenCreateGlobalUser}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs gap-1.5"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  <span>Criar Usuário Global</span>
+                </Button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+                <Input
+                  placeholder="Buscar por nome, e-mail ou telefone..."
+                  value={userSearchTerm}
+                  onChange={e => setUserSearchTerm(e.target.value)}
+                  className="pl-9 text-xs h-9"
+                />
+              </div>
+
+              <Select
+                value={userCompanyFilter}
+                onChange={e => setUserCompanyFilter(e.target.value)}
+                className="text-xs h-9"
+              >
+                <option value="ALL">Todas as Empresas</option>
+                {companies.map(c => (
+                  <option key={c.id} value={c.id}>{c.trade_name}</option>
+                ))}
+              </Select>
+
+              <Select
+                value={userRoleFilter}
+                onChange={e => setUserRoleFilter(e.target.value)}
+                className="text-xs h-9"
+              >
+                <option value="ALL">Todos os Cargos</option>
+                <option value="SUPER_ADMIN">Super Admin</option>
+                <option value="ADMINISTRADOR">Administrador</option>
+                <option value="ATENDENTE">Atendente</option>
+                <option value="TECNICO">Técnico</option>
+              </Select>
+
+              <Select
+                value={userStatusFilter}
+                onChange={e => setUserStatusFilter(e.target.value as any)}
+                className="text-xs h-9"
+              >
+                <option value="ALL">Todos os Status</option>
+                <option value="ONLINE">Online Agora</option>
+                <option value="ACTIVE">Contas Ativas</option>
+                <option value="BLOCKED">Contas Bloqueadas</option>
+              </Select>
             </div>
           </Card>
 
@@ -1103,86 +1698,152 @@ Incluso: Emissão de Comandas, Bancada Técnica Kanban, Rastreio e Impressão T�
                     <th className="p-3.5">Nome do Usuário</th>
                     <th className="p-3.5">E-mail de Login</th>
                     <th className="p-3.5">Empresa / Unidade</th>
-                    <th className="p-3.5">Papel (Role)</th>
-                    <th className="p-3.5">Sessão / Dispositivo</th>
-                    <th className="p-3.5">Data Cadastro</th>
-                    <th className="p-3.5 text-right">Ação Super Admin</th>
+                    <th className="p-3.5">Papel & Segurança</th>
+                    <th className="p-3.5">Sessão / Status</th>
+                    <th className="p-3.5">Cadastro</th>
+                    <th className="p-3.5 text-right">Ações Super Admin</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {allUsers.map(u => {
-                    const roleBadge = getRoleBadgeConfig(u.role);
-                    const company = companies.find(c => c.id === u.tenant_id);
-                    const isOnline = Boolean(u.active_session_token);
+                  {filteredUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="p-8 text-center text-slate-400">
+                        Nenhum usuário encontrado com os filtros aplicados.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredUsers.map(u => {
+                      const roleBadge = getRoleBadgeConfig(u.role);
+                      const company = companies.find(c => c.id === u.tenant_id);
+                      const isOnline = Boolean(u.active_session_token);
+                      const isUserActive = u.is_active !== false;
 
-                    return (
-                      <tr key={u.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                        <td className="p-3.5 font-bold text-slate-900 dark:text-slate-100">
-                          {u.full_name}
-                          {u.phone && <span className="text-[11px] text-slate-400 font-normal block">{u.phone}</span>}
-                        </td>
-                        <td className="p-3.5 text-slate-600 dark:text-slate-400 font-mono text-[11px]">{u.email}</td>
-                        <td className="p-3.5">
-                          {u.role === 'SUPER_ADMIN' ? (
-                            <span className="text-purple-600 font-bold flex items-center gap-1">
-                              <Crown className="w-3.5 h-3.5" /> Antigravity Central
-                            </span>
-                          ) : (
-                            <span className="font-medium text-slate-800 dark:text-slate-200">
-                              {company?.trade_name || 'Empresa Padrão'}
-                            </span>
-                          )}
-                        </td>
-                        <td className="p-3.5">
-                          <Badge className={cn("text-[10px] font-bold", roleBadge.className)}>
-                            {roleBadge.label}
-                          </Badge>
-                        </td>
-                        <td className="p-3.5">
-                          {isOnline ? (
-                            <div className="flex items-center gap-2">
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 animate-pulse">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                                Online
+                      return (
+                        <tr key={u.id} className={cn("hover:bg-slate-50 dark:hover:bg-slate-800/40", !isUserActive && "opacity-65")}>
+                          <td className="p-3.5 font-bold text-slate-900 dark:text-slate-100">
+                            {u.full_name}
+                            {u.phone && <span className="text-[11px] text-slate-400 font-normal block">{u.phone}</span>}
+                          </td>
+                          <td className="p-3.5 text-slate-600 dark:text-slate-400 font-mono text-[11px]">{u.email}</td>
+                          <td className="p-3.5">
+                            {u.role === 'SUPER_ADMIN' ? (
+                              <span className="text-purple-600 font-bold flex items-center gap-1">
+                                <Crown className="w-3.5 h-3.5" /> Central Agil OS
                               </span>
-                              <span className="text-[10px] text-slate-400 max-w-[120px] truncate" title={u.active_session_device}>
-                                {u.active_session_device || 'Web'}
+                            ) : (
+                              <span className="font-medium text-slate-800 dark:text-slate-200">
+                                {company?.trade_name || 'Empresa Padrão'}
                               </span>
-                            </div>
-                          ) : (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
-                              Offline
-                            </span>
-                          )}
-                        </td>
-                        <td className="p-3.5 text-slate-400">{formatDate(u.created_at)}</td>
-                        <td className="p-3.5 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            {isOnline && (
+                            )}
+                          </td>
+                          <td className="p-3.5 space-y-1">
+                            <Badge className={cn("text-[10px] font-bold", roleBadge.className)}>
+                              {roleBadge.label}
+                            </Badge>
+                            {u.must_change_password && (
+                              <span className="block text-[10px] font-semibold text-amber-600 dark:text-amber-400">
+                                Troca de senha pendente
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-3.5 space-y-1">
+                            {!isUserActive ? (
+                              <Badge variant="destructive" className="text-[10px] font-bold">Bloqueado</Badge>
+                            ) : isOnline ? (
+                              <div className="flex items-center gap-2">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 animate-pulse">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                  Online
+                                </span>
+                                <span className="text-[10px] text-slate-400 max-w-[110px] truncate" title={u.active_session_device}>
+                                  {u.active_session_device || 'Web'}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                                Offline
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-3.5 text-slate-400">{formatDate(u.created_at)}</td>
+                          <td className="p-3.5 text-right">
+                            <div className="flex flex-wrap items-center justify-end gap-1">
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => handleTerminateSessionSuperAdmin(u)}
-                                className="h-7 text-[11px] px-2 font-bold text-rose-600 border-rose-500/30 hover:bg-rose-50 dark:hover:bg-rose-950/40 gap-1"
-                                title="Desconectar sessão ativa remotamente"
+                                onClick={() => handleOpenEditGlobalUser(u)}
+                                title="Editar nome, cargo e empresa"
+                                className="h-7 text-[11px] px-2 text-slate-700 dark:text-slate-200"
                               >
-                                <LogOut className="w-3 h-3" />
-                                <span>Desconectar</span>
+                                <Edit3 className="w-3 h-3" />
                               </Button>
-                            )}
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleOpenResetPass(u)}
-                              className="h-7 text-[11px] px-2.5 font-bold text-amber-600 border-amber-500/30 hover:bg-amber-50"
-                            >
-                              Redefinir Senha
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
+
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleToggleForcePassChange(u)}
+                                title={u.must_change_password ? "Remover troca obrigatória de senha" : "Exigir troca de senha no próximo login"}
+                                className={cn(
+                                  "h-7 text-[11px] px-2 font-bold",
+                                  u.must_change_password
+                                    ? "bg-amber-50 text-amber-700 border-amber-400"
+                                    : "text-slate-600 dark:text-slate-300"
+                                )}
+                              >
+                                <KeyRound className="w-3 h-3" />
+                              </Button>
+
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={u.id === currentUser.id}
+                                onClick={() => handleToggleUserStatus(u)}
+                                title={isUserActive ? "Bloquear usuário" : "Reativar usuário"}
+                                className={cn(
+                                  "h-7 text-[11px] px-2 font-bold",
+                                  isUserActive ? "text-amber-600 border-amber-500/30" : "text-emerald-600 border-emerald-500/30"
+                                )}
+                              >
+                                {isUserActive ? <Ban className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
+                              </Button>
+
+                              {isOnline && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleTerminateSessionSuperAdmin(u)}
+                                  className="h-7 text-[11px] px-2 font-bold text-rose-600 border-rose-500/30 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                                  title="Desconectar sessão ativa remotamente"
+                                >
+                                  <LogOut className="w-3 h-3" />
+                                </Button>
+                              )}
+
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleOpenResetPass(u)}
+                                className="h-7 text-[11px] px-2 font-bold text-amber-600 border-amber-500/30 hover:bg-amber-50"
+                              >
+                                Senha
+                              </Button>
+
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={u.id === currentUser.id}
+                                onClick={() => handleDeleteGlobalUser(u)}
+                                title="Excluir usuário"
+                                className="h-7 text-[11px] px-2 text-rose-600 border-rose-500/30 hover:bg-rose-50"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
                 </tbody>
               </table>
             </div>
@@ -1324,6 +1985,297 @@ Incluso: Emissão de Comandas, Bancada Técnica Kanban, Rastreio e Impressão T�
               </CardContent>
             </Card>
           </div>
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* ABA 5: CONFIGURAÇÕES SAAS, PIX, COMUNICADOS E EXPORTAÇÃO              */}
+      {/* ===================================================================== */}
+      {activeTab === 'settings' && (
+        <div className="space-y-6 animate-in fade-in duration-300">
+          {/* Header & Export Quick Actions */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+            <div className="flex items-start gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-900 flex items-center justify-center shrink-0 text-indigo-600 dark:text-indigo-400">
+                <Settings className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-lg font-extrabold tracking-tight text-slate-900 dark:text-white">
+                  Configurações Globais do SaaS & Recebimento Pix
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Defina os dados oficiais de cobrança Pix exibidos no painel das lojas, publique avisos globais em tempo real e exporte relatórios gerenciais.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleExportTenantsCsv}
+                className="text-xs font-bold gap-2 border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-900/50 dark:text-emerald-400 dark:hover:bg-emerald-950/40"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>Exportar Empresas (CSV)</span>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleExportPlatformJson}
+                className="text-xs font-bold gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-900/50 dark:text-indigo-400 dark:hover:bg-indigo-950/40"
+              >
+                <Download className="w-4 h-4" />
+                <span>Backup Completo (JSON)</span>
+              </Button>
+            </div>
+          </div>
+
+          <form onSubmit={handleSavePlatformSettings} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Coluna 1 & 2: Pix, Suporte e Regras Comerciais */}
+            <div className="lg:col-span-2 space-y-6">
+              <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
+                <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800/80">
+                  <CardTitle className="text-sm font-bold flex items-center gap-2">
+                    <DollarSign className="w-4 h-4 text-emerald-600" />
+                    <span>Recebimento Pix & Canais Oficiais</span>
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    Esses dados alimentam automaticamente o QR Code Pix EMV na aba Assinatura de cada empresa e os links de cobrança no WhatsApp.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="pt-5 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                  <div>
+                    <label className="font-bold text-slate-700 dark:text-slate-300 mb-1.5 block">
+                      Nome Oficial da Plataforma
+                    </label>
+                    <Input
+                      required
+                      value={platformSettings.platform_name}
+                      onChange={e => setPlatformSettings(prev => ({ ...prev, platform_name: e.target.value }))}
+                      placeholder="Ex: Agil OS"
+                      className="text-xs font-semibold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 dark:text-slate-300 mb-1.5 block">
+                      Chave Pix Oficial (E-mail, CNPJ, Celular ou EVP)
+                    </label>
+                    <Input
+                      required
+                      value={platformSettings.pix_key}
+                      onChange={e => setPlatformSettings(prev => ({ ...prev, pix_key: e.target.value }))}
+                      placeholder="contato@supremeinformatica.com.br"
+                      className="text-xs font-mono font-bold text-emerald-700 dark:text-emerald-400"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 dark:text-slate-300 mb-1.5 block">
+                      Favorecido Pix (Nome no Comprovante / QR Code)
+                    </label>
+                    <Input
+                      required
+                      value={platformSettings.pix_beneficiary}
+                      onChange={e => setPlatformSettings(prev => ({ ...prev, pix_beneficiary: e.target.value }))}
+                      placeholder="SUPREME INFORMATICA"
+                      className="text-xs font-semibold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 dark:text-slate-300 mb-1.5 block">
+                      Cidade do Recebedor Pix (Sem acentos no BRCode)
+                    </label>
+                    <Input
+                      required
+                      value={platformSettings.pix_city}
+                      onChange={e => setPlatformSettings(prev => ({ ...prev, pix_city: e.target.value }))}
+                      placeholder="SAO PAULO"
+                      className="text-xs font-semibold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 dark:text-slate-300 mb-1.5 block">
+                      WhatsApp Comercial / Suporte (com DDI 55)
+                    </label>
+                    <Input
+                      value={platformSettings.support_whatsapp}
+                      onChange={e => setPlatformSettings(prev => ({ ...prev, support_whatsapp: e.target.value }))}
+                      placeholder="5511999999999"
+                      className="text-xs font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 dark:text-slate-300 mb-1.5 block">
+                      E-mail de Suporte Técnico & Financeiro
+                    </label>
+                    <Input
+                      type="email"
+                      value={platformSettings.support_email}
+                      onChange={e => setPlatformSettings(prev => ({ ...prev, support_email: e.target.value }))}
+                      placeholder="suporte@supremeinformatica.com.br"
+                      className="text-xs"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
+                <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800/80">
+                  <CardTitle className="text-sm font-bold flex items-center gap-2">
+                    <Megaphone className="w-4 h-4 text-amber-500" />
+                    <span>Aviso Global em Broadcast (Banner no Topo das Lojas)</span>
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    Publique comunicados importantes (manutenções, novidades, promoções) para todas as lojas conectadas no painel. Deixe em branco para ocultar o banner.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="pt-5 space-y-4 text-xs">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="md:col-span-2">
+                      <label className="font-bold text-slate-700 dark:text-slate-300 mb-1.5 block">
+                        Mensagem do Comunicado Global
+                      </label>
+                      <Input
+                        value={platformSettings.global_announcement}
+                        onChange={e => setPlatformSettings(prev => ({ ...prev, global_announcement: e.target.value }))}
+                        placeholder="Ex: Nova integração de WhatsApp automático liberada no módulo Clientes!"
+                        className="text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="font-bold text-slate-700 dark:text-slate-300 mb-1.5 block">
+                        Estilo Visual do Banner
+                      </label>
+                      <Select
+                        value={platformSettings.global_announcement_type}
+                        onChange={e => setPlatformSettings(prev => ({
+                          ...prev,
+                          global_announcement_type: e.target.value as 'info' | 'warning' | 'emerald'
+                        }))}
+                        className="text-xs font-semibold"
+                      >
+                        <option value="info">Informativo (Azul)</option>
+                        <option value="warning">Alerta / Manutenção (Âmbar)</option>
+                        <option value="emerald">Novidade / Sucesso (Verde)</option>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {platformSettings.global_announcement?.trim() && (
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                          Pré-visualização do Banner nos Painéis
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setPlatformSettings(prev => ({ ...prev, global_announcement: '' }))}
+                          className="text-[11px] font-semibold text-rose-600 hover:underline"
+                        >
+                          Limpar Aviso
+                        </button>
+                      </div>
+                      <div className={cn(
+                        'px-4 py-2.5 rounded-xl border text-xs font-semibold flex items-center gap-2',
+                        platformSettings.global_announcement_type === 'warning'
+                          ? 'bg-amber-50 border-amber-200 text-amber-900 dark:bg-amber-950/60 dark:border-amber-900/50 dark:text-amber-200'
+                          : platformSettings.global_announcement_type === 'emerald'
+                            ? 'bg-emerald-50 border-emerald-200 text-emerald-900 dark:bg-emerald-950/60 dark:border-emerald-900/50 dark:text-emerald-200'
+                            : 'bg-sky-50 border-sky-200 text-sky-900 dark:bg-sky-950/60 dark:border-sky-900/50 dark:text-sky-200'
+                      )}>
+                        <Megaphone className="w-4 h-4 shrink-0" />
+                        <span>{platformSettings.global_announcement}</span>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Coluna 3: Regras Comerciais & Resumo */}
+            <div className="space-y-6">
+              <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
+                <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800/80">
+                  <CardTitle className="text-sm font-bold flex items-center gap-2">
+                    <Timer className="w-4 h-4 text-purple-600" />
+                    <span>Políticas de Trial & Ciclo</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-5 space-y-4 text-xs">
+                  <div>
+                    <label className="font-bold text-slate-700 dark:text-slate-300 mb-1.5 block">
+                      Dias de Trial Padrão para Novas Empresas
+                    </label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={90}
+                      value={platformSettings.default_trial_days}
+                      onChange={e => setPlatformSettings(prev => ({
+                        ...prev,
+                        default_trial_days: Math.max(1, parseInt(e.target.value, 10) || 14)
+                      }))}
+                      className="text-xs font-bold"
+                    />
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      Aplicado no onboarding automático e atalhos de extensão de teste.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 dark:text-slate-300 mb-1.5 block">
+                      Desconto Padrão no Plano Anual (%)
+                    </label>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={80}
+                      value={platformSettings.annual_discount_percent}
+                      onChange={e => setPlatformSettings(prev => ({
+                        ...prev,
+                        annual_discount_percent: Math.max(0, Math.min(80, parseInt(e.target.value, 10) || 0))
+                      }))}
+                      className="text-xs font-bold"
+                    />
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 space-y-1.5">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Resumo da Base SaaS</p>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-500">Empresas Cadastradas</span>
+                      <span className="font-bold">{companies.length}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-500">Usuários Globais</span>
+                      <span className="font-bold">{allUsers.length}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-500">Planos Configurados</span>
+                      <span className="font-bold">{plans.length}</span>
+                    </div>
+                    {platformSettings.updated_at && (
+                      <p className="text-[10px] text-slate-400 pt-1 border-t border-slate-200 dark:border-slate-700">
+                        Última atualização: {formatDate(platformSettings.updated_at)}
+                      </p>
+                    )}
+                  </div>
+
+                  <Button
+                    type="submit"
+                    className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs gap-2 py-2.5 shadow-md"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Salvar Configurações Globais SaaS</span>
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+          </form>
         </div>
       )}
 
@@ -1482,10 +2434,10 @@ Incluso: Emissão de Comandas, Bancada Técnica Kanban, Rastreio e Impressão T�
                     />
                   </div>
                   <div>
-                    <label className="text-[11px] text-slate-500 mb-1 block">Senha Inicial (Padrão: 123456)</label>
+                    <label className="text-[11px] text-slate-500 mb-1 block">Senha Inicial (Padrão: Mudar@123)</label>
                     <Input
                       type="password"
-                      placeholder="123456"
+                      placeholder="Mudar@123"
                       value={newAdminPass}
                       onChange={e => setNewAdminPass(e.target.value)}
                       className="text-xs bg-white dark:bg-slate-900"
@@ -1609,6 +2561,108 @@ Incluso: Emissão de Comandas, Bancada Técnica Kanban, Rastreio e Impressão T�
                     </option>
                   ))}
                 </Select>
+              </div>
+
+              {/* Lifecycle & Expiration Controls */}
+              <div className="p-4 bg-indigo-50/50 dark:bg-indigo-950/30 rounded-xl border border-indigo-200/70 dark:border-indigo-900/50 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="font-bold text-indigo-900 dark:text-indigo-300 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                    <CalendarClock className="w-3.5 h-3.5" />
+                    <span>Ciclo de Vida, Status & Vencimento</span>
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const d = new Date(Date.now() + 7 * 86400000);
+                        setSubStatus('TRIAL');
+                        setSubExpiresAt(d.toISOString().slice(0, 10));
+                      }}
+                      className="px-2 py-1 rounded-lg text-[10px] font-bold bg-sky-100 text-sky-800 hover:bg-sky-200 dark:bg-sky-950/70 dark:text-sky-300"
+                    >
+                      +7d Trial
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const baseMs = subExpiresAt ? Math.max(Date.now(), new Date(`${subExpiresAt}T23:59:59Z`).getTime()) : Date.now();
+                        const d = new Date(baseMs + 30 * 86400000);
+                        setSubStatus('ACTIVE');
+                        setSubBillingCycle('MONTHLY');
+                        setSubExpiresAt(d.toISOString().slice(0, 10));
+                      }}
+                      className="px-2 py-1 rounded-lg text-[10px] font-bold bg-emerald-100 text-emerald-800 hover:bg-emerald-200 dark:bg-emerald-950/70 dark:text-emerald-300"
+                    >
+                      +30d Ativo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const baseMs = subExpiresAt ? Math.max(Date.now(), new Date(`${subExpiresAt}T23:59:59Z`).getTime()) : Date.now();
+                        const d = new Date(baseMs + 365 * 86400000);
+                        setSubStatus('ACTIVE');
+                        setSubBillingCycle('ANNUAL');
+                        setSubExpiresAt(d.toISOString().slice(0, 10));
+                      }}
+                      className="px-2 py-1 rounded-lg text-[10px] font-bold bg-indigo-100 text-indigo-800 hover:bg-indigo-200 dark:bg-indigo-950/70 dark:text-indigo-300"
+                    >
+                      +1 Ano Ativo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSubExpiresAt('')}
+                      className="px-2 py-1 rounded-lg text-[10px] font-semibold bg-slate-200/80 text-slate-700 hover:bg-slate-300 dark:bg-slate-800 dark:text-slate-300"
+                    >
+                      Sem Vencimento
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-[11px] text-slate-600 dark:text-slate-400 font-semibold mb-1 block">
+                      Status da Assinatura
+                    </label>
+                    <Select
+                      value={subStatus}
+                      onChange={e => setSubStatus(e.target.value as SubscriptionStatus)}
+                      className="text-xs font-semibold bg-white dark:bg-slate-900"
+                    >
+                      <option value="ACTIVE">Ativa (ACTIVE)</option>
+                      <option value="TRIAL">Período Trial (TRIAL)</option>
+                      <option value="PAUSED">Pausada (PAUSED)</option>
+                      <option value="EXPIRED">Expirada (EXPIRED)</option>
+                      <option value="CANCELLED">Cancelada (CANCELLED)</option>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] text-slate-600 dark:text-slate-400 font-semibold mb-1 block">
+                      Ciclo de Cobrança
+                    </label>
+                    <Select
+                      value={subBillingCycle}
+                      onChange={e => setSubBillingCycle(e.target.value as 'MONTHLY' | 'ANNUAL' | 'CUSTOM')}
+                      className="text-xs font-semibold bg-white dark:bg-slate-900"
+                    >
+                      <option value="MONTHLY">Mensal</option>
+                      <option value="ANNUAL">Anual</option>
+                      <option value="CUSTOM">Negociação Custom</option>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] text-slate-600 dark:text-slate-400 font-semibold mb-1 block">
+                      Data de Vencimento
+                    </label>
+                    <Input
+                      type="date"
+                      value={subExpiresAt}
+                      onChange={e => setSubExpiresAt(e.target.value)}
+                      className="text-xs font-semibold bg-white dark:bg-slate-900"
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Extras by Unified Users */}
@@ -1910,7 +2964,8 @@ Incluso: Emissão de Comandas, Bancada Técnica Kanban, Rastreio e Impressão T�
                 <Input
                   type="password"
                   required
-                  placeholder="Mínimo 4 caracteres"
+                  minLength={6}
+                  placeholder="Mínimo 6 caracteres"
                   value={newAdminPassword}
                   onChange={e => setNewAdminPassword(e.target.value)}
                 />
@@ -1922,6 +2977,411 @@ Incluso: Emissão de Comandas, Bancada Técnica Kanban, Rastreio e Impressão T�
                 </Button>
                 <Button type="submit" className="bg-amber-600 hover:bg-amber-500 text-white font-bold">
                   Definir Nova Senha
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* MODAL: RAIO-X 360º DA EMPRESA (TENANT)                                */}
+      {/* ===================================================================== */}
+      {xrayCompany && (() => {
+        const limits = AppStore.getEffectiveLimits(xrayCompany.id);
+        const stats = AppStore.getTenantStats(xrayCompany.id);
+        const companyUsers = allUsers.filter(u => u.tenant_id === xrayCompany.id);
+        const segKey = xrayCompany.business_segment || xrayCompany.active_template_keys?.[0] || 'RECARGA_CARTUCHOS';
+        const segName = (BUSINESS_PRESETS as any)[segKey]?.name || segKey;
+        const subStatus = limits.subscription?.status || 'ACTIVE';
+        const enabledModules = SYSTEM_MODULES.filter(m => AppStore.isModuleEnabledForTenant(xrayCompany.id, m.key));
+
+        return (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6 shadow-2xl space-y-5 my-8 animate-in fade-in zoom-in-95">
+              {/* Header */}
+              <div className="flex items-start justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-900 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
+                    <Building2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="font-extrabold text-base text-slate-900 dark:text-white">
+                        {xrayCompany.trade_name}
+                      </h3>
+                      <Badge className={cn(
+                        'text-[10px] font-bold',
+                        xrayCompany.is_active !== false
+                          ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
+                          : 'bg-rose-500/15 text-rose-700 dark:text-rose-400'
+                      )}>
+                        {xrayCompany.is_active !== false ? 'Loja Ativa' : 'Bloqueada'}
+                      </Badge>
+                      <Badge className="bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold">
+                        Assinatura: {subStatus}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {xrayCompany.corporate_name} • CNPJ: {xrayCompany.cnpj || 'Não informado'} • {segName}
+                    </p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      {xrayCompany.city || 'Cidade N/I'}{xrayCompany.state ? `/${xrayCompany.state}` : ''} • E-mail: {xrayCompany.email || '—'} • WhatsApp: {xrayCompany.whatsapp || xrayCompany.phone || '—'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setXrayCompany(null)}
+                  className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Action Strip */}
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => {
+                    const target = xrayCompany;
+                    setXrayCompany(null);
+                    handleEnterSupportMode(target);
+                  }}
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold gap-1.5"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Entrar em Modo Suporte</span>
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    const target = xrayCompany;
+                    setXrayCompany(null);
+                    handleOpenManagePlan(target);
+                  }}
+                  className="text-xs font-bold gap-1.5"
+                >
+                  <Sliders className="w-3.5 h-3.5 text-purple-600" />
+                  <span>Gerenciar Plano & Vencimento</span>
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleRenewSubscriptionQuick(xrayCompany, 30)}
+                  className="text-xs font-bold gap-1.5 border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-900/50 dark:text-emerald-400"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Renovar +30d</span>
+                </Button>
+                {(xrayCompany.whatsapp || xrayCompany.phone) && (
+                  <a
+                    href={getCompanyBillingWhatsAppUrl(xrayCompany)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-xs font-bold hover:bg-emerald-100"
+                  >
+                    <Phone className="w-3.5 h-3.5" />
+                    <span>Cobrar via WhatsApp</span>
+                  </a>
+                )}
+              </div>
+
+              {/* 4 KPIs */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Plano & MRR</p>
+                  <p className="text-sm font-extrabold text-slate-900 dark:text-white mt-1">{limits.plan.name}</p>
+                  <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                    {limits.finalMonthlyPrice === 0 ? 'Gratuito' : `${formatCurrency(limits.finalMonthlyPrice)}/mês`}
+                  </p>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Vencimento & Ciclo</p>
+                  <p className="text-sm font-extrabold text-slate-900 dark:text-white mt-1">
+                    {limits.subscription?.expires_at ? formatDate(limits.subscription.expires_at) : 'Contínuo'}
+                  </p>
+                  <p className="text-[11px] text-slate-500">
+                    Ciclo: {limits.subscription?.billing_cycle || 'MONTHLY'}
+                  </p>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Equipe & Assentos</p>
+                  <p className="text-sm font-extrabold text-slate-900 dark:text-white mt-1">
+                    {limits.usedUsers} / {limits.maxUsers} ativos
+                  </p>
+                  <p className="text-[11px] text-slate-500">
+                    {limits.usedAdmins} Adm • {limits.usedAttendants} Atd • {limits.usedTechs} Téc
+                  </p>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Operação da Loja</p>
+                  <p className="text-sm font-extrabold text-slate-900 dark:text-white mt-1">
+                    {stats.totalOrders} OS ({stats.totalItems} itens)
+                  </p>
+                  <p className="text-[11px] text-slate-500">
+                    {stats.totalCustomers} clientes • {formatCurrency(stats.totalRevenue)}
+                  </p>
+                </div>
+              </div>
+
+              {/* Enabled Modules */}
+              <div className="space-y-2">
+                <p className="text-xs font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5 text-purple-600" />
+                  <span>Módulos Liberados ({enabledModules.length}/{SYSTEM_MODULES.length})</span>
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {enabledModules.map(mod => (
+                    <Badge
+                      key={mod.key}
+                      className="bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-900/60 text-[10px] font-semibold"
+                    >
+                      {mod.label}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+
+              {/* Company Users */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 text-sky-600" />
+                    <span>Usuários da Empresa ({companyUsers.length})</span>
+                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      const targetId = xrayCompany.id;
+                      setXrayCompany(null);
+                      setEditingGlobalUser(null);
+                      setUserFormName('');
+                      setUserFormEmail('');
+                      setUserFormPhone('');
+                      setUserFormPassword('Mudar@123');
+                      setUserFormRole('ATENDENTE');
+                      setUserFormTenantId(targetId);
+                      setUserFormMustChange(true);
+                      setUserFormActive(true);
+                      setShowUserFormModal(true);
+                    }}
+                    className="h-7 px-2.5 text-[11px] font-bold gap-1"
+                  >
+                    <UserPlus className="w-3 h-3" />
+                    <span>Adicionar nesta Loja</span>
+                  </Button>
+                </div>
+
+                {companyUsers.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic py-3 text-center border border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
+                    Nenhum usuário vinculado a esta empresa.
+                  </p>
+                ) : (
+                  <div className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
+                    {companyUsers.map(u => {
+                      const roleCfg = getRoleBadgeConfig(u.role);
+                      return (
+                        <div key={u.id} className="px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs bg-white dark:bg-slate-900">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-slate-900 dark:text-white truncate">{u.full_name}</span>
+                              <span className={cn('px-2 py-0.5 rounded-full text-[10px] font-bold', roleCfg.className)}>
+                                {roleCfg.label}
+                              </span>
+                              {u.active_session_token && (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                  Online
+                                </span>
+                              )}
+                              {u.is_active === false && (
+                                <Badge className="bg-rose-500/15 text-rose-600 text-[10px]">Bloqueado</Badge>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-slate-500 truncate">{u.email}{u.phone ? ` • ${u.phone}` : ''}</p>
+                          </div>
+
+                          <div className="flex items-center gap-1">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setXrayCompany(null);
+                                handleOpenEditGlobalUser(u);
+                              }}
+                              className="h-7 px-2 text-[11px]"
+                              title="Editar usuário"
+                            >
+                              <Edit3 className="w-3 h-3" />
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleOpenResetPass(u)}
+                              className="h-7 px-2 text-[11px] text-amber-600"
+                              title="Redefinir senha"
+                            >
+                              <KeyRound className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ===================================================================== */}
+      {/* MODAL: CRIAR / EDITAR USUÁRIO GLOBAL                                  */}
+      {/* ===================================================================== */}
+      {showUserFormModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-4 my-8 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <UserPlus className="w-4 h-4 text-indigo-600" />
+                <h3 className="font-bold text-sm">
+                  {editingGlobalUser ? `Editar Usuário: ${editingGlobalUser.full_name}` : 'Novo Usuário Global na Plataforma'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowUserFormModal(false)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveGlobalUser} className="space-y-3.5 text-xs">
+              <div>
+                <label className="font-bold text-slate-700 dark:text-slate-300 mb-1 block">
+                  Empresa / Loja Vinculada *
+                </label>
+                <Select
+                  required
+                  value={userFormTenantId}
+                  onChange={e => setUserFormTenantId(e.target.value)}
+                  className="text-xs font-semibold"
+                >
+                  {companies.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.trade_name} ({c.cnpj || 'Sem CNPJ'})
+                    </option>
+                  ))}
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700 dark:text-slate-300 mb-1 block">Nome Completo *</label>
+                  <Input
+                    required
+                    value={userFormName}
+                    onChange={e => setUserFormName(e.target.value)}
+                    placeholder="Ex: Maria Oliveira"
+                    className="text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700 dark:text-slate-300 mb-1 block">E-mail de Acesso *</label>
+                  <Input
+                    type="email"
+                    required
+                    value={userFormEmail}
+                    onChange={e => setUserFormEmail(e.target.value)}
+                    placeholder="maria@empresa.com.br"
+                    className="text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700 dark:text-slate-300 mb-1 block">Telefone / WhatsApp</label>
+                  <Input
+                    value={userFormPhone}
+                    onChange={e => setUserFormPhone(e.target.value)}
+                    placeholder="(11) 99999-9999"
+                    className="text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700 dark:text-slate-300 mb-1 block">Perfil de Permissão *</label>
+                  <Select
+                    value={userFormRole}
+                    onChange={e => setUserFormRole(e.target.value as UserRole)}
+                    className="text-xs font-semibold"
+                  >
+                    <option value="ADMINISTRADOR">Administrador da Loja</option>
+                    <option value="ATENDENTE">Atendente / Balcão</option>
+                    <option value="TECNICO">Técnico / Bancada</option>
+                    <option value="SUPER_ADMIN">Super Administrador (SaaS)</option>
+                  </Select>
+                </div>
+              </div>
+
+              {!editingGlobalUser && (
+                <div>
+                  <label className="font-bold text-slate-700 dark:text-slate-300 mb-1 block">
+                    Senha Inicial (mínimo 8 caracteres) *
+                  </label>
+                  <Input
+                    type="password"
+                    required
+                    minLength={8}
+                    value={userFormPassword}
+                    onChange={e => setUserFormPassword(e.target.value)}
+                    placeholder="Mudar@123"
+                    className="text-xs"
+                  />
+                </div>
+              )}
+
+              <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2">
+                <label className="flex items-center gap-2 cursor-pointer font-semibold text-slate-700 dark:text-slate-200">
+                  <input
+                    type="checkbox"
+                    checked={userFormMustChange}
+                    onChange={e => setUserFormMustChange(e.target.checked)}
+                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span>Obrigar troca de senha no próximo login</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer font-semibold text-slate-700 dark:text-slate-200">
+                  <input
+                    type="checkbox"
+                    checked={userFormActive}
+                    onChange={e => setUserFormActive(e.target.checked)}
+                    className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <span>Conta ativa (permite autenticação no sistema)</span>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <Button type="button" variant="outline" onClick={() => setShowUserFormModal(false)}>
+                  Cancelar
+                </Button>
+                <Button type="submit" className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold">
+                  {editingGlobalUser ? 'Salvar Alterações' : 'Cadastrar Usuário'}
                 </Button>
               </div>
             </form>

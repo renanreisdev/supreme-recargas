@@ -281,8 +281,10 @@ function CompanySettingsContent() {
   const [pixQrUrl, setPixQrUrl] = useState<string>('');
   const [pixCopied, setPixCopied] = useState<boolean>(false);
 
+  const [platformSettings, setPlatformSettings] = useState(() => AppStore.getPlatformSettings());
+
   const handleCopyPix = () => {
-    navigator.clipboard.writeText('pix@supremerecargas.com.br');
+    navigator.clipboard.writeText(platformSettings.pix_key || 'pix@supremeinformatica.com.br');
     setPixCopied(true);
     toast.success('Chave Pix copiada com sucesso!');
     setTimeout(() => setPixCopied(false), 2500);
@@ -355,6 +357,7 @@ function CompanySettingsContent() {
     setCompanyState(comp.state || '');
     setCompanyZipCode(comp.zip_code || '');
     setCompanyResponsible(comp.responsible_name || '');
+    setPlatformSettings(AppStore.getPlatformSettings());
   };
 
   useEffect(() => {
@@ -365,7 +368,7 @@ function CompanySettingsContent() {
   }, [currentCompany.id]);
 
   useEffect(() => {
-    QRCode.toDataURL('https://supreme.com.br/acompanhar/DEMO-2026-0001', {
+    QRCode.toDataURL('https://agilos.supremeinformatica.com.br/acompanhar/DEMO-2026-0001', {
       width: 140,
       margin: 1,
       color: { dark: '#000000', light: '#ffffff' }
@@ -373,14 +376,40 @@ function CompanySettingsContent() {
       .then(url => setPreviewQrUrl(url))
       .catch(() => {});
 
-    QRCode.toDataURL('00020126580014br.gov.bcb.pix0136pix@supremerecargas.com.br5204000053039865802BR5925SUPREME RECARGAS SISTEMAS6009SAO PAULO62070503***6304', {
+    const pixKey = (platformSettings.pix_key || 'pix@supremeinformatica.com.br').trim();
+    const merchantName = (platformSettings.pix_beneficiary || 'AGIL OS').replace(/[^A-Za-z0-9 ]/g, '').slice(0, 25) || 'AGIL OS';
+    const merchantCity = (platformSettings.pix_city || 'SAO PAULO').replace(/[^A-Za-z0-9 ]/g, '').slice(0, 15) || 'SAO PAULO';
+    const tlv = (id: string, val: string) => `${id}${String(val.length).padStart(2, '0')}${val}`;
+    const gui = tlv('00', 'br.gov.bcb.pix') + tlv('01', pixKey);
+    const body =
+      tlv('00', '01') +
+      tlv('26', gui) +
+      tlv('52', '0000') +
+      tlv('53', '986') +
+      tlv('58', 'BR') +
+      tlv('59', merchantName) +
+      tlv('60', merchantCity) +
+      tlv('62', tlv('05', '***')) +
+      '6304';
+
+    let crc = 0xffff;
+    for (let i = 0; i < body.length; i++) {
+      crc ^= body.charCodeAt(i) << 8;
+      for (let j = 0; j < 8; j++) {
+        crc = crc & 0x8000 ? (crc << 1) ^ 0x1021 : crc << 1;
+        crc &= 0xffff;
+      }
+    }
+    const emvPayload = body + crc.toString(16).toUpperCase().padStart(4, '0');
+
+    QRCode.toDataURL(emvPayload, {
       width: 200,
       margin: 1,
       color: { dark: '#0f172a', light: '#ffffff' }
     })
       .then(url => setPixQrUrl(url))
       .catch(() => {});
-  }, []);
+  }, [platformSettings.pix_key, platformSettings.pix_beneficiary, platformSettings.pix_city]);
 
   // Save Operational Rules (Tab 4)
   const handleSavePolicies = (e: React.FormEvent) => {
@@ -2627,7 +2656,7 @@ function CompanySettingsContent() {
                     <div className="flex items-center gap-1.5">
                       <Input
                         readOnly
-                        value="pix@supremerecargas.com.br"
+                        value={platformSettings.pix_key || 'pix@supremeinformatica.com.br'}
                         className="text-xs font-mono bg-white dark:bg-slate-950 font-bold h-9 rounded-xl"
                       />
                       <Button
@@ -2664,10 +2693,9 @@ function CompanySettingsContent() {
                       Dados Bancários do Favorecido
                     </h4>
                     <div className="space-y-1 text-slate-600 dark:text-slate-400 text-[11px]">
-                      <p><strong>Titular:</strong> Supreme Recargas & Softwares Ltda</p>
-                      <p><strong>CNPJ:</strong> 55.892.410/0001-92</p>
-                      <p><strong>Instituição:</strong> Banco Inter (077)</p>
-                      <p><strong>Agência:</strong> 0001 | <strong>Conta:</strong> 9482103-9</p>
+                      <p><strong>Titular / Recebedor:</strong> {platformSettings.pix_beneficiary}</p>
+                      <p><strong>Praça / Cidade:</strong> {platformSettings.pix_city}</p>
+                      <p><strong>E-mail Financeiro:</strong> {platformSettings.support_email}</p>
                       <p className="pt-1 text-slate-900 dark:text-slate-200 font-bold">
                         Valor da Mensalidade: {formatCurrency(limits.finalMonthlyPrice)}
                       </p>
@@ -2685,8 +2713,9 @@ function CompanySettingsContent() {
                     </div>
 
                     {(() => {
-                      const msg = `Olá! Sou da empresa *${currentCompany.trade_name}* (CNPJ: ${currentCompany.cnpj || 'Não informado'}).\n\nAcabei de realizar o pagamento manual da mensalidade do plano *${limits.plan.name}* no valor de ${formatCurrency(limits.finalMonthlyPrice)}.\n\nSegue o comprovante em anexo para ativação/renovação do nosso acesso no Supreme Recargas!`;
-                      const waUrl = `https://wa.me/5511999999999?text=${encodeURIComponent(msg)}`;
+                      const waPhone = (platformSettings.support_whatsapp || '5511999999999').replace(/\D/g, '');
+                      const msg = `Olá! Sou da empresa *${currentCompany.trade_name}* (CNPJ: ${currentCompany.cnpj || 'Não informado'}).\n\nAcabei de realizar o pagamento manual da mensalidade do plano *${limits.plan.name}* no valor de ${formatCurrency(limits.finalMonthlyPrice)}.\n\nSegue o comprovante em anexo para ativação/renovação do nosso acesso no ${platformSettings.platform_name || 'Agil OS'}!`;
+                      const waUrl = `https://wa.me/${waPhone.startsWith('55') ? waPhone : `55${waPhone}`}?text=${encodeURIComponent(msg)}`;
                       return (
                         <a
                           href={waUrl}

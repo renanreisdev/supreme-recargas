@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { 
   LayoutDashboard, 
   PlusCircle, 
@@ -59,7 +59,8 @@ interface SidebarProps {
 
 export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   const pathname = usePathname();
-  const { currentUser, currentCompany, logout, changePassword, updateMyInactivityTimeout, hasPermission } = useAuth();
+  const router = useRouter();
+  const { currentUser, currentCompany, logout, changePassword, updateMyInactivityTimeout, hasPermission, impersonatedTenantId, impersonateCompany } = useAuth();
   const [showAccountModal, setShowAccountModal] = useState(false);
   const [accountTab, setAccountTab] = useState<'timeout' | 'password'>('timeout');
   const [myTimeout, setMyTimeout] = useState<number>(0);
@@ -125,7 +126,8 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
     }
   };
 
-  const isSuperAdmin = currentUser.role === 'SUPER_ADMIN';
+  const isSuperAdmin = currentUser.role === 'SUPER_ADMIN' && !impersonatedTenantId;
+  const isSupportMode = currentUser.role === 'SUPER_ADMIN' && Boolean(impersonatedTenantId);
 
   const navSections: NavSection[] = isSuperAdmin ? [
     {
@@ -262,7 +264,21 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
       </div>
 
       {/* Tenant Indicator Card */}
-      <div className="p-3 border-b border-slate-200/60 dark:border-slate-800/60 bg-slate-50/30 dark:bg-slate-950/20">
+      <div className="p-3 border-b border-slate-200/60 dark:border-slate-800/60 bg-slate-50/30 dark:bg-slate-950/20 space-y-2">
+        {isSupportMode && (
+          <button
+            type="button"
+            onClick={() => {
+              impersonateCompany(null);
+              if (isMobile && onMobileClose) onMobileClose();
+              router.push('/super-admin');
+            }}
+            className="w-full py-2 px-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-[11px] flex items-center justify-center gap-1.5 shadow-sm transition-colors"
+          >
+            <Crown className="w-3.5 h-3.5" />
+            <span>Sair do Modo Suporte</span>
+          </button>
+        )}
         <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-800 flex items-center justify-between shadow-xs">
           <div className="min-w-0 pr-2">
             <div className="flex items-center gap-1.5">

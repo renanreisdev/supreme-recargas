@@ -39,7 +39,8 @@ import {
   FinancialStatus,
   PaymentMethod,
   CashRegisterSession,
-  CashRegisterMovement
+  CashRegisterMovement,
+  PlatformSaasSettings
 } from '@/types';
 import { supabase } from './supabase';
 import { hashPassword, verifyPassword, isPasswordHashed, buildLgpdAnonymizedCustomer } from '@/lib/security';
@@ -859,6 +860,20 @@ export const MOCK_COMPANY_SETTINGS: CompanySettings = {
   technician_group_ids: ['default-tech-group']
 };
 
+export const DEFAULT_PLATFORM_SETTINGS: PlatformSaasSettings = {
+  id: 'global',
+  platform_name: 'Agil OS',
+  support_whatsapp: '5511999999999',
+  support_email: 'suporte@supremeinformatica.com.br',
+  pix_key: 'pix@supremeinformatica.com.br',
+  pix_beneficiary: 'SUPREME INFORMATICA SISTEMAS',
+  pix_city: 'SAO PAULO',
+  default_trial_days: 14,
+  annual_discount_percent: 20,
+  global_announcement: '',
+  global_announcement_type: 'info'
+};
+
 // ============================================================================
 // 3. APPSTORE CLASS IMPLEMENTATION (GENERIC STORE LAYER)
 // ============================================================================
@@ -887,6 +902,7 @@ export class AppStore {
           auditLogs: [...INITIAL_AUDIT_LOGS],
           cashRegisters: [],
           settings: { ...MOCK_COMPANY_SETTINGS },
+          platformSettings: { ...DEFAULT_PLATFORM_SETTINGS },
           company: { ...MOCK_COMPANY_SUPREME }
         };
       }
@@ -913,6 +929,7 @@ export class AppStore {
         auditLogs: INITIAL_AUDIT_LOGS,
         cashRegisters: [],
         settings: MOCK_COMPANY_SETTINGS,
+        platformSettings: DEFAULT_PLATFORM_SETTINGS,
         company: MOCK_COMPANY_SUPREME
       };
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(initial));
@@ -948,6 +965,7 @@ export class AppStore {
       if (!Array.isArray(parsed.auditLogs)) parsed.auditLogs = [];
       if (!Array.isArray(parsed.cashRegisters)) parsed.cashRegisters = [];
       if (!parsed.settings) parsed.settings = MOCK_COMPANY_SETTINGS;
+      if (!parsed.platformSettings) parsed.platformSettings = DEFAULT_PLATFORM_SETTINGS;
       if (!parsed.company) parsed.company = MOCK_COMPANY_SUPREME;
 
       if (migratedRaw !== rawStorage) {
@@ -1583,38 +1601,209 @@ export class AppStore {
     let sub: Subscription;
 
     if (idx !== -1) {
+      const existing = data.subscriptions[idx];
       sub = {
-        ...data.subscriptions[idx],
+        ...existing,
         plan_id: planId,
         plan,
-        extra_users: extras?.extra_users !== undefined ? extras.extra_users : data.subscriptions[idx].extra_users || 0,
-        custom_max_users: extras?.custom_max_users,
-        custom_price: extras?.custom_price,
-        status: extras?.status || data.subscriptions[idx].status || 'ACTIVE'
+        extra_users: extras?.extra_users !== undefined ? extras.extra_users : existing.extra_users || 0,
+        custom_max_users: extras?.custom_max_users !== undefined ? extras.custom_max_users : existing.custom_max_users,
+        custom_price: extras?.custom_price !== undefined ? extras.custom_price : existing.custom_price,
+        status: extras?.status || existing.status || 'ACTIVE',
+        expires_at: extras?.expires_at !== undefined ? extras.expires_at : existing.expires_at,
+        billing_cycle: extras?.billing_cycle || existing.billing_cycle || 'MONTHLY',
+        notes: extras?.notes !== undefined ? extras.notes : existing.notes
       };
       data.subscriptions[idx] = sub;
-      const { plan: _planObj, ...dbSubUpdates } = sub as any;
+      const dbSubUpdates = {
+        plan_id: sub.plan_id,
+        status: sub.status,
+        expires_at: sub.expires_at || null,
+        extra_users: sub.extra_users || 0,
+        custom_max_users: sub.custom_max_users ?? null,
+        custom_price: sub.custom_price ?? null,
+        billing_cycle: sub.billing_cycle || 'MONTHLY',
+        notes: sub.notes || null,
+        updated_at: new Date().toISOString()
+      };
       this.saveStoreData(data);
-      this.enqueueOrExecuteMutation({ table: 'subscriptions', action: 'UPDATE', payload: dbSubUpdates, matchField: 'id', matchValue: sub.id, tenant_id: tenantId });
+      if (isValidUUID(sub.id)) {
+        this.enqueueOrExecuteMutation({ table: 'subscriptions', action: 'UPDATE', payload: dbSubUpdates, matchField: 'id', matchValue: sub.id, tenant_id: tenantId });
+      }
     } else {
+      const subId = generateUUID();
+      const startsAt = new Date().toISOString();
       sub = {
-        id: generateUUID(),
+        id: subId,
         tenant_id: tenantId,
         plan_id: planId,
         plan,
         status: extras?.status || 'ACTIVE',
-        starts_at: new Date().toISOString(),
+        starts_at: startsAt,
+        expires_at: extras?.expires_at,
         extra_users: extras?.extra_users || 0,
         custom_max_users: extras?.custom_max_users,
         custom_price: extras?.custom_price,
-        billing_cycle: 'MONTHLY'
+        billing_cycle: extras?.billing_cycle || 'MONTHLY',
+        notes: extras?.notes
       };
       data.subscriptions.unshift(sub);
-      const { plan: _planObj, ...dbSubInsert } = sub as any;
+      const dbSubInsert = {
+        id: sub.id,
+        tenant_id: sub.tenant_id,
+        plan_id: sub.plan_id,
+        status: sub.status,
+        starts_at: sub.starts_at,
+        expires_at: sub.expires_at || null,
+        extra_users: sub.extra_users || 0,
+        custom_max_users: sub.custom_max_users ?? null,
+        custom_price: sub.custom_price ?? null,
+        billing_cycle: sub.billing_cycle || 'MONTHLY',
+        notes: sub.notes || null
+      };
       this.saveStoreData(data);
       this.enqueueOrExecuteMutation({ table: 'subscriptions', action: 'INSERT', payload: dbSubInsert, tenant_id: tenantId });
     }
     return sub;
+  }
+
+  static renewSubscription(tenantId: string, days: number = 30, performedByName?: string): Subscription {
+    const data = this.getStoreData();
+    const plans: Plan[] = data.plans || MOCK_PLANS;
+    const subIdx = (data.subscriptions || []).findIndex((s: Subscription) => s.tenant_id === tenantId);
+    const existingSub: Subscription | undefined = subIdx !== -1 ? data.subscriptions[subIdx] : undefined;
+
+    const nowMs = Date.now();
+    const baseMs = existingSub?.expires_at && new Date(existingSub.expires_at).getTime() > nowMs
+      ? new Date(existingSub.expires_at).getTime()
+      : nowMs;
+    const newExpiresAt = new Date(baseMs + days * 86400000).toISOString();
+    const planId = existingSub?.plan_id || plans[0]?.id;
+
+    const updatedSub = this.assignPlanToCompany(
+      tenantId,
+      planId,
+      {
+        status: 'ACTIVE',
+        expires_at: newExpiresAt,
+        extra_users: existingSub?.extra_users || 0,
+        custom_max_users: existingSub?.custom_max_users,
+        custom_price: existingSub?.custom_price,
+        billing_cycle: existingSub?.billing_cycle || 'MONTHLY'
+      },
+      performedByName
+    );
+
+    const freshData = this.getStoreData();
+    const compIdx = (freshData.companies || []).findIndex((c: Company) => c.id === tenantId);
+    if (compIdx !== -1 && freshData.companies[compIdx].is_active === false) {
+      freshData.companies[compIdx].is_active = true;
+      freshData.companies[compIdx].updated_at = new Date().toISOString();
+      this.saveStoreData(freshData);
+      this.enqueueOrExecuteMutation({
+        table: 'companies',
+        action: 'UPDATE',
+        payload: { is_active: true, updated_at: freshData.companies[compIdx].updated_at },
+        matchField: 'id',
+        matchValue: tenantId
+      });
+    }
+
+    const companyName = freshData.companies?.find((c: Company) => c.id === tenantId)?.trade_name || tenantId;
+    this.logAudit({
+      tenant_id: tenantId,
+      user_name: performedByName || 'Super Administrador',
+      action: 'RENOVACAO_ASSINATURA',
+      resource: 'subscriptions',
+      resource_id: updatedSub.id,
+      details: `Assinatura da empresa "${companyName}" renovada por +${days} dias (novo vencimento: ${new Date(newExpiresAt).toLocaleDateString('pt-BR')})`
+    });
+
+    return updatedSub;
+  }
+
+  static extendTrialSubscription(tenantId: string, days: number = 7, performedByName?: string): Subscription {
+    const data = this.getStoreData();
+    const plans: Plan[] = data.plans || MOCK_PLANS;
+    const subIdx = (data.subscriptions || []).findIndex((s: Subscription) => s.tenant_id === tenantId);
+    const existingSub: Subscription | undefined = subIdx !== -1 ? data.subscriptions[subIdx] : undefined;
+
+    const nowMs = Date.now();
+    const baseMs = existingSub?.expires_at && new Date(existingSub.expires_at).getTime() > nowMs
+      ? new Date(existingSub.expires_at).getTime()
+      : nowMs;
+    const newExpiresAt = new Date(baseMs + days * 86400000).toISOString();
+    const planId = existingSub?.plan_id || plans[0]?.id;
+
+    const updatedSub = this.assignPlanToCompany(
+      tenantId,
+      planId,
+      {
+        status: 'TRIAL',
+        expires_at: newExpiresAt,
+        extra_users: existingSub?.extra_users || 0,
+        custom_max_users: existingSub?.custom_max_users,
+        custom_price: existingSub?.custom_price,
+        billing_cycle: existingSub?.billing_cycle || 'MONTHLY'
+      },
+      performedByName
+    );
+
+    const companyName = (data.companies || []).find((c: Company) => c.id === tenantId)?.trade_name || tenantId;
+    this.logAudit({
+      tenant_id: tenantId,
+      user_name: performedByName || 'Super Administrador',
+      action: 'EXTENSAO_TRIAL',
+      resource: 'subscriptions',
+      resource_id: updatedSub.id,
+      details: `Período de testes (Trial) da empresa "${companyName}" estendido por +${days} dias (expira em ${new Date(newExpiresAt).toLocaleDateString('pt-BR')})`
+    });
+
+    return updatedSub;
+  }
+
+  static getPlatformSettings(): PlatformSaasSettings {
+    const data = this.getStoreData();
+    return {
+      ...DEFAULT_PLATFORM_SETTINGS,
+      ...(data.platformSettings || {})
+    };
+  }
+
+  static updatePlatformSettings(
+    updates: Partial<PlatformSaasSettings>,
+    performedByName?: string
+  ): PlatformSaasSettings {
+    const data = this.getStoreData();
+    const current = this.getPlatformSettings();
+    const now = new Date().toISOString();
+    const updated: PlatformSaasSettings = {
+      ...current,
+      ...updates,
+      id: 'global',
+      default_trial_days: Math.max(1, Number(updates.default_trial_days ?? current.default_trial_days ?? 14)),
+      annual_discount_percent: Math.min(90, Math.max(0, Number(updates.annual_discount_percent ?? current.annual_discount_percent ?? 20))),
+      updated_at: now
+    };
+    data.platformSettings = updated;
+    this.saveStoreData(data);
+
+    this.enqueueOrExecuteMutation({
+      table: 'platform_settings',
+      action: 'UPSERT',
+      payload: updated,
+      onConflict: 'id'
+    });
+
+    this.logAudit({
+      user_name: performedByName || 'Super Administrador',
+      action: 'ALTERACAO_CONFIG_PLATAFORMA',
+      resource: 'platform_settings',
+      resource_id: 'global',
+      details: `Atualizadas configurações globais da plataforma (Pix: ${updated.pix_key}, Trial padrão: ${updated.default_trial_days}d)`
+    });
+
+    return updated;
   }
 
   static getEffectiveLimits(tenantId: string) {
@@ -4105,23 +4294,96 @@ export class AppStore {
   }
 
   static getPlatformOverview() {
+    const data = this.getStoreData();
     const companies = this.getCompanies();
+    const plans = this.getPlans();
+    const subscriptions = this.getSubscriptions();
     const profiles = this.getAllProfiles();
+    const allOrders: ServiceOrder[] = data.serviceOrders || [];
+
     const activeCompanies = companies.filter(c => c.is_active !== false).length;
     const pausedCompanies = companies.filter(c => c.is_active === false).length;
+
     let totalMRR = 0;
-    companies.forEach(c => {
-      if (c.is_active !== false) {
-        totalMRR += this.getEffectiveLimits(c.id).finalMonthlyPrice;
-      }
+    let trialCompanies = 0;
+    let paidCompanies = 0;
+    let expiredCompanies = 0;
+
+    const planCountMap = new Map<string, { id: string; name: string; code: string; count: number; mrr: number }>();
+    plans.forEach(p => {
+      planCountMap.set(p.id, { id: p.id, name: p.name, code: p.code, count: 0, mrr: 0 });
     });
+
+    const segmentMap = new Map<string, { key: string; name: string; count: number }>();
+    const nowMs = Date.now();
+
+    companies.forEach(c => {
+      const limits = this.getEffectiveLimits(c.id);
+      const sub = limits.subscription;
+      const isExpired = sub?.status === 'EXPIRED' || (sub?.expires_at ? new Date(sub.expires_at).getTime() < nowMs : false);
+
+      if (c.is_active !== false) {
+        if (sub?.status === 'TRIAL') {
+          trialCompanies++;
+        } else {
+          totalMRR += limits.finalMonthlyPrice;
+          if (limits.finalMonthlyPrice > 0) paidCompanies++;
+        }
+        if (isExpired) expiredCompanies++;
+      }
+
+      const planEntry = planCountMap.get(limits.plan.id) || {
+        id: limits.plan.id,
+        name: limits.plan.name,
+        code: limits.plan.code,
+        count: 0,
+        mrr: 0
+      };
+      planEntry.count += 1;
+      if (c.is_active !== false && sub?.status !== 'TRIAL') {
+        planEntry.mrr += limits.finalMonthlyPrice;
+      }
+      planCountMap.set(limits.plan.id, planEntry);
+
+      const segKey = c.business_segment || c.active_template_keys?.[0] || 'RECARGA_CARTUCHOS';
+      const segName = (BUSINESS_PRESETS as any)[segKey]?.name || segKey;
+      const segEntry = segmentMap.get(segKey) || { key: segKey, name: segName, count: 0 };
+      segEntry.count += 1;
+      segmentMap.set(segKey, segEntry);
+    });
+
+    const tenantProfiles = profiles.filter(p => p.role !== 'SUPER_ADMIN' && p.is_active !== false);
+    const adminsCount = tenantProfiles.filter(p => p.role === 'ADMINISTRADOR').length;
+    const attendantsCount = tenantProfiles.filter(p => p.role === 'ATENDENTE').length;
+    const techsCount = tenantProfiles.filter(p => p.role === 'TECNICO').length;
+    const onlineUsersCount = profiles.filter(p => Boolean(p.active_session_token)).length;
+
+    const totalOrdersGlobal = allOrders.length;
+    const totalItemsGlobal = allOrders.reduce((acc, o) => acc + (o.items?.length || 0), 0);
+    const totalGMVGlobal = allOrders.reduce((acc, o) => acc + (o.paid_amount || 0), 0);
 
     return {
       totalCompanies: companies.length,
       activeCompanies,
       pausedCompanies,
+      trialCompanies,
+      paidCompanies,
+      expiredCompanies,
       totalMRR,
-      totalUsers: profiles.filter(p => p.role !== 'SUPER_ADMIN' && p.is_active !== false).length
+      totalARR: totalMRR * 12,
+      arpu: activeCompanies > 0 ? totalMRR / activeCompanies : 0,
+      totalUsers: tenantProfiles.length,
+      adminsCount,
+      attendantsCount,
+      techsCount,
+      onlineUsersCount,
+      plansCount: plans.filter(p => p.is_active !== false).length,
+      subscriptionsCount: subscriptions.length,
+      totalOrdersGlobal,
+      totalItemsGlobal,
+      totalGMVGlobal,
+      planDistribution: Array.from(planCountMap.values()),
+      segmentDistribution: Array.from(segmentMap.values())
     };
   }
 
@@ -4337,12 +4599,17 @@ export class AppStore {
       // 2. Fetch Profiles
       const { data: profilesData } = await supabase.from('profiles').select('*');
 
-      // 3. Fetch Plans & Subscriptions
+      // 3. Fetch Plans, Subscriptions & Global Platform Settings
       const { data: plansData } = await supabase
         .from('plans')
         .select('*')
         .order('monthly_price', { ascending: true });
       const { data: subsData } = await supabase.from('subscriptions').select('*');
+      const { data: platformSettingsData } = await supabase
+        .from('platform_settings')
+        .select('*')
+        .eq('id', 'global')
+        .maybeSingle();
 
       // 4. Target tenant
       const targetTenant = tenantId || (companiesData && companiesData[0]?.id) || MOCK_COMPANY_SUPREME.id;
@@ -4473,6 +4740,7 @@ export class AppStore {
       if (profilesData && profilesData.length > 0) current.profiles = profilesData;
       if (plansData && plansData.length > 0) current.plans = plansData.map(p => this.normalizePlan(p));
       if (subsData && subsData.length > 0) current.subscriptions = subsData;
+      if (platformSettingsData) current.platformSettings = { ...DEFAULT_PLATFORM_SETTINGS, ...platformSettingsData };
       if (settingsData && settingsData.length > 0) current.settings = settingsData[0];
       if (permGroupsData && permGroupsData.length > 0) current.permissionGroups = permGroupsData;
 

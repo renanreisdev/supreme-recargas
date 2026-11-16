@@ -122,5 +122,104 @@ describe('Production Readiness: Tenant Onboarding, Plans & Cash Register Persist
     expect(AppStore.isModuleEnabledForTenant(company.id, 'frente_caixa')).toBe(false);
     expect(AppStore.isModuleEnabledForTenant(company.id, 'relatorios_financeiros')).toBe(false);
   });
+
+  it('computes SaaS executive overview KPIs including MRR, ARR, ARPU and distributions', () => {
+    const paidPlan = AppStore.getPlans().find(p => p.monthly_price > 0) || AppStore.getPlans()[0];
+    AppStore.addCompany(
+      {
+        trade_name: 'Loja MRR Alpha',
+        corporate_name: 'Loja MRR Alpha LTDA',
+        cnpj: '33.444.555/0001-01',
+        phone: '(11) 95555-1111',
+        email: 'alpha@mrrteste.com.br'
+      },
+      {
+        fullName: 'Alpha Admin',
+        email: 'alpha@mrrteste.com.br',
+        password: 'Password@123'
+      },
+      paidPlan.id,
+      'Super Admin',
+      'ASSISTENCIA_CELULARES'
+    );
+
+    const overview = AppStore.getPlatformOverview();
+    expect(overview.totalCompanies).toBeGreaterThanOrEqual(1);
+    expect(overview.activeCompanies).toBeGreaterThanOrEqual(1);
+    expect(overview.totalUsers).toBeGreaterThanOrEqual(1);
+    expect(overview.totalARR).toBeCloseTo(overview.totalMRR * 12, 2);
+    expect(overview.arpu).toBeCloseTo(overview.activeCompanies > 0 ? overview.totalMRR / overview.activeCompanies : 0, 2);
+    expect(Array.isArray(overview.planDistribution)).toBe(true);
+    expect(Array.isArray(overview.segmentDistribution)).toBe(true);
+    expect(overview.segmentDistribution.some(s => s.key === 'ASSISTENCIA_CELULARES')).toBe(true);
+  });
+
+  it('renews active subscription and extends trial with cumulative expiration dates', () => {
+    const plan = AppStore.getPlans().find(p => p.monthly_price > 0) || AppStore.getPlans()[0];
+    const company = AppStore.addCompany(
+      {
+        trade_name: 'Loja Renovação Test',
+        corporate_name: 'Loja Renovação Test LTDA',
+        cnpj: '44.555.666/0001-02',
+        phone: '(11) 94444-2222',
+        email: 'renovacao@teste.com.br'
+      },
+      {
+        fullName: 'Renovacao Admin',
+        email: 'renovacao@teste.com.br',
+        password: 'Password@123'
+      },
+      plan.id,
+      'Super Admin',
+      'RECARGA_CARTUCHOS'
+    );
+
+    const beforeExtend = Date.now();
+    const trialSub = AppStore.extendTrialSubscription(company.id, 7, 'Super Admin');
+    expect(trialSub.status).toBe('TRIAL');
+    expect(trialSub.expires_at).toBeDefined();
+    const firstExpMs = new Date(trialSub.expires_at!).getTime();
+    expect(firstExpMs).toBeGreaterThanOrEqual(beforeExtend + 6 * 86400000);
+
+    const activeSub = AppStore.renewSubscription(company.id, 30, 'Super Admin');
+    expect(activeSub.status).toBe('ACTIVE');
+    expect(activeSub.expires_at).toBeDefined();
+    const renewedExpMs = new Date(activeSub.expires_at!).getTime();
+    // Should accumulate ~30 days on top of future trial expiration
+    expect(renewedExpMs - firstExpMs).toBeGreaterThanOrEqual(29 * 86400000);
+  });
+
+  it('updates and persists global SaaS platform settings including Pix and announcement banner', () => {
+    const saved = AppStore.updatePlatformSettings(
+      {
+        platform_name: 'Agil OS Enterprise',
+        pix_key: 'pix@agilos.com.br',
+        pix_beneficiary: 'AGIL OS TECNOLOGIA',
+        pix_city: 'SAO PAULO',
+        support_whatsapp: '5511988887777',
+        support_email: 'suporte@agilos.com.br',
+        default_trial_days: 21,
+        annual_discount_percent: 25,
+        global_announcement: 'Atualização programada para domingo às 23h.',
+        global_announcement_type: 'warning'
+      },
+      'Super Admin'
+    );
+
+    expect(saved.platform_name).toBe('Agil OS Enterprise');
+    expect(saved.pix_key).toBe('pix@agilos.com.br');
+    expect(saved.default_trial_days).toBe(21);
+    expect(saved.annual_discount_percent).toBe(25);
+    expect(saved.global_announcement_type).toBe('warning');
+
+    const loaded = AppStore.getPlatformSettings();
+    expect(loaded.pix_key).toBe('pix@agilos.com.br');
+    expect(loaded.global_announcement).toBe('Atualização programada para domingo às 23h.');
+
+    // Bounds enforcement check
+    const clamped = AppStore.updatePlatformSettings({ default_trial_days: 0, annual_discount_percent: 120 }, 'Super Admin');
+    expect(clamped.default_trial_days).toBe(1);
+    expect(clamped.annual_discount_percent).toBe(90);
+  });
 });
 

@@ -8,6 +8,7 @@ import { toast } from '@/lib/toast';
 
 const AUTH_STORAGE_KEY = 'supreme_auth_user';
 const AUTH_SESSION_KEY = 'supreme_session_token';
+const IMPERSONATION_STORAGE_KEY = 'agilos_impersonated_tenant';
 
 export function getBrowserDeviceDescription(): string {
   if (typeof window === 'undefined') return 'Dispositivo Web';
@@ -50,12 +51,15 @@ interface AuthContextType {
   setCurrentUser: (user: Profile | null) => void;
   hasPermission: (permission: string) => boolean;
   refreshUser: () => void;
+  impersonatedTenantId: string | null;
+  impersonateCompany: (tenantId: string | null) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUserState] = useState<Profile | null>(null);
+  const [impersonatedTenantId, setImpersonatedTenantId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
   const pathname = usePathname();
@@ -63,12 +67,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const lastActivityRef = useRef<number>(Date.now());
   const isLoggingOutRef = useRef<boolean>(false);
 
+  const impersonateCompany = useCallback((tenantId: string | null) => {
+    setImpersonatedTenantId(tenantId);
+    if (typeof window !== 'undefined') {
+      if (tenantId) {
+        sessionStorage.setItem(IMPERSONATION_STORAGE_KEY, tenantId);
+        AppStore.initRealtime(tenantId);
+        AppStore.syncFromSupabase(tenantId);
+      } else {
+        sessionStorage.removeItem(IMPERSONATION_STORAGE_KEY);
+      }
+    }
+  }, []);
+
   const currentCompany: Company = React.useMemo(() => {
+    if (currentUser?.role === 'SUPER_ADMIN' && impersonatedTenantId) {
+      return AppStore.getCompany(impersonatedTenantId);
+    }
     if (currentUser?.tenant_id) {
       return AppStore.getCompany(currentUser.tenant_id);
     }
     return MOCK_COMPANY_SUPREME;
-  }, [currentUser]);
+  }, [currentUser, impersonatedTenantId]);
 
   const setCurrentUser = useCallback((user: Profile | null) => {
     setCurrentUserState(user);
@@ -99,10 +119,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     setCurrentUser(null);
+    setImpersonatedTenantId(null);
 
     if (typeof window !== 'undefined') {
       localStorage.removeItem(AUTH_STORAGE_KEY);
       localStorage.removeItem(AUTH_SESSION_KEY);
+      sessionStorage.removeItem(IMPERSONATION_STORAGE_KEY);
     }
 
     if (reason === 'concurrent_session') {
@@ -159,7 +181,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }).catch(() => {});
 
             setCurrentUserState(fresh);
-            if (fresh.tenant_id) {
+            if (fresh.role === 'SUPER_ADMIN') {
+              const savedImpersonation = sessionStorage.getItem(IMPERSONATION_STORAGE_KEY);
+              if (savedImpersonation) {
+                setImpersonatedTenantId(savedImpersonation);
+                AppStore.initRealtime(savedImpersonation);
+                AppStore.syncFromSupabase(savedImpersonation);
+              } else {
+                AppStore.syncFromSupabase();
+              }
+            } else if (fresh.tenant_id) {
               AppStore.initRealtime(fresh.tenant_id);
               AppStore.syncFromSupabase(fresh.tenant_id);
             } else {
@@ -415,7 +446,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         updateMyInactivityTimeout,
         setCurrentUser,
         hasPermission,
-        refreshUser
+        refreshUser,
+        impersonatedTenantId,
+        impersonateCompany
       }}
     >
       {children}
