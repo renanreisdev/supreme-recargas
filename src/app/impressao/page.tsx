@@ -536,12 +536,17 @@ function ThermalPrintContent() {
                           </div>
                           {it.services && it.services.length > 0 && (
                             <div className="pl-2 text-[9px] text-gray-800">
-                              {it.services.map((s, sIdx) => (
-                                <div key={sIdx} className="flex justify-between">
-                                  <span>• {s.service_name}</span>
-                                  {showPrices && <span>{formatCurrency(s.total_amount)}</span>}
-                                </div>
-                              ))}
+                              {it.services.map((s, sIdx) => {
+                                const isCourtesy = Boolean(s.is_courtesy || s.field_data?.is_courtesy);
+                                return (
+                                  <div key={sIdx} className="flex justify-between">
+                                    <span>• {s.service_name}{isCourtesy ? ' (CORTESIA)' : ''}</span>
+                                    {showPrices && (
+                                      <span>{isCourtesy ? 'CORTESIA (R$ 0,00)' : formatCurrency(s.total_amount)}</span>
+                                    )}
+                                  </div>
+                                );
+                              })}
                             </div>
                           )}
                           {settings.show_reported_issue_on_receipt !== false && it.reported_issue && (

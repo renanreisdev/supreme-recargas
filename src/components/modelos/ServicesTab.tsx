@@ -9,7 +9,8 @@ import {
   Wrench, 
   Check, 
   X, 
-  PlusCircle 
+  PlusCircle,
+  Gift
 } from 'lucide-react';
 import { Service, ItemCategory, Company, Profile } from '@/types';
 import { AppStore } from '@/lib/store';
@@ -61,6 +62,7 @@ export function ServicesTab({
   const [serviceCode, setServiceCode] = useState('');
   const [serviceDesc, setServiceDesc] = useState('');
   const [servicePrice, setServicePrice] = useState('50.00');
+  const [serviceAllowCourtesy, setServiceAllowCourtesy] = useState(false);
   const [serviceEstTime, setServiceEstTime] = useState('45');
   const [selectedServiceCategories, setSelectedServiceCategories] = useState<string[]>([]);
 
@@ -78,6 +80,7 @@ export function ServicesTab({
     setServiceCode('');
     setServiceDesc('');
     setServicePrice('40.00');
+    setServiceAllowCourtesy(false);
     setServiceEstTime('45');
     setSelectedServiceCategories(categories.map(c => c.id));
     setShowServiceModal(true);
@@ -95,6 +98,7 @@ export function ServicesTab({
     setServiceCode(srv.code);
     setServiceDesc(srv.description || '');
     setServicePrice(String(srv.default_price || '0.00'));
+    setServiceAllowCourtesy(Boolean(srv.allow_courtesy));
     setServiceEstTime(String(srv.estimated_time_minutes || '30'));
     setSelectedServiceCategories(srv.category_ids || categories.map(c => c.id));
     setShowServiceModal(true);
@@ -130,6 +134,7 @@ export function ServicesTab({
       code: (serviceCode || serviceName.toUpperCase().replace(/\s+/g, '_')).trim(),
       description: serviceDesc.trim() || undefined,
       default_price: parseFloat(servicePrice) || 0,
+      allow_courtesy: serviceAllowCourtesy,
       estimated_time_minutes: parseInt(serviceEstTime, 10) || 30,
       category_ids: selectedServiceCategories,
       is_active: true
@@ -234,7 +239,15 @@ export function ServicesTab({
                 return (
                   <tr key={srv.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
                     <td className="p-3.5">
-                      <div className="font-extrabold text-slate-900 dark:text-slate-100 text-sm">{srv.name}</div>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="font-extrabold text-slate-900 dark:text-slate-100 text-sm">{srv.name}</span>
+                        {srv.allow_courtesy && (
+                          <Badge className="bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 text-[9px] font-bold inline-flex items-center gap-1">
+                            <Gift className="w-2.5 h-2.5" />
+                            Permite Cortesia
+                          </Badge>
+                        )}
+                      </div>
                       {srv.description && (
                         <div className="text-[11px] text-slate-400 mt-0.5 max-w-md">{srv.description}</div>
                       )}
@@ -370,6 +383,31 @@ export function ServicesTab({
                   />
                 </div>
               </div>
+
+              <label
+                className={cn(
+                  'flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all select-none',
+                  serviceAllowCourtesy
+                    ? 'bg-amber-50/80 dark:bg-amber-950/30 border-amber-300 dark:border-amber-800'
+                    : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800'
+                )}
+              >
+                <input
+                  type="checkbox"
+                  checked={serviceAllowCourtesy}
+                  onChange={e => setServiceAllowCourtesy(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 rounded text-amber-600 focus:ring-amber-500"
+                />
+                <div className="space-y-0.5">
+                  <span className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                    <Gift className="w-3.5 h-3.5 text-amber-600" />
+                    Habilitar opção de Cortesia na hora da venda
+                  </span>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
+                    Permite manter o valor padrão cadastrado, mas liberar o serviço como R$ 0,00 (Cortesia) na abertura ou baixa da OS.
+                  </p>
+                </div>
+              </label>
 
               <div>
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">

@@ -359,5 +359,240 @@ describe('Production Readiness: Tenant Onboarding, Plans & Cash Register Persist
       expect(AppStore.isModuleEnabledForTenant(company.id, mod.key)).toBe(true);
     }
   });
+
+  it('supports allow_courtesy on service registration, applying courtesy on order creation and toggling courtesy at checkout', () => {
+    const email = `cortesia.${Date.now()}@loja.com.br`;
+    const company = AppStore.addCompany(
+      {
+        trade_name: 'Loja Cortesia Teste',
+        corporate_name: 'Loja Cortesia Teste LTDA',
+        cnpj: '66.777.888/0001-99',
+        phone: '(11) 93333-2222',
+        email
+      },
+      {
+        fullName: 'João Admin',
+        email,
+        password: 'SenhaForte@2026',
+        phone: '(11) 93333-2222'
+      },
+      AppStore.getPlans()[0]?.id,
+      'Super Admin',
+      'RECARGA_CARTUCHOS'
+    );
+
+    const verificationSrv = AppStore.addService({
+      tenant_id: company.id,
+      name: 'Serviço de Verificação',
+      code: 'VERIFICACAO_TESTE',
+      default_price: 20.0,
+      allow_courtesy: true,
+      estimated_time_minutes: 15,
+      is_active: true
+    });
+    expect(verificationSrv.allow_courtesy).toBe(true);
+
+    const refillSrv = AppStore.addService({
+      tenant_id: company.id,
+      name: 'Recarga Completa',
+      code: 'RECARGA_TESTE',
+      default_price: 45.0,
+      allow_courtesy: false,
+      estimated_time_minutes: 30,
+      is_active: true
+    });
+    expect(refillSrv.allow_courtesy).toBe(false);
+
+    const customer = AppStore.addCustomer({
+      tenant_id: company.id,
+      name: 'Maria Cliente',
+      phone: '(11) 91111-0000'
+    });
+
+    const adminUser = AppStore.getUsers(company.id)[0];
+
+    const order = AppStore.addServiceOrder({
+      tenant_id: company.id,
+      customer_id: customer.id,
+      opened_by: adminUser.id,
+      items: [
+        {
+          model_id: 'mod-hp667',
+          internal_identifier: 'SN-667',
+          services: [
+            {
+              service_id: verificationSrv.id,
+              unit_price: 20.0,
+              is_courtesy: true
+            },
+            {
+              service_id: refillSrv.id,
+              unit_price: 45.0,
+              is_courtesy: false
+            }
+          ]
+        }
+      ]
+    });
+
+    expect(order.total_amount).toBe(45.0);
+    const verifOrderSrv = order.items![0].services!.find(s => s.service_id === verificationSrv.id)!;
+    expect(verifOrderSrv.is_courtesy).toBe(true);
+    expect(verifOrderSrv.total_amount).toBe(0);
+
+    // Toggle courtesy OFF at checkout -> total increases back to 65.00
+    const updatedWithoutCourtesy = AppStore.toggleOrderItemServiceCourtesy(
+      order.id,
+      verifOrderSrv.id,
+      false,
+      adminUser.full_name
+    );
+    expect(updatedWithoutCourtesy.total_amount).toBe(65.0);
+    expect(updatedWithoutCourtesy.items![0].services![0].is_courtesy).toBe(false);
+
+    // Toggle courtesy ON again -> total returns to 45.00
+    const updatedWithCourtesy = AppStore.toggleOrderItemServiceCourtesy(
+      order.id,
+      verifOrderSrv.id,
+      true,
+      adminUser.full_name
+    );
+    expect(updatedWithCourtesy.total_amount).toBe(45.0);
+    expect(updatedWithCourtesy.items![0].services![0].total_amount).toBe(0);
+  });
+
+  it('requires current password validation or email reset verification code before changing user password', async () => {
+    const email = `seguranca.${Date.now()}@loja.com.br`;
+    const company = AppStore.addCompany(
+      {
+        trade_name: 'Loja Segurança Senha',
+        corporate_name: 'Loja Segurança Senha LTDA',
+        cnpj: '77.888.999/0001-00',
+        phone: '(11) 92222-1111',
+        email
+      },
+      {
+        fullName: 'Pedro Segurança',
+        email,
+        password: 'SenhaInicial@2026',
+        phone: '(11) 92222-1111'
+      },
+      AppStore.getPlans()[0]?.id,
+      'Super Admin',
+      'ASSISTENCIA_INFORMATICA'
+    );
+
+    const adminUser = AppStore.getUsers(company.id)[0];
+
+    expect(() =>
+      AppStore.changeOwnPassword(adminUser.id, 'SenhaErrada!', 'NovaSenha@2026')
+    ).toThrow(/senha atual informada está incorreta/i);
+
+    const changed = AppStore.changeOwnPassword(adminUser.id, 'SenhaInicial@2026', 'NovaSenha@2026');
+    expect(verifyPassword('NovaSenha@2026', changed.password!)).toBe(true);
+
+    // Email reset flow
+    const resetReq = await AppStore.requestPasswordResetByEmail(email);
+    expect(resetReq.success).toBe(true);
+    expect(resetReq.resetCode).toMatch(/^\d{6}$/);
+
+    expect(() =>
+      AppStore.confirmPasswordResetByEmail(email, '000000', 'SenhaReset@2026')
+    ).toThrow(/Código de verificação inválido/i);
+
+    const resetDone = AppStore.confirmPasswordResetByEmail(email, resetReq.resetCode, 'SenhaReset@2026');
+    expect(verifyPassword('SenhaReset@2026', resetDone.password!)).toBe(true);
+  });
+
+  it('persists quality review photos on workbench items and records customer approval or rejection from tracking link', async () => {
+    const email = `qualidade.${Date.now()}@impressao.com.br`;
+    const company = AppStore.addCompany(
+      {
+        trade_name: 'WorkPrint Qualidade',
+        corporate_name: 'WorkPrint Qualidade LTDA',
+        cnpj: '88.999.000/0001-11',
+        phone: '(11) 98888-0000',
+        email
+      },
+      {
+        fullName: 'Rafael Técnico',
+        email,
+        password: 'SenhaForte@2026',
+        phone: '(11) 98888-0000'
+      },
+      AppStore.getPlans()[0]?.id,
+      'Super Admin',
+      'RECARGA_CARTUCHOS'
+    );
+
+    const customer = AppStore.addCustomer({
+      tenant_id: company.id,
+      name: 'Lucas Cliente Foto',
+      phone: '(11) 97777-0000'
+    });
+    const techUser = AppStore.getUsers(company.id)[0];
+
+    const order = AppStore.addServiceOrder({
+      tenant_id: company.id,
+      customer_id: customer.id,
+      opened_by: techUser.id,
+      items: [
+        {
+          model_id: 'mod-hp664',
+          internal_identifier: 'CART-991',
+          services: []
+        }
+      ]
+    });
+
+    const itemId = order.items![0].id;
+
+    AppStore.updateOrderItemStatus(
+      itemId,
+      {
+        status: 'COM_PROBLEMA',
+        custom_field_values: {
+          quality_review: {
+            photos: [
+              {
+                id: 'foto-1',
+                data_url: 'data:image/jpeg;base64,ZmFrZWRhdGE=',
+                caption: 'Página de teste com leve falha no ciano',
+                uploaded_by: techUser.full_name,
+                uploaded_at: new Date().toISOString()
+              }
+            ],
+            request_approval: true,
+            technician_note: 'Injetor apresenta leve falha após 2 ciclos. Confirme se aceita.',
+            decision: 'PENDING',
+            updated_at: new Date().toISOString()
+          }
+        }
+      },
+      techUser.full_name
+    );
+
+    const rejectedOrder = await AppStore.submitCustomerQualityDecisionAsync(
+      order.tracking_token,
+      itemId,
+      'REJECTED',
+      'Prefiro tentar nova limpeza antes de retirar.'
+    );
+    expect(rejectedOrder).not.toBeNull();
+    expect(rejectedOrder!.items![0].custom_field_values?.quality_review?.decision).toBe('REJECTED');
+    expect(rejectedOrder!.items![0].custom_field_values?.quality_review?.customer_feedback).toBe(
+      'Prefiro tentar nova limpeza antes de retirar.'
+    );
+
+    const approvedOrder = await AppStore.submitCustomerQualityDecisionAsync(
+      order.tracking_token,
+      itemId,
+      'APPROVED',
+      'Está bom assim, pode finalizar!'
+    );
+    expect(approvedOrder).not.toBeNull();
+    expect(approvedOrder!.items![0].custom_field_values?.quality_review?.decision).toBe('APPROVED');
+    expect(approvedOrder!.items![0].technical_notes).toContain('CLIENTE ACEITOU A QUALIDADE PELO SITE');
+  });
 });
 

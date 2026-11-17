@@ -24,11 +24,60 @@ import {
   Kanban,
   GripVertical,
   Eye,
-  MessageCircle
+  MessageCircle,
+  Camera,
+  Image as ImageIcon,
+  ThumbsUp,
+  ThumbsDown
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { AppStore } from '@/lib/store';
-import { ServiceOrderItem, WorkflowState, CompanySettings, KanbanColumnColor, StageType, ItemCategory } from '@/types';
+import {
+  ServiceOrderItem,
+  WorkflowState,
+  CompanySettings,
+  KanbanColumnColor,
+  StageType,
+  ItemCategory,
+  ItemQualityPhoto,
+  ItemQualityReview
+} from '@/types';
+
+async function compressQualityImageFile(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new window.Image();
+      img.onload = () => {
+        const maxDim = 960;
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(String(reader.result));
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.75));
+      };
+      img.onerror = () => reject(new Error('Falha ao processar a imagem selecionada.'));
+      img.src = String(reader.result);
+    };
+    reader.onerror = () => reject(new Error('Falha ao ler o arquivo selecionado.'));
+    reader.readAsDataURL(file);
+  });
+}
 import { formatCurrency, formatDate, cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -117,6 +166,12 @@ export default function TechnicianWorkbenchPage() {
   const [targetStatus, setTargetStatus] = useState<string>('EM_RECARGA');
   const [modalAssignedTechId, setModalAssignedTechId] = useState<string>('');
   const [checklistState, setChecklistState] = useState<Array<{ item: string; checked: boolean }>>([]);
+  const [qualityPhotos, setQualityPhotos] = useState<ItemQualityPhoto[]>([]);
+  const [requestQualityApproval, setRequestQualityApproval] = useState(false);
+  const [qualityTechNote, setQualityTechNote] = useState('');
+  const [isProcessingPhotos, setIsProcessingPhotos] = useState(false);
+  const [resetQualityDecision, setResetQualityDecision] = useState(false);
+  const [lightboxPhotoUrl, setLightboxPhotoUrl] = useState<string | null>(null);
 
   // Workflow / Columns Customization Modal State
   const [showWorkflowModal, setShowWorkflowModal] = useState(false);
@@ -205,6 +260,77 @@ export default function TechnicianWorkbenchPage() {
     setTargetStatus(item.status);
     setModalAssignedTechId(item.assigned_technician_id || '');
     setChecklistState(item.checklist || []);
+
+    const existingReview: ItemQualityReview | undefined = item.custom_field_values?.quality_review || item.quality_review;
+    setQualityPhotos(Array.isArray(existingReview?.photos) ? existingReview.photos : []);
+    setRequestQualityApproval(Boolean(existingReview?.request_approval));
+    setQualityTechNote(existingReview?.technician_note || '');
+    setResetQualityDecision(false);
+  };
+
+  const handleUploadQualityPhotos = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fileList = e.target.files;
+    if (!fileList || fileList.length === 0) return;
+
+    const remainingSlots = Math.max(0, 6 - qualityPhotos.length);
+    if (remainingSlots === 0) {
+      toast.warning('Limite de 6 fotos por item atingido.');
+      e.target.value = '';
+      return;
+    }
+
+    const files = Array.from(fileList).slice(0, remainingSlots);
+    setIsProcessingPhotos(true);
+    try {
+      const processed: ItemQualityPhoto[] = [];
+      for (const file of files) {
+        if (!file.type.startsWith('image/')) continue;
+        const dataUrl = await compressQualityImageFile(file);
+        processed.push({
+          id: `qfoto-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          data_url: dataUrl,
+          caption: '',
+          uploaded_by: currentUser?.full_name || 'Técnico',
+          uploaded_at: new Date().toISOString()
+        });
+      }
+      if (processed.length > 0) {
+        setQualityPhotos(prev => [...prev, ...processed]);
+        setRequestQualityApproval(true);
+        setResetQualityDecision(true);
+        toast.success(`${processed.length} foto(s) anexada(s)! Salve as alterações para disponibilizar ao cliente.`);
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Não foi possível processar a imagem.');
+    } finally {
+      setIsProcessingPhotos(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleRemoveQualityPhoto = (photoId: string) => {
+    setQualityPhotos(prev => prev.filter(p => p.id !== photoId));
+  };
+
+  const handleUpdateQualityPhotoCaption = (photoId: string, caption: string) => {
+    setQualityPhotos(prev => prev.map(p => (p.id === photoId ? { ...p, caption } : p)));
+  };
+
+  const buildUpdatedQualityReview = (existing?: ItemQualityReview): ItemQualityReview | undefined => {
+    if (qualityPhotos.length === 0 && !requestQualityApproval && !qualityTechNote.trim() && !existing) {
+      return undefined;
+    }
+    const nowIso = new Date().toISOString();
+    const shouldReset = resetQualityDecision || (!existing && requestQualityApproval);
+    return {
+      photos: qualityPhotos,
+      request_approval: requestQualityApproval,
+      technician_note: qualityTechNote.trim() || undefined,
+      decision: shouldReset ? 'PENDING' : (existing?.decision || 'PENDING'),
+      customer_feedback: shouldReset ? undefined : existing?.customer_feedback,
+      decided_at: shouldReset ? undefined : existing?.decided_at,
+      updated_at: nowIso
+    };
   };
 
   const handleToggleChecklist = (idx: number) => {
@@ -317,6 +443,9 @@ export default function TechnicianWorkbenchPage() {
       const inNum = inputWeight ? parseFloat(inputWeight) : undefined;
       const outNum = outputWeight ? parseFloat(outputWeight) : undefined;
       const assignedTechProfile = technicians.find(t => t.id === modalAssignedTechId);
+      const updatedQualityReview = buildUpdatedQualityReview(
+        selectedItem.custom_field_values?.quality_review || selectedItem.quality_review
+      );
 
       AppStore.updateOrderItemStatus(selectedItem.id, {
         status: targetStatus,
@@ -328,7 +457,8 @@ export default function TechnicianWorkbenchPage() {
         custom_field_values: {
           ...(selectedItem.custom_field_values || {}),
           input_weight_grams: inNum,
-          output_weight_grams: outNum
+          output_weight_grams: outNum,
+          ...(updatedQualityReview !== undefined ? { quality_review: updatedQualityReview } : {})
         },
         checklist: checklistState
       }, currentUser.full_name);
@@ -370,6 +500,9 @@ export default function TechnicianWorkbenchPage() {
           : ['100% OK / Concluído', 'Reparo Concluído com Sucesso', 'Reparado com Ressalvas', 'Sem Reparo / Placa Inviável', 'Aguardando Peça do Cliente', 'Orçamento Reprovado / Devolvido'];
 
       const successVerdict = verdicts[0] || '100% OK / Concluído';
+      const updatedQualityReview = buildUpdatedQualityReview(
+        selectedItem.custom_field_values?.quality_review || selectedItem.quality_review
+      );
 
       AppStore.updateOrderItemStatus(selectedItem.id, {
         status: 'FINALIZADO',
@@ -379,7 +512,8 @@ export default function TechnicianWorkbenchPage() {
         assigned_technician_name: selectedItem.assigned_technician_name || currentUser.full_name,
         custom_field_values: {
           ...(selectedItem.custom_field_values || {}),
-          output_weight_grams: outNum
+          output_weight_grams: outNum,
+          ...(updatedQualityReview !== undefined ? { quality_review: updatedQualityReview } : {})
         },
         checklist: checklistState
       }, currentUser.full_name);
@@ -406,14 +540,21 @@ export default function TechnicianWorkbenchPage() {
     const trackingUrl = order ? `${origin}/acompanhar/${order.tracking_token || order.id}` : '';
     const modelName = item.model?.name || item.internal_identifier;
 
+    const qr: ItemQualityReview | undefined = item.custom_field_values?.quality_review || item.quality_review;
+    const hasPendingPhotoReview = Boolean(qr?.request_approval && qr?.decision === 'PENDING' && (qr?.photos?.length || 0) > 0);
     const isReady = item.status === 'FINALIZADO';
-    const message = isReady
-      ? `Olá, *${custName}*!\n\nSeu item *${modelName}* (OS *#${item.order_number}*) está *PRONTO PARA RETIRADA* na *${currentCompany.trade_name}*!\n\n` +
-        (trackingUrl ? `🔍 *Ver laudo e comprovante:*\n${trackingUrl}\n\n` : '') +
-        `Aguardamos você para a retirada!`
-      : `Olá, *${custName}*!\n\nAtualização sobre seu item *${modelName}* (OS *#${item.order_number}*) na *${currentCompany.trade_name}*: o status atual é *${item.status}*.\n\n` +
-        (trackingUrl ? `🔍 *Acompanhe pelo link:*\n${trackingUrl}\n\n` : '') +
-        `Qualquer dúvida, estamos à disposição!`;
+
+    const message = hasPendingPhotoReview
+      ? `Olá, *${custName}*!\n\nEnviamos uma *foto de teste de qualidade* do seu item *${modelName}* (OS *#${item.order_number}*) na *${currentCompany.trade_name}*.\n\n` +
+        (trackingUrl ? `📸 *Veja a foto e confirme pelo link:*\n${trackingUrl}\n\n` : '') +
+        `Você pode aceitar ou recusar diretamente pela página de acompanhamento!`
+      : isReady
+        ? `Olá, *${custName}*!\n\nSeu item *${modelName}* (OS *#${item.order_number}*) está *PRONTO PARA RETIRADA* na *${currentCompany.trade_name}*!\n\n` +
+          (trackingUrl ? `🔍 *Ver laudo e comprovante:*\n${trackingUrl}\n\n` : '') +
+          `Aguardamos você para a retirada!`
+        : `Olá, *${custName}*!\n\nAtualização sobre seu item *${modelName}* (OS *#${item.order_number}*) na *${currentCompany.trade_name}*: o status atual é *${item.status}*.\n\n` +
+          (trackingUrl ? `🔍 *Acompanhe pelo link:*\n${trackingUrl}\n\n` : '') +
+          `Qualquer dúvida, estamos à disposição!`;
 
     window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`, '_blank');
   };
@@ -826,6 +967,41 @@ export default function TechnicianWorkbenchPage() {
                           </div>
                         )}
 
+                        {/* Quality Photo Review Badge */}
+                        {(() => {
+                          const qr: ItemQualityReview | undefined = item.custom_field_values?.quality_review || item.quality_review;
+                          const photoCount = qr?.photos?.length || 0;
+                          if (photoCount === 0 && !qr?.request_approval) return null;
+                          return (
+                            <div className="flex flex-wrap items-center gap-1 pt-1">
+                              {qr?.request_approval && qr.decision === 'APPROVED' && (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                                  <ThumbsUp className="w-2.5 h-2.5" />
+                                  Qualidade Aceita ({photoCount})
+                                </span>
+                              )}
+                              {qr?.request_approval && qr.decision === 'REJECTED' && (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
+                                  <ThumbsDown className="w-2.5 h-2.5" />
+                                  Qualidade Recusada ({photoCount})
+                                </span>
+                              )}
+                              {qr?.request_approval && qr.decision === 'PENDING' && (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-950/60 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                                  <Camera className="w-2.5 h-2.5" />
+                                  Aguard. Aceite ({photoCount} foto{photoCount === 1 ? '' : 's'})
+                                </span>
+                              )}
+                              {!qr?.request_approval && photoCount > 0 && (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                                  <Camera className="w-2.5 h-2.5" />
+                                  {photoCount} foto{photoCount === 1 ? '' : 's'}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
+
                         {/* Technician Info / Claim Button */}
                         <div className="pt-2 border-t border-slate-100 dark:border-slate-800/60 flex items-center justify-between gap-1 text-[10px]">
                           {item.assigned_technician_name ? (
@@ -1087,6 +1263,163 @@ export default function TechnicianWorkbenchPage() {
                   </div>
                 </div>
 
+                {/* Quality Photos & Customer Online Approval Section */}
+                {(() => {
+                  const savedReview: ItemQualityReview | undefined =
+                    selectedItem.custom_field_values?.quality_review || selectedItem.quality_review;
+                  const effectiveDecision = resetQualityDecision ? 'PENDING' : savedReview?.decision;
+
+                  return (
+                    <div className="p-3.5 rounded-2xl bg-purple-50/50 dark:bg-purple-950/20 border border-purple-200/80 dark:border-purple-900/50 space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <span className="text-xs font-extrabold text-purple-900 dark:text-purple-200 flex items-center gap-1.5">
+                            <Camera className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                            <span>Fotos de Teste / Qualidade &amp; Aceite do Cliente</span>
+                          </span>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                            Anexe fotos da qualidade para o cliente visualizar e aprovar na página de acompanhamento.
+                          </p>
+                        </div>
+
+                        {!isReadOnlyMode && (
+                          <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold cursor-pointer shadow-xs transition-colors shrink-0">
+                            <Camera className="w-3.5 h-3.5" />
+                            <span>{isProcessingPhotos ? 'Processando...' : 'Adicionar Foto / Câmera'}</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              multiple
+                              disabled={isProcessingPhotos}
+                              onChange={handleUploadQualityPhotos}
+                              className="hidden"
+                            />
+                          </label>
+                        )}
+                      </div>
+
+                      {savedReview && savedReview.request_approval && (
+                        <div
+                          className={cn(
+                            'p-2.5 rounded-xl border text-xs space-y-1',
+                            effectiveDecision === 'APPROVED'
+                              ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200'
+                              : effectiveDecision === 'REJECTED'
+                                ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200'
+                                : 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200'
+                          )}
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2 font-bold">
+                            <span className="flex items-center gap-1.5">
+                              {effectiveDecision === 'APPROVED' ? (
+                                <ThumbsUp className="w-3.5 h-3.5" />
+                              ) : effectiveDecision === 'REJECTED' ? (
+                                <ThumbsDown className="w-3.5 h-3.5" />
+                              ) : (
+                                <Clock className="w-3.5 h-3.5" />
+                              )}
+                              <span>
+                                {effectiveDecision === 'APPROVED'
+                                  ? 'Cliente ACEITOU esta qualidade pelo site'
+                                  : effectiveDecision === 'REJECTED'
+                                    ? 'Cliente NÃO ACEITOU esta qualidade pelo site'
+                                    : 'Aguardando o cliente analisar as fotos no site de acompanhamento'}
+                              </span>
+                            </span>
+                            {!isReadOnlyMode && effectiveDecision && effectiveDecision !== 'PENDING' && (
+                              <button
+                                type="button"
+                                onClick={() => setResetQualityDecision(true)}
+                                className="text-[10px] underline font-semibold hover:opacity-80"
+                              >
+                                Solicitar nova análise
+                              </button>
+                            )}
+                          </div>
+                          {!resetQualityDecision && savedReview.customer_feedback && (
+                            <p className="text-[11px]">Comentário do cliente: &quot;{savedReview.customer_feedback}&quot;</p>
+                          )}
+                          {!resetQualityDecision && savedReview.decided_at && (
+                            <p className="text-[10px] opacity-80">
+                              Respondido em {formatDate(savedReview.decided_at)} às{' '}
+                              {new Date(savedReview.decided_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {qualityPhotos.length > 0 && (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                          {qualityPhotos.map((photo, pIdx) => (
+                            <div
+                              key={photo.id}
+                              className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden flex flex-col"
+                            >
+                              <div className="relative group h-24 bg-slate-100 dark:bg-slate-800">
+                                <img
+                                  src={photo.data_url}
+                                  alt={photo.caption || `Foto ${pIdx + 1}`}
+                                  onClick={() => setLightboxPhotoUrl(photo.data_url)}
+                                  className="w-full h-full object-cover cursor-zoom-in"
+                                />
+                                {!isReadOnlyMode && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveQualityPhoto(photo.id)}
+                                    className="absolute top-1 right-1 p-1 rounded-full bg-black/70 text-white hover:bg-rose-600 transition-colors"
+                                    title="Remover foto"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                )}
+                              </div>
+                              <input
+                                type="text"
+                                value={photo.caption || ''}
+                                onChange={e => handleUpdateQualityPhotoCaption(photo.id, e.target.value)}
+                                disabled={isReadOnlyMode}
+                                placeholder="Legenda opcional..."
+                                className="w-full px-2 py-1 text-[10px] bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 outline-none"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <label
+                        className={cn(
+                          'flex items-center gap-2 text-xs font-semibold text-slate-800 dark:text-slate-200',
+                          isReadOnlyMode ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'
+                        )}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={requestQualityApproval}
+                          disabled={isReadOnlyMode}
+                          onChange={e => setRequestQualityApproval(e.target.checked)}
+                          className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500"
+                        />
+                        <span>Solicitar aceite/recusa desta qualidade pelo cliente na página de acompanhamento</span>
+                      </label>
+
+                      {(requestQualityApproval || qualityPhotos.length > 0) && (
+                        <div>
+                          <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                            Explicação visível para o cliente no site:
+                          </label>
+                          <Input
+                            value={qualityTechNote}
+                            onChange={e => setQualityTechNote(e.target.value)}
+                            disabled={isReadOnlyMode}
+                            placeholder="Ex: Página de teste impressa com leve falha no ciano devido a desgaste natural dos bicos. Confirme se aceita."
+                            className="text-xs bg-white dark:bg-slate-900"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 {/* Actions */}
                 <div className="flex flex-wrap items-center justify-between gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
                   <div className="flex flex-wrap items-center gap-2">
@@ -1316,6 +1649,31 @@ export default function TechnicianWorkbenchPage() {
                 </Button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Lightbox Modal for Quality Photo Inspection */}
+      {lightboxPhotoUrl && (
+        <div
+          onClick={() => setLightboxPhotoUrl(null)}
+          className="fixed inset-0 z-[70] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4"
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            className="relative max-w-3xl w-full bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden shadow-2xl"
+          >
+            <button
+              type="button"
+              onClick={() => setLightboxPhotoUrl(null)}
+              className="absolute top-3 right-3 z-10 p-2 rounded-full bg-black/70 text-white hover:bg-rose-600 transition-colors"
+              aria-label="Fechar foto"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <div className="bg-black flex items-center justify-center max-h-[85vh]">
+              <img src={lightboxPhotoUrl} alt="Foto técnica ampliada" className="max-h-[82vh] w-auto object-contain" />
+            </div>
           </div>
         </div>
       )}

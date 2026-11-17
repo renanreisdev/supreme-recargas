@@ -359,6 +359,7 @@ export interface Service {
   code: string;
   description?: string;
   default_price: number;
+  allow_courtesy?: boolean;
   estimated_time_minutes?: number;
   is_active: boolean;
   category_ids?: string[]; // Compatible category IDs
@@ -492,12 +493,33 @@ export interface ServiceOrderItemService {
   discount_amount: number;
   surcharge_amount: number;
   total_amount: number;
+  is_courtesy?: boolean;
   status: 'PENDENTE' | 'EM_EXECUCAO' | 'CONCLUIDO' | 'CANCELADO';
   field_data?: Record<string, any>; // Dynamic technical fields (e.g. input_weight, output_weight)
   started_at?: string;
   completed_at?: string;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface ItemQualityPhoto {
+  id: string;
+  data_url: string;
+  caption?: string;
+  uploaded_by: string;
+  uploaded_at: string;
+}
+
+export type QualityReviewDecision = 'PENDING' | 'APPROVED' | 'REJECTED';
+
+export interface ItemQualityReview {
+  photos: ItemQualityPhoto[];
+  request_approval: boolean;
+  technician_note?: string;
+  decision: QualityReviewDecision;
+  customer_feedback?: string;
+  decided_at?: string;
+  updated_at: string;
 }
 
 export interface ServiceOrderItem {
@@ -516,6 +538,7 @@ export interface ServiceOrderItem {
   accessories?: string;
   checklist?: ChecklistExecutionItem[];
   custom_field_values?: Record<string, any>;
+  quality_review?: ItemQualityReview;
   
   current_state_id: string;
   status: string; // Code matching workflow state (e.g., 'RECEBIDO', 'EM_ANDAMENTO', 'FINALIZADO')
@@ -838,6 +861,7 @@ export interface PresetImportServiceInput {
   code: string;
   description?: string;
   default_price: number;
+  allow_courtesy?: boolean;
   estimated_time_minutes?: number;
   category_slugs?: string[];
 }

@@ -80,6 +80,7 @@ interface DraftService {
   code: string;
   description?: string;
   default_price: number;
+  allow_courtesy?: boolean;
   estimated_time_minutes: number;
   category_slugs: string[];
   selected: boolean;
@@ -336,6 +337,7 @@ export function PresetCatalogWizard({
             code,
             description: s.description,
             default_price: prevEdited ? prevEdited.default_price : Number(s.default_price ?? 0),
+            allow_courtesy: prevEdited ? prevEdited.allow_courtesy : Boolean(s.allow_courtesy),
             estimated_time_minutes: prevEdited ? prevEdited.estimated_time_minutes : Number(s.estimated_time_minutes ?? 60),
             category_slugs: (s.category_ids || []).map(cid => cid.replace(/^cat-/, '')),
             selected: prevEdited ? prevEdited.selected : !alreadyExists,
@@ -697,6 +699,7 @@ export function PresetCatalogWizard({
             code: s.code,
             description: s.description,
             default_price: Number(s.default_price) || 0,
+            allow_courtesy: Boolean(s.allow_courtesy),
             estimated_time_minutes: Number(s.estimated_time_minutes) || 60,
             category_slugs: s.category_slugs
           })),

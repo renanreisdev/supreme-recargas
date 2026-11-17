@@ -27,7 +27,9 @@ import {
   ArrowUpRight,
   Timer,
   Smartphone,
-  Banknote
+  Banknote,
+  Mail,
+  Lock
 } from 'lucide-react';
 import { useAuth, getBrowserDeviceDescription } from '@/lib/auth-context';
 import { AppStore } from '@/lib/store';
@@ -65,8 +67,14 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   const [accountTab, setAccountTab] = useState<'timeout' | 'password'>('timeout');
   const [myTimeout, setMyTimeout] = useState<number>(0);
   const [timeoutSaved, setTimeoutSaved] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordResetMode, setPasswordResetMode] = useState<'current_password' | 'email_reset'>('current_password');
+  const [resetCodeSent, setResetCodeSent] = useState(false);
+  const [resetCodeInput, setResetCodeInput] = useState('');
+  const [resetEmailMessage, setResetEmailMessage] = useState('');
+  const [isSendingResetEmail, setIsSendingResetEmail] = useState(false);
   const [passSuccess, setPassSuccess] = useState(false);
   const [passError, setPassError] = useState('');
   const [, setStoreVersion] = useState(0);
@@ -88,8 +96,13 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
     setMyTimeout(currentUser?.inactivity_timeout_minutes ?? 0);
     setPassError('');
     setPassSuccess(false);
+    setCurrentPassword('');
     setNewPassword('');
     setConfirmPassword('');
+    setPasswordResetMode('current_password');
+    setResetCodeSent(false);
+    setResetCodeInput('');
+    setResetEmailMessage('');
     setShowAccountModal(true);
   };
 
@@ -108,11 +121,28 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
     }
   };
 
+  const handleSendEmailResetCode = async () => {
+    if (!currentUser?.email) return;
+    setPassError('');
+    setIsSendingResetEmail(true);
+    try {
+      const res = await AppStore.requestPasswordResetByEmail(currentUser.email);
+      setResetCodeSent(true);
+      setResetEmailMessage(res.message);
+      toast.info(`Redefinição solicitada para ${res.maskedEmail}.`);
+    } catch (err: any) {
+      setPassError(err?.message || 'Não foi possível enviar a redefinição para o e-mail cadastrado.');
+    } finally {
+      setIsSendingResetEmail(false);
+    }
+  };
+
   const handleChangePassword = (e: React.FormEvent) => {
     e.preventDefault();
     setPassError('');
+
     if (!newPassword || newPassword.length < 4) {
-      setPassError('A senha deve ter no mínimo 4 caracteres.');
+      setPassError('A nova senha deve ter no mínimo 4 caracteres.');
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -120,13 +150,43 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
       return;
     }
 
-    const res = changePassword(newPassword);
+    if (passwordResetMode === 'email_reset') {
+      if (!resetCodeInput.trim()) {
+        setPassError('Informe o código de verificação recebido no e-mail cadastrado.');
+        return;
+      }
+      try {
+        AppStore.confirmPasswordResetByEmail(currentUser.email, resetCodeInput, newPassword);
+        setPassSuccess(true);
+        toast.success('Senha redefinida com sucesso!');
+        setTimeout(() => {
+          setPassSuccess(false);
+          setShowAccountModal(false);
+          setCurrentPassword('');
+          setNewPassword('');
+          setConfirmPassword('');
+          setResetCodeInput('');
+          setResetCodeSent(false);
+        }, 1500);
+      } catch (err: any) {
+        setPassError(err?.message || 'Código inválido ou expirado.');
+      }
+      return;
+    }
+
+    if (!currentPassword.trim()) {
+      setPassError('Por segurança, informe sua senha atual.');
+      return;
+    }
+
+    const res = changePassword(newPassword, false, currentPassword);
     if (res.success) {
       setPassSuccess(true);
       toast.success('Senha alterada com sucesso!');
       setTimeout(() => {
         setPassSuccess(false);
         setShowAccountModal(false);
+        setCurrentPassword('');
         setNewPassword('');
         setConfirmPassword('');
       }, 1500);
@@ -547,43 +607,137 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
                   </div>
                 ) : (
                   <>
+                    <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-[11px] text-slate-300 flex items-start gap-2">
+                      <Lock className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                      <span>
+                        {passwordResetMode === 'current_password'
+                          ? 'Por segurança, confirme sua senha atual antes de cadastrar uma nova senha.'
+                          : `Redefinição via e-mail cadastrado (${currentUser.email}).`}
+                      </span>
+                    </div>
+
                     {passError && (
                       <div className="p-2.5 bg-rose-950/60 border border-rose-800 text-rose-300 rounded-lg text-xs">
                         {passError}
                       </div>
                     )}
 
-                    <div>
-                      <label className="text-xs text-slate-300 mb-1 block font-semibold">Nova Senha</label>
-                      <Input
-                        type="password"
-                        required
-                        placeholder="Mínimo 4 dígitos"
-                        value={newPassword}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                        className="text-xs bg-slate-950 border-slate-700 text-white"
-                      />
-                    </div>
+                    {passwordResetMode === 'current_password' ? (
+                      <div>
+                        <label className="text-xs text-slate-300 mb-1 block font-semibold">Senha Atual *</label>
+                        <Input
+                          type="password"
+                          required
+                          placeholder="Digite sua senha atual"
+                          value={currentPassword}
+                          onChange={(e) => setCurrentPassword(e.target.value)}
+                          className="text-xs bg-slate-950 border-slate-700 text-white"
+                        />
+                      </div>
+                    ) : (
+                      <div className="space-y-2.5">
+                        <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="text-slate-400 flex items-center gap-1.5">
+                              <Mail className="w-3.5 h-3.5 text-emerald-400" />
+                              E-mail cadastrado:
+                            </span>
+                            <span className="font-mono text-[11px] text-slate-200 truncate">{currentUser.email}</span>
+                          </div>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={isSendingResetEmail}
+                            onClick={handleSendEmailResetCode}
+                            className="w-full text-xs border-emerald-700/70 text-emerald-300 hover:bg-emerald-950/50 gap-1.5"
+                          >
+                            <Mail className="w-3.5 h-3.5" />
+                            <span>
+                              {isSendingResetEmail
+                                ? 'Enviando solicitação...'
+                                : resetCodeSent
+                                  ? 'Reenviar Redefinição para o E-mail'
+                                  : 'Enviar Redefinição para o E-mail'}
+                            </span>
+                          </Button>
+                          {resetEmailMessage && (
+                            <p className="text-[11px] text-emerald-300 leading-relaxed bg-emerald-950/40 border border-emerald-800/60 rounded-lg p-2">
+                              {resetEmailMessage}
+                            </p>
+                          )}
+                        </div>
 
-                    <div>
-                      <label className="text-xs text-slate-300 mb-1 block font-semibold">Confirmar Nova Senha</label>
-                      <Input
-                        type="password"
-                        required
-                        placeholder="Repita a nova senha"
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        className="text-xs bg-slate-950 border-slate-700 text-white"
-                      />
+                        {resetCodeSent && (
+                          <div>
+                            <label className="text-xs text-slate-300 mb-1 block font-semibold">Código recebido no e-mail *</label>
+                            <Input
+                              type="text"
+                              required
+                              inputMode="numeric"
+                              maxLength={6}
+                              placeholder="Código de 6 dígitos"
+                              value={resetCodeInput}
+                              onChange={(e) => setResetCodeInput(e.target.value)}
+                              className="text-xs font-mono bg-slate-950 border-slate-700 text-white tracking-widest"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {(passwordResetMode === 'current_password' || resetCodeSent) && (
+                      <>
+                        <div>
+                          <label className="text-xs text-slate-300 mb-1 block font-semibold">Nova Senha *</label>
+                          <Input
+                            type="password"
+                            required
+                            placeholder="Mínimo 4 dígitos"
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                            className="text-xs bg-slate-950 border-slate-700 text-white"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-xs text-slate-300 mb-1 block font-semibold">Confirmar Nova Senha *</label>
+                          <Input
+                            type="password"
+                            required
+                            placeholder="Repita a nova senha"
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            className="text-xs bg-slate-950 border-slate-700 text-white"
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    <div className="pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPassError('');
+                          setPasswordResetMode(prev => (prev === 'current_password' ? 'email_reset' : 'current_password'));
+                        }}
+                        className="text-[11px] text-emerald-400 hover:text-emerald-300 underline underline-offset-2 font-medium"
+                      >
+                        {passwordResetMode === 'current_password'
+                          ? `Esqueceu a senha atual? Redefinir via e-mail cadastrado`
+                          : 'Voltar e informar a senha atual'}
+                      </button>
                     </div>
 
                     <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
                       <Button type="button" variant="outline" size="sm" onClick={() => setShowAccountModal(false)} className="text-xs border-slate-700 text-slate-300">
                         Cancelar
                       </Button>
-                      <Button type="submit" size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs">
-                        Salvar Nova Senha
-                      </Button>
+                      {(passwordResetMode === 'current_password' || resetCodeSent) && (
+                        <Button type="submit" size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs">
+                          Salvar Nova Senha
+                        </Button>
+                      )}
                     </div>
                   </>
                 )}

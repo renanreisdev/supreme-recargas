@@ -54,20 +54,63 @@ function LoginForm() {
   // is in place, recovery is performed by the company administrator.
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
+  const [isSendingForgot, setIsSendingForgot] = useState(false);
   const [forgotFeedback, setForgotFeedback] = useState<{
-    type: 'info';
+    type: 'info' | 'success' | 'error';
     title: string;
     message: string;
   } | null>(null);
+  const [forgotCode, setForgotCode] = useState('');
+  const [forgotNewPass, setForgotNewPass] = useState('');
+  const [forgotStep, setForgotStep] = useState<'request' | 'confirm'>('request');
 
-  const handleVerifyForgotEmail = (e: React.FormEvent) => {
+  const handleVerifyForgotEmail = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!forgotEmail.trim()) return;
-    setForgotFeedback({
-      type: 'info',
-      title: 'Solicite a redefinição ao administrador',
-      message: 'Por segurança, a senha deve ser redefinida pelo administrador da sua empresa (menu "Empresa > Equipe"). Administradores devem contatar o suporte da plataforma.'
-    });
+    setIsSendingForgot(true);
+    try {
+      const res = await AppStore.requestPasswordResetByEmail(forgotEmail);
+      setForgotFeedback({
+        type: 'info',
+        title: 'Solicitação de redefinição processada',
+        message: res.message
+      });
+      setForgotStep('confirm');
+    } catch (err: any) {
+      setForgotFeedback({
+        type: 'error',
+        title: 'Não foi possível solicitar',
+        message: err?.message || 'Verifique o e-mail informado.'
+      });
+    } finally {
+      setIsSendingForgot(false);
+    }
+  };
+
+  const handleConfirmForgotCode = (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      AppStore.confirmPasswordResetByEmail(forgotEmail, forgotCode, forgotNewPass);
+      setForgotFeedback({
+        type: 'success',
+        title: 'Senha redefinida com sucesso!',
+        message: 'Você já pode fazer login com a nova senha.'
+      });
+      toast.success('Senha redefinida! Entre com sua nova senha.');
+      setTimeout(() => {
+        setShowForgotModal(false);
+        setForgotStep('request');
+        setForgotCode('');
+        setForgotNewPass('');
+        setForgotFeedback(null);
+      }, 1400);
+    } catch (err: any) {
+      setForgotFeedback({
+        type: 'error',
+        title: 'Código inválido ou expirado',
+        message: err?.message || 'Confira o código de 6 dígitos enviado para o seu e-mail.'
+      });
+    }
   };
 
   // If already authenticated, redirect to proper route
@@ -215,6 +258,9 @@ function LoginForm() {
                     setShowForgotModal(true);
                     setForgotEmail(email);
                     setForgotFeedback(null);
+                    setForgotStep('request');
+                    setForgotCode('');
+                    setForgotNewPass('');
                   }}
                   className="text-[11px] text-emerald-400 hover:text-emerald-300 underline underline-offset-2 transition-colors cursor-pointer"
                 >
@@ -315,7 +361,7 @@ function LoginForm() {
               </button>
             </div>
 
-            <form onSubmit={handleVerifyForgotEmail} className="space-y-4">
+            <form onSubmit={forgotStep === 'request' ? handleVerifyForgotEmail : handleConfirmForgotCode} className="space-y-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-slate-300 block">
                     Digite o e-mail da sua conta
@@ -325,6 +371,7 @@ function LoginForm() {
                     <Input
                       type="email"
                       required
+                      readOnly={forgotStep === 'confirm'}
                       placeholder="seu.email@empresa.com"
                       value={forgotEmail}
                       onChange={(e) => setForgotEmail(e.target.value)}
@@ -333,14 +380,67 @@ function LoginForm() {
                   </div>
                 </div>
 
+                {forgotStep === 'confirm' && (
+                  <div className="space-y-3">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-slate-300 block">
+                        Código de verificação (se já recebeu no e-mail)
+                      </label>
+                      <Input
+                        type="text"
+                        required
+                        inputMode="numeric"
+                        maxLength={6}
+                        placeholder="000000"
+                        value={forgotCode}
+                        onChange={(e) => setForgotCode(e.target.value)}
+                        className="text-xs font-mono bg-slate-950/80 border-slate-700 text-white tracking-widest h-10"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-slate-300 block">
+                        Nova Senha
+                      </label>
+                      <Input
+                        type="password"
+                        required
+                        placeholder="Mínimo 4 caracteres"
+                        value={forgotNewPass}
+                        onChange={(e) => setForgotNewPass(e.target.value)}
+                        className="text-xs bg-slate-950/80 border-slate-700 text-white h-10"
+                      />
+                    </div>
+                  </div>
+                )}
+
                 {forgotFeedback && (
-                  <div className="p-3.5 rounded-xl border text-xs leading-relaxed space-y-1 bg-blue-950/40 border-blue-800 text-blue-300">
+                  <div className={`p-3.5 rounded-xl border text-xs leading-relaxed space-y-1 ${
+                    forgotFeedback.type === 'success'
+                      ? 'bg-emerald-950/40 border-emerald-800 text-emerald-300'
+                      : forgotFeedback.type === 'error'
+                        ? 'bg-rose-950/40 border-rose-800 text-rose-300'
+                        : 'bg-blue-950/40 border-blue-800 text-blue-300'
+                  }`}>
                     <div className="font-bold">{forgotFeedback.title}</div>
                     <div>{forgotFeedback.message}</div>
                   </div>
                 )}
 
                 <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+                  {forgotStep === 'confirm' && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setForgotStep('request');
+                        setForgotFeedback(null);
+                      }}
+                      className="text-xs text-slate-400 hover:text-white mr-auto"
+                    >
+                      Reenviar
+                    </Button>
+                  )}
                   <Button
                     type="button"
                     variant="outline"
@@ -348,6 +448,7 @@ function LoginForm() {
                     onClick={() => {
                       setShowForgotModal(false);
                       setForgotFeedback(null);
+                      setForgotStep('request');
                     }}
                     className="text-xs border-slate-700 text-slate-300 hover:bg-slate-800"
                   >
@@ -356,9 +457,14 @@ function LoginForm() {
                   <Button
                     type="submit"
                     size="sm"
+                    disabled={isSendingForgot}
                     className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-9 px-4 gap-1.5 shadow-md shadow-emerald-950/40"
                   >
-                    Continuar
+                    {isSendingForgot
+                      ? 'Enviando...'
+                      : forgotStep === 'request'
+                        ? 'Solicitar Redefinição'
+                        : 'Confirmar Nova Senha'}
                   </Button>
                 </div>
               </form>

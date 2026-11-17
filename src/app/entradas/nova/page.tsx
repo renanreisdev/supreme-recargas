@@ -28,7 +28,8 @@ import {
   Wrench,
   Laptop,
   Smartphone,
-  CheckSquare
+  CheckSquare,
+  Gift
 } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
@@ -61,6 +62,7 @@ interface ServiceItemServiceInput {
   unit_price: number;
   quantity: number;
   discount_amount: number;
+  is_courtesy?: boolean;
   field_data?: Record<string, any>;
 }
 
@@ -258,7 +260,24 @@ export default function NovaEntradaPage() {
       if (it.id !== itemId) return it;
       const updatedServices = it.services.map(srv => {
         if (srv.service_id === serviceId) {
-          return { ...srv, selected: !srv.selected };
+          const nextSelected = !srv.selected;
+          return { ...srv, selected: nextSelected, is_courtesy: nextSelected ? srv.is_courtesy : false };
+        }
+        return srv;
+      });
+      return { ...it, services: updatedServices };
+    }));
+  };
+
+  // Toggle Courtesy flag on Item Service
+  const handleToggleServiceCourtesy = (itemId: string, serviceId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setItems(prev => prev.map(it => {
+      if (it.id !== itemId) return it;
+      const updatedServices = it.services.map(srv => {
+        if (srv.service_id === serviceId) {
+          const nextCourtesy = !srv.is_courtesy;
+          return { ...srv, selected: nextCourtesy ? true : srv.selected, is_courtesy: nextCourtesy };
         }
         return srv;
       });
@@ -330,7 +349,7 @@ export default function NovaEntradaPage() {
   // Calculate Subtotals & Grand Total
   const calculateItemTotal = (item: ServiceOrderItemInput) => {
     return item.services
-      .filter(s => s.selected)
+      .filter(s => s.selected && !s.is_courtesy)
       .reduce((sum, s) => sum + ((s.unit_price * (s.quantity || 1)) - (s.discount_amount || 0)), 0);
   };
 
@@ -444,13 +463,18 @@ export default function NovaEntradaPage() {
           ...it.custom_field_values,
           input_weight_grams: it.input_weight_grams
         },
-        services: it.services.filter(s => s.selected).map(s => ({
-          service_id: s.service_id,
-          quantity: s.quantity || 1,
-          unit_price: s.unit_price,
-          discount_amount: s.discount_amount || 0,
-          field_data: it.input_weight_grams !== undefined ? { input_weight: it.input_weight_grams } : undefined
-        }))
+        services: it.services.filter(s => s.selected).map(s => {
+          const qty = s.quantity || 1;
+          const courtesyDiscount = s.is_courtesy ? (s.unit_price * qty) : (s.discount_amount || 0);
+          return {
+            service_id: s.service_id,
+            quantity: qty,
+            unit_price: s.unit_price,
+            discount_amount: courtesyDiscount,
+            is_courtesy: Boolean(s.is_courtesy),
+            field_data: it.input_weight_grams !== undefined ? { input_weight: it.input_weight_grams } : undefined
+          };
+        })
       }))
     };
 
@@ -836,6 +860,8 @@ export default function NovaEntradaPage() {
                       {item.services.map(srvInput => {
                         const srvDef = allServices.find(s => s.id === srvInput.service_id);
                         if (!srvDef) return null;
+                        const isCourtesy = Boolean(srvInput.is_courtesy);
+                        const canUseCourtesy = Boolean(srvDef.allow_courtesy);
 
                         return (
                           <div
@@ -843,7 +869,9 @@ export default function NovaEntradaPage() {
                             onClick={() => handleToggleService(item.id, srvInput.service_id)}
                             className={`p-3 rounded-xl border transition-all cursor-pointer select-none flex items-start gap-2.5 ${
                               srvInput.selected
-                                ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800/80 shadow-sm'
+                                ? isCourtesy
+                                  ? 'bg-amber-50/80 dark:bg-amber-950/30 border-amber-300 dark:border-amber-800/80 shadow-sm'
+                                  : 'bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800/80 shadow-sm'
                                 : 'bg-slate-50/50 dark:bg-slate-950/30 border-slate-200 dark:border-slate-800 opacity-70 hover:opacity-100'
                             }`}
                           >
@@ -854,19 +882,47 @@ export default function NovaEntradaPage() {
                               className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
                             />
 
-                            <div className="flex-1 text-xs">
-                              <div className="flex items-center justify-between">
-                                <span className="font-bold text-slate-900 dark:text-white">
+                            <div className="flex-1 text-xs min-w-0">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-bold text-slate-900 dark:text-white truncate">
                                   {srvDef.name}
                                 </span>
-                                <span className="font-black text-emerald-600 dark:text-emerald-400">
-                                  {formatCurrency(srvInput.unit_price)}
-                                </span>
+                                {isCourtesy ? (
+                                  <span className="flex items-center gap-1.5 shrink-0">
+                                    <span className="text-[10px] text-slate-400 line-through">
+                                      {formatCurrency(srvInput.unit_price)}
+                                    </span>
+                                    <span className="font-black text-amber-600 dark:text-amber-400">
+                                      R$ 0,00
+                                    </span>
+                                  </span>
+                                ) : (
+                                  <span className="font-black text-emerald-600 dark:text-emerald-400 shrink-0">
+                                    {formatCurrency(srvInput.unit_price)}
+                                  </span>
+                                )}
                               </div>
                               {srvDef.description && (
                                 <p className="text-[10px] text-slate-500 line-clamp-1 mt-0.5">
                                   {srvDef.description}
                                 </p>
+                              )}
+                              {canUseCourtesy && (
+                                <div className="mt-2 pt-1.5 border-t border-slate-200/70 dark:border-slate-800/70 flex items-center justify-between">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => handleToggleServiceCourtesy(item.id, srvInput.service_id, e)}
+                                    className={cn(
+                                      'inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-colors',
+                                      isCourtesy
+                                        ? 'bg-amber-600 text-white border-amber-600 hover:bg-amber-700'
+                                        : 'bg-white dark:bg-slate-900 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950/50'
+                                    )}
+                                  >
+                                    <Gift className="w-3 h-3" />
+                                    <span>{isCourtesy ? 'Cortesia Aplicada (R$ 0,00)' : 'Marcar Cortesia'}</span>
+                                  </button>
+                                </div>
                               )}
                             </div>
                           </div>

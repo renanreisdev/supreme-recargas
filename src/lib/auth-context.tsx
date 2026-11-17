@@ -46,7 +46,7 @@ interface AuthContextType {
     activeAt?: string;
   }>;
   logout: (reason?: LogoutReason) => void;
-  changePassword: (newPassword: string, resetMustChange?: boolean) => { success: boolean; error?: string };
+  changePassword: (newPassword: string, resetMustChange?: boolean, currentPassword?: string) => { success: boolean; error?: string };
   updateMyInactivityTimeout: (minutes: number) => boolean;
   setCurrentUser: (user: Profile | null) => void;
   hasPermission: (permission: string) => boolean;
@@ -314,10 +314,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const changePassword = (newPassword: string, resetMustChange: boolean = false): { success: boolean; error?: string } => {
+  const changePassword = (
+    newPassword: string,
+    resetMustChange: boolean = false,
+    currentPassword?: string
+  ): { success: boolean; error?: string } => {
     if (!currentUser) return { success: false, error: 'Usuário não autenticado.' };
     try {
-      const updated = AppStore.changeUserPassword(currentUser.id, newPassword, currentUser.full_name, resetMustChange);
+      const updated = resetMustChange
+        ? AppStore.changeUserPassword(currentUser.id, newPassword, currentUser.full_name, true)
+        : AppStore.changeOwnPassword(currentUser.id, currentPassword || '', newPassword);
       setCurrentUser(updated);
       return { success: true };
     } catch (err: any) {

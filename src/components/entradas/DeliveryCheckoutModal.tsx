@@ -6,7 +6,8 @@ import {
   X, 
   Trash2, 
   AlertTriangle, 
-  CheckCircle2 
+  CheckCircle2,
+  Gift
 } from 'lucide-react';
 import { ServiceOrder, PaymentMethod, Profile } from '@/types';
 import { AppStore } from '@/lib/store';
@@ -40,6 +41,7 @@ export function DeliveryCheckoutModal({
   autoPrintOnDelivery = false,
   printDeliveryCopies = 1
 }: DeliveryCheckoutModalProps) {
+  const [activeOrder, setActiveOrder] = useState<ServiceOrder | null>(order);
   const [receiverName, setReceiverName] = useState('');
   const [receiverDoc, setReceiverDoc] = useState('');
   const [receiverRelation, setReceiverRelation] = useState('Próprio Cliente');
@@ -55,6 +57,7 @@ export function DeliveryCheckoutModal({
 
   useEffect(() => {
     if (order && isOpen) {
+      setActiveOrder(order);
       setReceiverName(order.customer?.name || '');
       setReceiverDoc(order.customer?.document || '');
       setReceiverRelation('Próprio Cliente');
@@ -71,19 +74,60 @@ export function DeliveryCheckoutModal({
         }
       ]);
     }
-  }, [order, isOpen]);
+  }, [order?.id, isOpen]);
 
-  if (!isOpen || !order) return null;
+  const currentOrder = activeOrder || order;
+  if (!isOpen || !currentOrder) return null;
 
-  const modalRemainingToPay = Math.max(0, order.total_amount - (order.paid_amount || 0));
+  const catalogServices = AppStore.getServices(currentOrder.tenant_id);
+  const courtesyEligibleServices = (currentOrder.items || []).flatMap(item =>
+    (item.services || [])
+      .map(srv => {
+        const srvDef = catalogServices.find(c => c.id === srv.service_id);
+        const isCourtesy = Boolean(srv.is_courtesy || srv.field_data?.is_courtesy);
+        const isEligible = Boolean(srvDef?.allow_courtesy) || isCourtesy;
+        return isEligible
+          ? {
+              itemName: item.model?.name || item.internal_identifier || 'Item',
+              service: srv,
+              isCourtesy
+            }
+          : null;
+      })
+      .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
+  );
+
+  const modalRemainingToPay = Math.max(0, currentOrder.total_amount - (currentOrder.paid_amount || 0));
   const totalPaidSum = payments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
   const diff = totalPaidSum - modalRemainingToPay;
   const liveChange = diff > 0 ? diff : 0;
   const liveRemaining = diff < 0 ? Math.abs(diff) : 0;
 
+  const handleToggleCourtesyInModal = (itemServiceId: string, nextCourtesy: boolean) => {
+    try {
+      const updated = AppStore.toggleOrderItemServiceCourtesy(
+        currentOrder.id,
+        itemServiceId,
+        nextCourtesy,
+        currentUser?.full_name || 'Atendente'
+      );
+      setActiveOrder({ ...updated, items: [...(updated.items || [])] });
+      const newRemaining = Math.max(0, updated.total_amount - (updated.paid_amount || 0));
+      setPayments(prev =>
+        prev.length === 1
+          ? [{ ...prev[0], amount: newRemaining }]
+          : prev
+      );
+      toast.success(nextCourtesy ? 'Cortesia aplicada ao serviço (R$ 0,00).' : 'Cortesia removida; valor padrão restaurado.');
+      onSuccess();
+    } catch (err: any) {
+      toast.error(err?.message || 'Erro ao atualizar cortesia do serviço.');
+    }
+  };
+
   const handleAddPaymentLine = () => {
     const currentPaidSum = payments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
-    const orderRemaining = Math.max(0, order.total_amount - (order.paid_amount || 0));
+    const orderRemaining = Math.max(0, currentOrder.total_amount - (currentOrder.paid_amount || 0));
     const stillDue = Math.max(0, orderRemaining - currentPaidSum);
 
     setPayments([
@@ -115,8 +159,8 @@ export function DeliveryCheckoutModal({
 
   const executeDelivery = (options: { applyDiscount: number; isZeroValue?: boolean; customNotes?: string }) => {
     try {
-      const deliveredId = order.id;
-      const orderNum = order.order_number;
+      const deliveredId = currentOrder.id;
+      const orderNum = currentOrder.order_number;
 
       AppStore.deliverServiceOrder(deliveredId, {
         receiver_name: receiverName.trim(),
@@ -266,7 +310,7 @@ export function DeliveryCheckoutModal({
                 <span>Entrega & Baixa de Ordem de Serviço</span>
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                OS #{order.order_number} • Cliente: {order.customer?.name}
+                OS #{currentOrder.order_number} • Cliente: {currentOrder.customer?.name}
               </p>
             </div>
             <button
@@ -279,6 +323,49 @@ export function DeliveryCheckoutModal({
           </div>
 
           <form onSubmit={handleRegisterDelivery} className="space-y-4">
+            {/* Courtesy Toggle Box (only when order contains services with allow_courtesy enabled) */}
+            {courtesyEligibleServices.length > 0 && (
+              <div className="p-3.5 bg-amber-50/70 dark:bg-amber-950/25 rounded-2xl border border-amber-200/80 dark:border-amber-900/50 space-y-2.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-amber-900 dark:text-amber-300 flex items-center gap-1.5">
+                    <Gift className="w-4 h-4 text-amber-600" />
+                    <span>Cortesia de Serviços na Venda</span>
+                  </span>
+                  <span className="text-[10px] text-amber-700 dark:text-amber-400 font-semibold">
+                    Habilitado no cadastro do serviço
+                  </span>
+                </div>
+                <div className="space-y-1.5">
+                  {courtesyEligibleServices.map(({ itemName, service, isCourtesy }) => (
+                    <div
+                      key={service.id}
+                      className="flex items-center justify-between gap-2 p-2 rounded-xl bg-white/90 dark:bg-slate-900/80 border border-amber-200/60 dark:border-amber-800/40 text-xs"
+                    >
+                      <div className="min-w-0">
+                        <div className="font-bold text-slate-800 dark:text-slate-100 truncate">
+                          {service.service_name || 'Serviço'}
+                        </div>
+                        <div className="text-[10px] text-slate-500 truncate">
+                          Item: {itemName} • Padrão: {formatCurrency(service.unit_price)}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleCourtesyInModal(service.id, !isCourtesy)}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border shrink-0 transition-colors flex items-center gap-1 ${
+                          isCourtesy
+                            ? 'bg-amber-600 text-white border-amber-600 hover:bg-amber-700'
+                            : 'bg-white dark:bg-slate-900 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/40'
+                        }`}
+                      >
+                        <Gift className="w-3 h-3" />
+                        <span>{isCourtesy ? 'Cortesia (R$ 0,00)' : 'Aplicar Cortesia'}</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {/* Receiver Info */}
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -422,7 +509,7 @@ export function DeliveryCheckoutModal({
                   Baixa com Valor Zerado
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Ordem nº <strong className="font-mono">{order.order_number}</strong> • Saldo a liquidar: <strong className="text-amber-600">{formatCurrency(modalRemainingToPay)}</strong>
+                  Ordem nº <strong className="font-mono">{currentOrder.order_number}</strong> • Saldo a liquidar: <strong className="text-amber-600">{formatCurrency(modalRemainingToPay)}</strong>
                 </p>
               </div>
             </div>

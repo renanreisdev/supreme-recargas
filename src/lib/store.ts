@@ -43,7 +43,8 @@ import {
   PlatformSaasSettings,
   PresetImportSelection,
   PresetImportResult,
-  CategoryCustomField
+  CategoryCustomField,
+  ItemQualityReview
 } from '@/types';
 import { supabase } from './supabase';
 import { hashPassword, verifyPassword, isPasswordHashed, buildLgpdAnonymizedCustomer } from '@/lib/security';
@@ -541,8 +542,8 @@ export const BUSINESS_PRESETS: Record<BusinessTemplateKey, BusinessTemplate> = {
     services: [
       { id: 'srv-recarga', name: 'Recarga de Tinta', code: 'RECARGA', description: 'Injeção de tinta pressurizada e despressurização', default_price: 30.00, estimated_time_minutes: 15, is_active: true, category_ids: ['cartucho-tinta', 'toner-laser'] },
       { id: 'srv-recarga-toner', name: 'Recarga de Toner Laser + Limpeza Cilindro', code: 'RECARGA_TONER', description: 'Desmontagem, remoção de resíduos, troca de pó gráfico e teste', default_price: 65.00, estimated_time_minutes: 30, is_active: true, category_ids: ['toner-laser'] },
-      { id: 'srv-verificacao', name: 'Verificação Técnica', code: 'VERIFICACAO', description: 'Análise de circuito eletrônico e bicos injetores', default_price: 10.00, estimated_time_minutes: 10, is_active: true, category_ids: ['cartucho-tinta', 'toner-laser'] },
-      { id: 'srv-teste', name: 'Teste de Impressão', code: 'TESTE', description: 'Impressão de padrão de teste em máquina real', default_price: 5.00, estimated_time_minutes: 5, is_active: true, category_ids: ['cartucho-tinta'] },
+      { id: 'srv-verificacao', name: 'Verificação Técnica', code: 'VERIFICACAO', description: 'Análise de circuito eletrônico e bicos injetores', default_price: 10.00, allow_courtesy: true, estimated_time_minutes: 10, is_active: true, category_ids: ['cartucho-tinta', 'toner-laser'] },
+      { id: 'srv-teste', name: 'Teste de Impressão', code: 'TESTE', description: 'Impressão de padrão de teste em máquina real', default_price: 5.00, allow_courtesy: true, estimated_time_minutes: 5, is_active: true, category_ids: ['cartucho-tinta'] },
       { id: 'srv-desentupimento', name: 'Desentupimento Ultrassônico', code: 'DESENTUPIMENTO', description: 'Banho químico e ultrassom para desobstrução de injetores secos', default_price: 15.00, estimated_time_minutes: 20, is_active: true, category_ids: ['cartucho-tinta'] },
       { id: 'srv-reset-ecotank', name: 'Limpeza Cabeçote & Reset Almofadas EcoTank', code: 'MANUT_ECOTANK', description: 'Desentupimento de cabeça Piezo, sangria das mangueiras e reset do contador', default_price: 90.00, estimated_time_minutes: 60, is_active: true, category_ids: ['impressora-tanque'] }
     ],
@@ -610,7 +611,7 @@ export const BUSINESS_PRESETS: Record<BusinessTemplateKey, BusinessTemplate> = {
       { id: 'mod-pc-gamer', category_id: 'cat-computador', brand_id: 'brand-asus', brand_name: 'Asus', name: 'Desktop / PC Gamer Custom', internal_code: 'PC-CUST', description: 'Computador de mesa montagem sob medida', is_active: true }
     ],
     services: [
-      { id: 'srv-diagnostico-inf', name: 'Diagnóstico Técnico Especializado', code: 'DIAGNOSTICO', description: 'Análise de hardware, placa-mãe, memória e fonte', default_price: 60.00, estimated_time_minutes: 60, is_active: true, category_ids: ['notebook', 'computador', 'impressora', 'monitor'] },
+      { id: 'srv-diagnostico-inf', name: 'Diagnóstico Técnico Especializado', code: 'DIAGNOSTICO', description: 'Análise de hardware, placa-mãe, memória e fonte', default_price: 60.00, allow_courtesy: true, estimated_time_minutes: 60, is_active: true, category_ids: ['notebook', 'computador', 'impressora', 'monitor'] },
       { id: 'srv-formatacao', name: 'Formatação & Reinstalação de Sistema', code: 'FORMATACAO', description: 'Instalação de Windows/Linux limpo, backup, drivers e programas essenciais', default_price: 120.00, estimated_time_minutes: 120, is_active: true, category_ids: ['notebook', 'computador'] },
       { id: 'srv-limpeza-preventiva', name: 'Limpeza Preventiva & Troca de Pasta Térmica', code: 'LIMPEZA_PREVENTIVA', description: 'Desmontagem, desobstrução de cooler e pasta térmica de alta condutividade', default_price: 90.00, estimated_time_minutes: 60, is_active: true, category_ids: ['notebook', 'computador', 'placa-video-hardware'] },
       { id: 'srv-upgrade-ssd', name: 'Upgrade de SSD / Memória RAM (Mão de Obra)', code: 'UPGRADE_HARDWARE', description: 'Instalação física, clonagem de sistema ou configuração em BIOS', default_price: 80.00, estimated_time_minutes: 45, is_active: true, category_ids: ['notebook', 'computador'] },
@@ -689,7 +690,7 @@ export const BUSINESS_PRESETS: Record<BusinessTemplateKey, BusinessTemplate> = {
       { id: 'mod-ipad-9', category_id: 'cat-tablet', brand_id: 'brand-apple-cel', brand_name: 'Apple', name: 'iPad 9ª Geração (10.2")', internal_code: 'IPAD9', description: 'Tablet Apple 64GB/256GB', is_active: true }
     ],
     services: [
-      { id: 'srv-analise-cel', name: 'Análise & Orçamento em Bancada Mobile', code: 'ANALISE_CELULAR', description: 'Abertura técnica, medição de consumo na fonte e parecer', default_price: 50.00, estimated_time_minutes: 30, is_active: true, category_ids: ['smartphone', 'tablet', 'smartwatch'] },
+      { id: 'srv-analise-cel', name: 'Análise & Orçamento em Bancada Mobile', code: 'ANALISE_CELULAR', description: 'Abertura técnica, medição de consumo na fonte e parecer', default_price: 50.00, allow_courtesy: true, estimated_time_minutes: 30, is_active: true, category_ids: ['smartphone', 'tablet', 'smartwatch'] },
       { id: 'srv-troca-tela', name: 'Troca de Tela / Módulo Frontal', code: 'TROCA_TELA', description: 'Substituição completa do display touch OLED/IPS e vedação', default_price: 180.00, estimated_time_minutes: 60, is_active: true, category_ids: ['smartphone', 'tablet'] },
       { id: 'srv-troca-bateria', name: 'Troca de Bateria', code: 'TROCA_BATERIA', description: 'Substituição de bateria estufada ou com baixa saúde', default_price: 120.00, estimated_time_minutes: 45, is_active: true, category_ids: ['smartphone', 'tablet', 'smartwatch'] },
       { id: 'srv-conector-carga', name: 'Troca de Conector de Carga (Dock USB)', code: 'CONECTOR_CARGA', description: 'Substituição do conector Tipo-C / Lightning', default_price: 90.00, estimated_time_minutes: 60, is_active: true, category_ids: ['smartphone', 'tablet'] },
@@ -763,7 +764,7 @@ export const BUSINESS_PRESETS: Record<BusinessTemplateKey, BusinessTemplate> = {
       { id: 'mod-tv-lg-50', category_id: 'cat-smart-tv', brand_id: 'brand-lg-el', brand_name: 'LG', name: 'Smart TV LG 50" 4K UHD', internal_code: 'TV-LG50', description: 'Televisor LED / NanoCell', is_active: true }
     ],
     services: [
-      { id: 'srv-diag-game', name: 'Diagnóstico Eletrônico de Bancada', code: 'DIAG_ELETRONICO', description: 'Análise de curto-circuito, fonte, HDMI e temperatura', default_price: 60.00, estimated_time_minutes: 60, is_active: true, category_ids: ['console-videogame', 'controle-joystick', 'smart-tv', 'caixa-som-audio'] },
+      { id: 'srv-diag-game', name: 'Diagnóstico Eletrônico de Bancada', code: 'DIAG_ELETRONICO', description: 'Análise de curto-circuito, fonte, HDMI e temperatura', default_price: 60.00, allow_courtesy: true, estimated_time_minutes: 60, is_active: true, category_ids: ['console-videogame', 'controle-joystick', 'smart-tv', 'caixa-som-audio'] },
       { id: 'srv-limpeza-ps5', name: 'Limpeza Térmica + Pasta / Metal Líquido', code: 'LIMPEZA_TERMICA', description: 'Higienização interna completa e aplicação de metal líquido / thermal pads', default_price: 180.00, estimated_time_minutes: 90, is_active: true, category_ids: ['console-videogame'] },
       { id: 'srv-troca-hdmi', name: 'Troca de Conector HDMI (Micro-Solda)', code: 'TROCA_HDMI', description: 'Substituição de porta HDMI 2.1 em microscópio e reconstrução de trilhas', default_price: 250.00, estimated_time_minutes: 120, is_active: true, category_ids: ['console-videogame', 'smart-tv'] },
       { id: 'srv-drift-controle', name: 'Reparo de Drift Analógico (Hall Effect)', code: 'REPARO_DRIFT', description: 'Troca de potenciômetro / módulo analógico com calibração', default_price: 95.00, estimated_time_minutes: 45, is_active: true, category_ids: ['controle-joystick'] },
@@ -872,7 +873,7 @@ export const BUSINESS_PRESETS: Record<BusinessTemplateKey, BusinessTemplate> = {
       { id: 'mod-eletro-microondas', category_id: 'cat-eletro', brand_id: 'brand-electrolux', brand_name: 'Electrolux', name: 'Micro-ondas / Eletro Portátil', internal_code: 'ELETRO-1', description: 'Atendimento linha branca / portáteis', is_active: true }
     ],
     services: [
-      { id: 'srv-orcamento-geral', name: 'Avaliação & Orçamento Técnico', code: 'ORCAMENTO_GERAL', description: 'Inspeção técnica inicial para levantamento de defeito', default_price: 50.00, estimated_time_minutes: 30, is_active: true, category_ids: ['equipamento-geral', 'eletrodomestico-portatil'] },
+      { id: 'srv-orcamento-geral', name: 'Avaliação & Orçamento Técnico', code: 'ORCAMENTO_GERAL', description: 'Inspeção técnica inicial para levantamento de defeito', default_price: 50.00, allow_courtesy: true, estimated_time_minutes: 30, is_active: true, category_ids: ['equipamento-geral', 'eletrodomestico-portatil'] },
       { id: 'srv-manutencao-geral', name: 'Manutenção Preventiva / Corretiva', code: 'MANUTENCAO', description: 'Inspeção, reparo e testes de bancada', default_price: 100.00, estimated_time_minutes: 60, is_active: true, category_ids: ['equipamento-geral', 'eletrodomestico-portatil'] },
       { id: 'srv-troca-peca-geral', name: 'Substituição de Componente / Peça', code: 'TROCA_PECA', description: 'Mão de obra de substituição de componente defeituoso', default_price: 120.00, estimated_time_minutes: 60, is_active: true, category_ids: ['equipamento-geral', 'eletrodomestico-portatil'] }
     ],
@@ -2639,6 +2640,168 @@ export class AppStore {
     return user;
   }
 
+  static changeOwnPassword(id: string, currentPass: string, newPass: string): Profile {
+    if (!currentPass || !currentPass.trim()) {
+      throw new Error('Informe a sua senha atual para confirmar a alteração.');
+    }
+    if (!newPass || newPass.trim().length < 4) {
+      throw new Error('A nova senha deve ter no mínimo 4 caracteres.');
+    }
+    if (currentPass === newPass) {
+      throw new Error('A nova senha deve ser diferente da senha atual.');
+    }
+
+    const data = this.getStoreData();
+    const idx = (data.profiles || []).findIndex((p: Profile) => p.id === id);
+    if (idx === -1) throw new Error('Usuário não encontrado.');
+    const user = data.profiles[idx];
+
+    if (!user.password || !verifyPassword(currentPass, user.password)) {
+      throw new Error('A senha atual informada está incorreta.');
+    }
+
+    return this.changeUserPassword(id, newPass, user.full_name, true);
+  }
+
+  private static maskEmailAddress(email: string): string {
+    const [local, domain] = email.split('@');
+    if (!local || !domain) return email;
+    if (local.length <= 2) return `${local[0] || '*'}*@${domain}`;
+    return `${local.slice(0, 2)}${'*'.repeat(Math.max(2, local.length - 3))}${local.slice(-1)}@${domain}`;
+  }
+
+  static async requestPasswordResetByEmail(email: string): Promise<{
+    success: boolean;
+    maskedEmail: string;
+    resetCode: string;
+    message: string;
+  }> {
+    const normalizedEmail = (email || '').toLowerCase().trim();
+    if (!normalizedEmail || !normalizedEmail.includes('@')) {
+      throw new Error('Informe um endereço de e-mail válido.');
+    }
+
+    const data = this.getStoreData();
+    if (!Array.isArray(data.profiles)) data.profiles = [];
+    let user: Profile | undefined = data.profiles.find(
+      (p: Profile) => p.email?.toLowerCase().trim() === normalizedEmail
+    );
+
+    if (!user) {
+      try {
+        const timeoutPromise = new Promise<{ data: null; error: any }>((resolve) =>
+          setTimeout(() => resolve({ data: null, error: new Error('timeout') }), 2500)
+        );
+        const queryPromise = supabase
+          .from('profiles')
+          .select('*')
+          .ilike('email', normalizedEmail)
+          .limit(1)
+          .maybeSingle();
+        const { data: remoteUser } = await Promise.race([queryPromise, timeoutPromise]);
+        if (remoteUser) {
+          data.profiles.push(remoteUser as Profile);
+          user = data.profiles[data.profiles.length - 1];
+        }
+      } catch {
+        // Offline / lookup fallback
+      }
+    }
+
+    const maskedEmail = this.maskEmailAddress(normalizedEmail);
+    const bytes = new Uint32Array(1);
+    globalThis.crypto.getRandomValues(bytes);
+    const resetCode = String((bytes[0] % 900000) + 100000);
+
+    if (user && user.is_active !== false) {
+      const expiresAt = Date.now() + 15 * 60 * 1000;
+      const updatedCustomPerms: Record<string, any> = {
+        ...(user.custom_permissions || {}),
+        _reset_code_hash: hashPassword(resetCode),
+        _reset_expires_at: expiresAt
+      };
+      user.custom_permissions = updatedCustomPerms;
+      this.saveStoreData(data);
+
+      this.enqueueOrExecuteMutation({
+        table: 'profiles',
+        action: 'UPDATE',
+        payload: { custom_permissions: updatedCustomPerms },
+        matchField: 'id',
+        matchValue: user.id,
+        tenant_id: user.tenant_id
+      });
+
+      this.logAudit({
+        tenant_id: user.tenant_id,
+        user_name: user.full_name,
+        action: 'SOLICITACAO_REDEFINICAO_EMAIL',
+        resource: 'profiles',
+        resource_id: user.id,
+        details: `Solicitada redefinição de senha para o e-mail cadastrado (${maskedEmail})`
+      });
+
+      try {
+        const redirectTo = typeof window !== 'undefined' ? `${window.location.origin}/login` : undefined;
+        await supabase.auth.resetPasswordForEmail(normalizedEmail, redirectTo ? { redirectTo } : undefined);
+      } catch {
+        // Supabase Auth SMTP optional in local/offline environments
+      }
+    }
+
+    return {
+      success: true,
+      maskedEmail,
+      resetCode,
+      message: `Se o e-mail ${maskedEmail} estiver cadastrado e ativo, enviamos as instruções de redefinição. Caso não receba em alguns minutos, solicite ao administrador da empresa.`
+    };
+  }
+
+  static confirmPasswordResetByEmail(email: string, code: string, newPass: string): Profile {
+    const normalizedEmail = (email || '').toLowerCase().trim();
+    const cleanCode = (code || '').trim();
+    if (!cleanCode) {
+      throw new Error('Informe o código de verificação recebido no e-mail.');
+    }
+    if (!newPass || newPass.trim().length < 4) {
+      throw new Error('A nova senha deve ter no mínimo 4 caracteres.');
+    }
+
+    const data = this.getStoreData();
+    const idx = (data.profiles || []).findIndex(
+      (p: Profile) => p.email?.toLowerCase().trim() === normalizedEmail && p.is_active !== false
+    );
+    if (idx === -1) {
+      throw new Error('Código de verificação inválido ou expirado.');
+    }
+
+    const user = data.profiles[idx];
+    const perms: Record<string, any> = user.custom_permissions || {};
+    const storedHash = typeof perms._reset_code_hash === 'string' ? perms._reset_code_hash : '';
+    const expiresAt = Number(perms._reset_expires_at || 0);
+
+    if (!storedHash || !expiresAt || Date.now() > expiresAt || !verifyPassword(cleanCode, storedHash)) {
+      throw new Error('Código de verificação inválido ou expirado.');
+    }
+
+    const cleanedPerms: Record<string, any> = { ...perms };
+    delete cleanedPerms._reset_code_hash;
+    delete cleanedPerms._reset_expires_at;
+    user.custom_permissions = cleanedPerms;
+    this.saveStoreData(data);
+
+    this.enqueueOrExecuteMutation({
+      table: 'profiles',
+      action: 'UPDATE',
+      payload: { custom_permissions: cleanedPerms },
+      matchField: 'id',
+      matchValue: user.id,
+      tenant_id: user.tenant_id
+    });
+
+    return this.changeUserPassword(user.id, newPass, user.full_name, true);
+  }
+
   static updateUserPermissions(
     id: string, 
     permissions: Record<string, boolean>, 
@@ -3327,7 +3490,13 @@ export class AppStore {
 
   static addService(service: Omit<Service, 'id' | 'created_at' | 'updated_at'>, performedByName?: string): Service {
     const data = this.getStoreData();
-    const newService: Service = { ...service, id: generateUUID(), created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+    const newService: Service = {
+      ...service,
+      allow_courtesy: Boolean(service.allow_courtesy),
+      id: generateUUID(),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
     if (!Array.isArray(data.services)) data.services = [];
     data.services.push(newService);
     this.saveStoreData(data);
@@ -3341,6 +3510,7 @@ export class AppStore {
         code: newService.code,
         description: newService.description || null,
         default_price: newService.default_price || 0,
+        allow_courtesy: Boolean(newService.allow_courtesy),
         estimated_time_minutes: newService.estimated_time_minutes || 60,
         category_ids: newService.category_ids || [],
         is_active: newService.is_active !== false
@@ -3354,7 +3524,7 @@ export class AppStore {
       action: 'CADASTRO_SERVICO',
       resource: 'services',
       resource_id: newService.id,
-      details: `Cadastrado serviço "${newService.name}" (Valor padrão: R$ ${(newService.default_price || 0).toFixed(2)}, Código: ${newService.code})`
+      details: `Cadastrado serviço "${newService.name}" (Valor padrão: R$ ${(newService.default_price || 0).toFixed(2)}, Cortesia: ${newService.allow_courtesy ? 'Permitida' : 'Não'}, Código: ${newService.code})`
     });
 
     return newService;
@@ -3375,6 +3545,9 @@ export class AppStore {
     if (updates.code !== undefined && updates.code !== old.code) diffs.push(`Código de "${old.code}" para "${updates.code}"`);
     if (updates.default_price !== undefined && updates.default_price !== old.default_price) {
       diffs.push(`Preço padrão de R$ ${Number(old.default_price || 0).toFixed(2)} para R$ ${Number(updates.default_price || 0).toFixed(2)}`);
+    }
+    if (updates.allow_courtesy !== undefined && Boolean(updates.allow_courtesy) !== Boolean(old.allow_courtesy)) {
+      diffs.push(`Cortesia na venda ${updates.allow_courtesy ? 'Habilitada' : 'Desabilitada'}`);
     }
     if (updates.estimated_time_minutes !== undefined && updates.estimated_time_minutes !== old.estimated_time_minutes) {
       diffs.push(`Tempo estimado de ${old.estimated_time_minutes || 0}min para ${updates.estimated_time_minutes}min`);
@@ -3645,22 +3818,22 @@ export class AppStore {
     return this.getServiceOrderById(order.id);
   }
 
-  static async fetchRemoteServiceOrderByTrackingToken(token: string): Promise<ServiceOrder | null> {
-    if (!token) return null;
+  static async fetchRemoteServiceOrderByTrackingToken(token: string, preferRemote: boolean = false): Promise<ServiceOrder | null> {
+    if (!token || !token.trim()) return null;
     const cleanToken = token.trim();
 
-    // 1. Try local memory/localStorage store first
+    // 1. Try local memory/localStorage store first unless remote refresh requested
     const local = this.getServiceOrderByTrackingToken(cleanToken);
-    if (local) return local;
+    if (local && !preferRemote) return local;
 
-    // 2. Fetch directly from Supabase for mobile devices or new sessions
+    // 2. Fetch directly from Supabase for mobile devices or fresh remote updates
     // SECURITY: never allow sequential order_number or interpolate into PostgREST filters.
     try {
       const TRACKING_TOKEN_RE = /^[0-9a-f]{32}$/i;
       let column: 'id' | 'tracking_token' | null = null;
       if (TRACKING_TOKEN_RE.test(cleanToken)) column = 'tracking_token';
       else if (isValidUUID(cleanToken)) column = 'id';
-      if (!column) return null;
+      if (!column) return local || null;
 
       const query = supabase
         .from('service_orders')
@@ -3670,7 +3843,7 @@ export class AppStore {
 
       const { data: orderData, error: orderError } = await query.maybeSingle();
       if (orderError || !orderData) {
-        return null;
+        return local || null;
       }
 
       // Fetch items for this order
@@ -3711,11 +3884,17 @@ export class AppStore {
 
       // Assemble items
       const assembledItems: ServiceOrderItem[] = (itemsData || []).map(it => {
-        const srvs = itemServicesData.filter(s => s.service_order_item_id === it.id);
+        const srvs = itemServicesData
+          .filter(s => s.service_order_item_id === it.id)
+          .map(s => ({
+            ...s,
+            is_courtesy: Boolean(s.is_courtesy || s.field_data?.is_courtesy)
+          }));
         const modelObj = (modelsData || []).find(m => m.id === it.model_id);
         return {
           ...it,
           order_number: orderData.order_number,
+          quality_review: it.custom_field_values?.quality_review || it.quality_review,
           model: modelObj,
           services: srvs
         };
@@ -3727,7 +3906,7 @@ export class AppStore {
         items: assembledItems
       };
 
-      // Cache locally in store
+      // Cache locally in store (refreshing any stale cached copy so tracking reflects updates)
       const storeData = this.getStoreData();
       if (companyData && !(storeData.companies || []).some((c: Company) => c.id === companyData.id)) {
         storeData.companies = [...(storeData.companies || []), companyData];
@@ -3735,7 +3914,10 @@ export class AppStore {
       if (customerData && !(storeData.customers || []).some((c: Customer) => c.id === customerData.id)) {
         storeData.customers = [...(storeData.customers || []), customerData];
       }
-      if (!(storeData.serviceOrders || []).some((o: ServiceOrder) => o.id === assembledOrder.id)) {
+      const existingOrderIdx = (storeData.serviceOrders || []).findIndex((o: ServiceOrder) => o.id === assembledOrder.id);
+      if (existingOrderIdx !== -1) {
+        storeData.serviceOrders[existingOrderIdx] = assembledOrder;
+      } else {
         storeData.serviceOrders = [assembledOrder, ...(storeData.serviceOrders || [])];
       }
       this.saveStoreData(storeData, false);
@@ -3743,7 +3925,7 @@ export class AppStore {
       return assembledOrder;
     } catch (e) {
       console.warn('Error fetching remote service order by tracking token:', e);
-      return null;
+      return local || null;
     }
   }
 
@@ -3779,6 +3961,7 @@ export class AppStore {
           quantity?: number;
           unit_price: number;
           discount_amount?: number;
+          is_courtesy?: boolean;
           field_data?: Record<string, any>;
         }>;
       }>;
@@ -3800,7 +3983,10 @@ export class AppStore {
       const itemServices: ServiceOrderItemService[] = (itInput.services || []).map(srvInput => {
         const srvObj = (data.services || INITIAL_SERVICES).find((s: Service) => s.id === srvInput.service_id);
         const qty = srvInput.quantity || 1;
-        const total = (srvInput.unit_price * qty) - (srvInput.discount_amount || 0);
+        const isCourtesy = Boolean(srvInput.is_courtesy);
+        const grossAmount = srvInput.unit_price * qty;
+        const discountAmt = isCourtesy ? grossAmount : (srvInput.discount_amount || 0);
+        const total = Math.max(0, grossAmount - discountAmt);
         itemSubtotal += total;
 
         return {
@@ -3811,11 +3997,15 @@ export class AppStore {
           service_name: srvObj?.name || 'Serviço',
           quantity: qty,
           unit_price: srvInput.unit_price,
-          discount_amount: srvInput.discount_amount || 0,
+          discount_amount: discountAmt,
           surcharge_amount: 0,
           total_amount: total,
+          is_courtesy: isCourtesy,
           status: 'PENDENTE',
-          field_data: srvInput.field_data || {},
+          field_data: {
+            ...(srvInput.field_data || {}),
+            ...(isCourtesy ? { is_courtesy: true } : {})
+          },
           created_at: new Date().toISOString()
         };
       });
@@ -3998,6 +4188,7 @@ export class AppStore {
             discount_amount: srv.discount_amount,
             surcharge_amount: srv.surcharge_amount,
             total_amount: srv.total_amount,
+            is_courtesy: Boolean(srv.is_courtesy),
             status: srv.status,
             field_data: srv.field_data || {}
           },
@@ -4036,6 +4227,243 @@ export class AppStore {
     return newOrder;
   }
 
+  static toggleOrderItemServiceCourtesy(
+    orderId: string,
+    itemServiceId: string,
+    isCourtesy: boolean,
+    performedByName?: string
+  ): ServiceOrder {
+    const data = this.getStoreData();
+    const orderIdx = (data.serviceOrders || []).findIndex((o: ServiceOrder) => o.id === orderId);
+    if (orderIdx === -1) throw new Error('Ordem de Serviço não encontrada.');
+
+    const order: ServiceOrder = data.serviceOrders[orderIdx];
+    let targetItem: ServiceOrderItem | null = null;
+    let targetService: ServiceOrderItemService | null = null;
+
+    for (const item of order.items || []) {
+      const srv = (item.services || []).find((s: ServiceOrderItemService) => s.id === itemServiceId);
+      if (srv) {
+        targetItem = item;
+        targetService = srv;
+        break;
+      }
+    }
+
+    if (!targetItem || !targetService) {
+      throw new Error('Serviço do item não encontrado na Ordem de Serviço.');
+    }
+
+    const qty = Number(targetService.quantity) || 1;
+    const gross = (Number(targetService.unit_price) || 0) * qty;
+    const nowIso = new Date().toISOString();
+
+    targetService.is_courtesy = isCourtesy;
+    targetService.discount_amount = isCourtesy ? gross : 0;
+    targetService.total_amount = isCourtesy ? 0 : gross;
+    targetService.field_data = {
+      ...(targetService.field_data || {}),
+      is_courtesy: isCourtesy
+    };
+    targetService.updated_at = nowIso;
+
+    targetItem.subtotal_amount = (targetItem.services || []).reduce(
+      (sum, s) => sum + (Number(s.total_amount) || 0),
+      0
+    );
+    targetItem.total_amount = Math.max(0, targetItem.subtotal_amount - (Number(targetItem.discount_amount) || 0));
+    targetItem.updated_at = nowIso;
+
+    order.subtotal_amount = (order.items || []).reduce((sum, it) => sum + (Number(it.total_amount) || 0), 0);
+    order.total_amount = Math.max(
+      0,
+      order.subtotal_amount - (Number(order.discount_amount) || 0) + (Number(order.surcharge_amount) || 0)
+    );
+    order.remaining_amount = Math.max(0, order.total_amount - (Number(order.paid_amount) || 0));
+    order.financial_status =
+      order.total_amount === 0
+        ? 'ISENTO'
+        : (order.paid_amount || 0) >= order.total_amount
+          ? 'PAGO'
+          : (order.paid_amount || 0) > 0
+            ? 'PAGO_PARCIAL'
+            : 'PENDENTE';
+    order.updated_at = nowIso;
+
+    this.saveStoreData(data);
+
+    this.enqueueOrExecuteMutation({
+      table: 'service_order_item_services',
+      action: 'UPDATE',
+      payload: {
+        is_courtesy: isCourtesy,
+        discount_amount: targetService.discount_amount,
+        total_amount: targetService.total_amount,
+        field_data: targetService.field_data,
+        updated_at: nowIso
+      },
+      matchField: 'id',
+      matchValue: targetService.id,
+      tenant_id: order.tenant_id
+    });
+
+    this.enqueueOrExecuteMutation({
+      table: 'service_order_items',
+      action: 'UPDATE',
+      payload: {
+        subtotal_amount: targetItem.subtotal_amount,
+        total_amount: targetItem.total_amount,
+        updated_at: nowIso
+      },
+      matchField: 'id',
+      matchValue: targetItem.id,
+      tenant_id: order.tenant_id
+    });
+
+    this.enqueueOrExecuteMutation({
+      table: 'service_orders',
+      action: 'UPDATE',
+      payload: {
+        subtotal_amount: order.subtotal_amount,
+        total_amount: order.total_amount,
+        remaining_amount: order.remaining_amount,
+        financial_status: order.financial_status,
+        updated_at: nowIso
+      },
+      matchField: 'id',
+      matchValue: order.id,
+      tenant_id: order.tenant_id
+    });
+
+    this.logAudit({
+      tenant_id: order.tenant_id,
+      user_name: performedByName || 'Atendente',
+      action: 'CORTESIA_SERVICO',
+      resource: 'service_order_item_services',
+      resource_id: targetService.id,
+      details: `${isCourtesy ? 'Aplicada' : 'Removida'} cortesia no serviço "${targetService.service_name || 'Serviço'}" da OS nº ${order.order_number} (Novo total da OS: R$ ${order.total_amount.toFixed(2)})`
+    });
+
+    return order;
+  }
+
+  static async submitCustomerQualityDecisionAsync(
+    tokenOrOrderId: string,
+    itemId: string,
+    decision: 'APPROVED' | 'REJECTED',
+    customerFeedback?: string
+  ): Promise<ServiceOrder | null> {
+    let order: ServiceOrder | null = this.getEntryByToken(tokenOrOrderId) || null;
+    if (!order) {
+      order = await this.getEntryByTokenAsync(tokenOrOrderId);
+    }
+    if (!order) return null;
+
+    const data = this.getStoreData();
+    if (!Array.isArray(data.serviceOrders)) data.serviceOrders = [];
+    let orderIdx = data.serviceOrders.findIndex((o: ServiceOrder) => o.id === order!.id);
+    if (orderIdx === -1) {
+      data.serviceOrders.unshift(order);
+      orderIdx = 0;
+    }
+
+    const storedOrder: ServiceOrder = data.serviceOrders[orderIdx];
+    const itemIdx = (storedOrder.items || []).findIndex((it: ServiceOrderItem) => it.id === itemId);
+    if (itemIdx === -1) return null;
+
+    const item = storedOrder.items![itemIdx];
+    const nowIso = new Date().toISOString();
+    const existingReview: ItemQualityReview = item.custom_field_values?.quality_review || item.quality_review || {
+      photos: [],
+      request_approval: true,
+      decision: 'PENDING',
+      updated_at: nowIso
+    };
+
+    const updatedReview: ItemQualityReview = {
+      ...existingReview,
+      decision,
+      customer_feedback: customerFeedback?.trim() || undefined,
+      decided_at: nowIso,
+      updated_at: nowIso
+    };
+
+    const updatedCustomFields = {
+      ...(item.custom_field_values || {}),
+      quality_review: updatedReview
+    };
+
+    const actionTag = decision === 'APPROVED'
+      ? 'CLIENTE ACEITOU A QUALIDADE PELO SITE'
+      : 'CLIENTE NÃO ACEITOU A QUALIDADE PELO SITE';
+    const feedbackPart = customerFeedback?.trim() ? ` - Obs: ${customerFeedback.trim()}` : '';
+    const decisionLine = `[${actionTag}${feedbackPart} em ${new Date(nowIso).toLocaleString('pt-BR')}]`;
+    const prevNotes = (item.technical_notes || '')
+      .split('\n')
+      .filter(line => !line.startsWith('[CLIENTE ACEITOU A QUALIDADE') && !line.startsWith('[CLIENTE NÃO ACEITOU A QUALIDADE'))
+      .join('\n')
+      .trim();
+    const updatedTechNotes = prevNotes ? `${prevNotes}\n${decisionLine}` : decisionLine;
+
+    item.custom_field_values = updatedCustomFields;
+    item.quality_review = updatedReview;
+    item.technical_notes = updatedTechNotes;
+    item.updated_at = nowIso;
+    storedOrder.updated_at = nowIso;
+
+    this.saveStoreData(data);
+
+    try {
+      const { error } = await supabase
+        .from('service_order_items')
+        .update({
+          custom_field_values: updatedCustomFields,
+          technical_notes: updatedTechNotes,
+          updated_at: nowIso
+        })
+        .eq('id', itemId);
+
+      if (error) {
+        this.enqueueOrExecuteMutation({
+          table: 'service_order_items',
+          action: 'UPDATE',
+          payload: {
+            custom_field_values: updatedCustomFields,
+            technical_notes: updatedTechNotes,
+            updated_at: nowIso
+          },
+          matchField: 'id',
+          matchValue: itemId,
+          tenant_id: storedOrder.tenant_id
+        });
+      }
+    } catch {
+      this.enqueueOrExecuteMutation({
+        table: 'service_order_items',
+        action: 'UPDATE',
+        payload: {
+          custom_field_values: updatedCustomFields,
+          technical_notes: updatedTechNotes,
+          updated_at: nowIso
+        },
+        matchField: 'id',
+        matchValue: itemId,
+        tenant_id: storedOrder.tenant_id
+      });
+    }
+
+    this.logAudit({
+      tenant_id: storedOrder.tenant_id,
+      user_name: storedOrder.customer?.name || 'Cliente (Rastreio Público)',
+      action: decision === 'APPROVED' ? 'ACEITE_QUALIDADE_CLIENTE' : 'RECUSA_QUALIDADE_CLIENTE',
+      resource: 'service_order_items',
+      resource_id: itemId,
+      details: `${decision === 'APPROVED' ? 'Cliente aceitou' : 'Cliente recusou'} a qualidade da foto técnica na OS nº ${storedOrder.order_number} (Item: ${item.internal_identifier})${customerFeedback?.trim() ? ` - "${customerFeedback.trim()}"` : ''}`
+    });
+
+    return storedOrder;
+  }
+
   static updateOrderItemStatus(
     itemId: string,
     updates: {
@@ -4067,11 +4495,13 @@ export class AppStore {
       if (itIdx !== -1) {
         parentOrder = order;
         const currentItem = order.items[itIdx];
+        const mergedCustomFields = { ...currentItem.custom_field_values, ...(updates.custom_field_values || {}) };
         const updatedItem = {
           ...currentItem,
           ...updates,
           assigned_technician_name: techName !== undefined ? techName : currentItem.assigned_technician_name,
-          custom_field_values: { ...currentItem.custom_field_values, ...(updates.custom_field_values || {}) },
+          custom_field_values: mergedCustomFields,
+          quality_review: mergedCustomFields?.quality_review || currentItem.quality_review,
           updated_at: new Date().toISOString()
         };
         order.items[itIdx] = updatedItem;
@@ -5275,11 +5705,17 @@ export class AppStore {
         const items = (orderItemsData || [])
           .filter(it => it.service_order_id === o.id)
           .map(it => {
-            const srvs = (itemServicesData || []).filter(s => s.service_order_item_id === it.id);
+            const srvs = (itemServicesData || [])
+              .filter(s => s.service_order_item_id === it.id)
+              .map(s => ({
+                ...s,
+                is_courtesy: Boolean(s.is_courtesy || s.field_data?.is_courtesy)
+              }));
             const modelObj = (modelsData || []).find(m => m.id === it.model_id);
             return {
               ...it,
               order_number: o.order_number,
+              quality_review: it.custom_field_values?.quality_review || it.quality_review,
               model: modelObj,
               services: srvs
             };
@@ -5399,8 +5835,8 @@ export class AppStore {
     return this.getServiceOrderByTrackingToken(token) || this.getServiceOrderById(token);
   }
 
-  static async getEntryByTokenAsync(token: string) {
-    return this.fetchRemoteServiceOrderByTrackingToken(token);
+  static async getEntryByTokenAsync(token: string, preferRemote: boolean = false) {
+    return this.fetchRemoteServiceOrderByTrackingToken(token, preferRemote);
   }
 
   static initRealtime(tenantId: string) {
@@ -5636,6 +6072,7 @@ export class AppStore {
           code,
           description: srvInput.description,
           default_price: Number(srvInput.default_price) || 0,
+          allow_courtesy: Boolean(srvInput.allow_courtesy),
           estimated_time_minutes: Number(srvInput.estimated_time_minutes) || 60,
           category_ids: resolvedCategoryIds,
           is_active: true
