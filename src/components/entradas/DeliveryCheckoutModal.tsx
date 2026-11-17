@@ -172,7 +172,7 @@ export function DeliveryCheckoutModal({
           : payments.filter(p => Number(p.amount) > 0).map(p => ({ payment_method: p.method, amount: Number(p.amount) })),
         apply_discount: options.applyDiscount,
         is_zero_value: options.isZeroValue
-      }, currentUser?.full_name || 'Atendente');
+      }, currentUser?.full_name || 'Atendente', currentUser?.id);
 
       toast.success(`Baixa e entrega da OS #${orderNum} concluída com sucesso!`);
       onSuccess();

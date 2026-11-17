@@ -410,6 +410,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       case 'orders_discount':
       case 'catalog_manage':
       case 'allow_zero_value_delivery':
+      case 'cash_register_view_expected':
         return currentUser.role === 'ADMINISTRADOR';
 
       // Attendant & Admin permissions (Balcão de Atendimento)
@@ -423,6 +424,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       case 'orders_view':
       case 'orders_create':
       case 'orders_print':
+      case 'cash_register_operate':
+      case 'cash_register_sangria':
+      case 'cash_register_close':
         return ['ADMINISTRADOR', 'ATENDENTE'].includes(currentUser.role);
 
       // Technician & Admin permissions (Bancada Técnica)

@@ -759,11 +759,15 @@ describe('Custom Services, Kanban & Financial Report Suite', () => {
   });
 
   describe('24. Permission Group Rules Count Validation', () => {
-    it('has exactly 23 canonical permission rules in admin group', () => {
+    it('has all 27 canonical permission rules in admin group (including universal cash register controls)', () => {
       const groups = AppStore.getPermissionGroups(tenantId);
       const adminGroup = groups.find(g => g.id === 'default-admin-group');
       const activeAdminKeys = Object.entries(adminGroup?.permissions || {}).filter(([_, v]) => Boolean(v)).map(([k]) => k);
-      expect(activeAdminKeys.length).toBe(23);
+      expect(activeAdminKeys.length).toBe(27);
+      expect(activeAdminKeys).toContain('cash_register_operate');
+      expect(activeAdminKeys).toContain('cash_register_sangria');
+      expect(activeAdminKeys).toContain('cash_register_close');
+      expect(activeAdminKeys).toContain('cash_register_view_expected');
 
       const techGroup = groups.find(g => g.id === 'default-tech-group');
       const activeTechKeys = Object.entries(techGroup?.permissions || {}).filter(([_, v]) => Boolean(v)).map(([k]) => k);

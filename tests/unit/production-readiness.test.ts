@@ -594,5 +594,166 @@ describe('Production Readiness: Tenant Onboarding, Plans & Cash Register Persist
     expect(approvedOrder!.items![0].custom_field_values?.quality_review?.decision).toBe('APPROVED');
     expect(approvedOrder!.items![0].technical_notes).toContain('CLIENTE ACEITOU A QUALIDADE PELO SITE');
   });
+
+  it('supports SHARED universal cash register with AUTO_OPEN, multi-operator attribution, VENDA_AVULSA and accurate closing', () => {
+    const email = `caixa.shared.${Date.now()}@loja.com.br`;
+    const company = AppStore.addCompany(
+      { trade_name: 'Loja Caixa Compartilhado', corporate_name: 'Loja Caixa LTDA', phone: '(11) 96666-1111', email },
+      { fullName: 'Dono Admin', email, password: 'SenhaForte@2026', phone: '(11) 96666-1111' },
+      AppStore.getPlans()[0]?.id,
+      'Super Admin',
+      'RECARGA_CARTUCHOS'
+    );
+
+    AppStore.updateSettings(company.id, {
+      cash_register_mode: 'SHARED',
+      cash_register_policy: 'AUTO_OPEN',
+      default_cash_register_float: 50
+    });
+
+    const customer = AppStore.addCustomer({
+      tenant_id: company.id,
+      name: 'Cliente Caixa Shared',
+      phone: '(11) 95555-2222'
+    });
+
+    const opA = { id: 'op-a-1111', name: 'Atendente Alice' };
+    const opB = { id: 'op-b-2222', name: 'Atendente Bruno' };
+
+    const os1 = AppStore.addServiceOrder({
+      tenant_id: company.id,
+      customer_id: customer.id,
+      opened_by: opA.id,
+      opened_by_name: opA.name,
+      items: [{ model_id: 'mod-hp664', internal_identifier: 'CART-01', services: [{ service_id: 'srv-recarga-preto', unit_price: 80 }] }]
+    }, opA.name);
+
+    const os2 = AppStore.addServiceOrder({
+      tenant_id: company.id,
+      customer_id: customer.id,
+      opened_by: opB.id,
+      opened_by_name: opB.name,
+      items: [{ model_id: 'mod-hp664', internal_identifier: 'CART-02', services: [{ service_id: 'srv-recarga-preto', unit_price: 120 }] }]
+    }, opB.name);
+
+    // Caixa ainda não foi aberto manualmente — entrega deve auto-abrir caixa compartilhado com fundo padrão R$ 50
+    AppStore.deliverServiceOrder(
+      os1.id,
+      { receiver_name: 'Cliente Caixa Shared', payments: [{ payment_method: 'DINHEIRO', amount: 80 }] },
+      opA.name,
+      opA.id
+    );
+
+    AppStore.deliverServiceOrder(
+      os2.id,
+      { receiver_name: 'Cliente Caixa Shared', payments: [{ payment_method: 'PIX', amount: 120 }] },
+      opB.name,
+      opB.id
+    );
+
+    const activeList = AppStore.getActiveCashRegisters(company.id);
+    expect(activeList.length).toBe(1);
+    const sharedReg = activeList[0];
+    expect(sharedReg.initial_amount).toBe(50);
+
+    // Vendas avulsas + suprimento + sangria no mesmo caixa compartilhado
+    AppStore.addCashRegisterMovement(company.id, 'VENDA_AVULSA', 30, 'Cabo USB avulso', opA.id, opA.name, 'DINHEIRO');
+    AppStore.addCashRegisterMovement(company.id, 'VENDA_AVULSA', 40, 'Resma papel A4', opB.id, opB.name, 'PIX');
+    AppStore.addCashRegisterMovement(company.id, 'SUPRIMENTO', 20, 'Troco extra', opA.id, opA.name);
+    AppStore.addCashRegisterMovement(company.id, 'SANGRIA', 10, 'Compra água', opB.id, opB.name);
+
+    const refreshed = AppStore.getActiveCashRegister(company.id)!;
+    const aliceMovs = refreshed.movements.filter(m => m.performed_by === opA.id);
+    const brunoMovs = refreshed.movements.filter(m => m.performed_by === opB.id);
+    expect(aliceMovs.length).toBeGreaterThanOrEqual(4); // abertura + OS1 + venda avulsa + suprimento
+    expect(brunoMovs.length).toBeGreaterThanOrEqual(3); // OS2 + venda avulsa + sangria
+
+    // Dinheiro esperado na gaveta: 50 (abertura) + 80 (OS1 Dinheiro) + 30 (Avulsa Dinheiro) + 20 (Suprimento) - 10 (Sangria) = 170
+    const closed = AppStore.closeCashRegister(company.id, 210, opA.id, opA.name, 'Fechamento compartilhado');
+    expect(closed.closing_calculated_cash).toBe(170);
+    expect(closed.closing_difference).toBe(40);
+
+    AppStore.updateSettings(company.id, {
+      cash_register_mode: 'SHARED',
+      cash_register_policy: 'AUTO_OPEN',
+      default_cash_register_float: 0
+    });
+  });
+
+  it('enforces REQUIRE_OPEN policy before charging initial or delivery payment and isolates PER_OPERATOR registers', () => {
+    const email = `caixa.strict.${Date.now()}@loja.com.br`;
+    const company = AppStore.addCompany(
+      { trade_name: 'Loja Caixa Estrito', corporate_name: 'Loja Estrito LTDA', phone: '(11) 96666-3333', email },
+      { fullName: 'Gestor Caixa', email, password: 'SenhaForte@2026', phone: '(11) 96666-3333' },
+      AppStore.getPlans()[0]?.id,
+      'Super Admin',
+      'RECARGA_CARTUCHOS'
+    );
+
+    const customer = AppStore.addCustomer({
+      tenant_id: company.id,
+      name: 'Cliente Rigoroso',
+      phone: '(11) 95555-4444'
+    });
+
+    const opA = { id: 'op-strict-a', name: 'Operadora Carla' };
+    const opB = { id: 'op-strict-b', name: 'Operador Diego' };
+
+    AppStore.updateSettings(company.id, {
+      cash_register_mode: 'PER_OPERATOR',
+      cash_register_policy: 'REQUIRE_OPEN',
+      default_cash_register_float: 0
+    });
+
+    // Sem caixa aberto, tentar criar OS com sinal deve lançar erro e não criar OS órfã
+    expect(() =>
+      AppStore.addServiceOrder({
+        tenant_id: company.id,
+        customer_id: customer.id,
+        opened_by: opA.id,
+        opened_by_name: opA.name,
+        initial_payment: { amount: 50, payment_method: 'DINHEIRO' },
+        items: [{ model_id: 'mod-hp664', internal_identifier: 'CART-ERR', services: [{ service_id: 'srv-recarga-preto', unit_price: 50 }] }]
+      }, opA.name)
+    ).toThrow(/Caixa Aberto|abra o seu caixa/i);
+
+    expect(AppStore.getServiceOrders(company.id).length).toBe(0);
+
+    // Abrir caixas individuais simultaneamente para Carla e Diego
+    const regA = AppStore.openCashRegister(company.id, 100, opA.id, opA.name);
+    const regB = AppStore.openCashRegister(company.id, 200, opB.id, opB.name);
+
+    expect(AppStore.getActiveCashRegisters(company.id).length).toBe(2);
+    expect(AppStore.getActiveCashRegister(company.id, opA.id)?.id).toBe(regA.id);
+    expect(AppStore.getActiveCashRegister(company.id, opB.id)?.id).toBe(regB.id);
+
+    // Criar OS sem pagamento inicial e receber como Diego
+    const osDiego = AppStore.addServiceOrder({
+      tenant_id: company.id,
+      customer_id: customer.id,
+      opened_by: opA.id,
+      opened_by_name: opA.name,
+      items: [{ model_id: 'mod-hp664', internal_identifier: 'CART-PEROP', services: [{ service_id: 'srv-recarga-preto', unit_price: 60 }] }]
+    }, opA.name);
+
+    AppStore.deliverServiceOrder(
+      osDiego.id,
+      { receiver_name: 'Cliente Rigoroso', payments: [{ payment_method: 'DINHEIRO', amount: 60 }] },
+      opB.name,
+      opB.id
+    );
+
+    const updatedRegA = AppStore.getActiveCashRegister(company.id, opA.id)!;
+    const updatedRegB = AppStore.getActiveCashRegister(company.id, opB.id)!;
+    expect(updatedRegA.movements.filter(m => m.type === 'VENDA_ORDEM').length).toBe(0);
+    expect(updatedRegB.movements.filter(m => m.type === 'VENDA_ORDEM').length).toBe(1);
+    expect(updatedRegB.movements.find(m => m.type === 'VENDA_ORDEM')?.performed_by).toBe(opB.id);
+
+    AppStore.updateSettings(company.id, {
+      cash_register_mode: 'SHARED',
+      cash_register_policy: 'AUTO_OPEN',
+      default_cash_register_float: 0
+    });
+  });
 });
 

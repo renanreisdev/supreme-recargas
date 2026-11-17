@@ -789,6 +789,11 @@ export interface CompanySettings {
   // Configuração Individual e Completa por Via (1ª Via e 2ª Via):
   receipt_copy_1_config?: ReceiptCopyConfig;
   receipt_copy_2_config?: ReceiptCopyConfig;
+
+  // Configuração Universal de Caixa (Compartilhado vs Por Operador e Política de Abertura):
+  cash_register_mode?: 'SHARED' | 'PER_OPERATOR';
+  cash_register_policy?: 'AUTO_OPEN' | 'REQUIRE_OPEN' | 'OPTIONAL';
+  default_cash_register_float?: number;
 }
 
 // ============================================================================
@@ -835,7 +840,7 @@ export interface CashRegisterMovement {
   id: string;
   tenant_id: string;
   register_id: string;
-  type: 'ABERTURA' | 'SANGRIA' | 'SUPRIMENTO' | 'VENDA_ORDEM';
+  type: 'ABERTURA' | 'SANGRIA' | 'SUPRIMENTO' | 'VENDA_ORDEM' | 'VENDA_AVULSA';
   amount: number;
   payment_method?: PaymentMethod;
   order_id?: string;

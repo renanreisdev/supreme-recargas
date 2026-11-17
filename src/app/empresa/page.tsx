@@ -39,7 +39,9 @@ import {
   Download,
   FileSpreadsheet,
   ShieldCheck,
-  Database
+  Database,
+  Banknote,
+  Wallet
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import Link from 'next/link';
@@ -60,7 +62,7 @@ interface PermissionOption {
   key: string;
   label: string;
   description: string;
-  category: 'Balcão' | 'Oficina' | 'Gestão';
+  category: 'Balcão' | 'Financeiro & Caixa' | 'Oficina' | 'Gestão';
 }
 
 const AVAILABLE_PERMISSIONS: PermissionOption[] = [
@@ -85,6 +87,10 @@ const AVAILABLE_PERMISSIONS: PermissionOption[] = [
   { key: 'manage_models', label: 'Gerenciar Catálogo & Preços', description: 'Permite cadastrar modelos e alterar preços padrão', category: 'Gestão' },
   { key: 'manage_services', label: 'Gerenciar Serviços & Procedimentos', description: 'Permite criar, editar e precificar serviços solicitados da oficina', category: 'Gestão' },
   { key: 'view_financial_reports', label: 'Relatórios Financeiros', description: 'Permite visualizar faturamento e formas de pagamento', category: 'Gestão' },
+  { key: 'cash_register_operate', label: 'Operar Frente de Caixa (Abrir & Lançar Entradas)', description: 'Permite abrir o caixa e lançar suprimentos e vendas avulsas no balcão', category: 'Financeiro & Caixa' },
+  { key: 'cash_register_sangria', label: 'Lançar Sangrias (Retiradas de Caixa)', description: 'Permite registrar retiradas em dinheiro e sangrias da gaveta', category: 'Financeiro & Caixa' },
+  { key: 'cash_register_close', label: 'Realizar Fechamento de Caixa', description: 'Permite encerrar turnos do caixa e registrar conferência da gaveta', category: 'Financeiro & Caixa' },
+  { key: 'cash_register_view_expected', label: 'Ver Saldo Esperado Antes do Fechamento', description: 'Permite ver o saldo calculado pelo sistema no caixa (quando desmarcado, força fechamento cego)', category: 'Financeiro & Caixa' },
   { key: 'view_audit_logs', label: 'Auditoria de Ações', description: 'Permite consultar o registro histórico de operações de todos os usuários', category: 'Gestão' },
   { key: 'manage_company', label: 'Gerenciar Empresa & Permissões', description: 'Permite alterar dados da empresa e permissões dos usuários', category: 'Gestão' },
 ];
@@ -252,6 +258,9 @@ function CompanySettingsContent() {
   const [skuDigits, setSkuDigits] = useState<string>(String(settings.sku_digits || 4));
   const [itemDescriptionDisplayMode, setItemDescriptionDisplayMode] = useState<'BASIC' | 'FULL'>(settings.item_description_display_mode || 'BASIC');
   const [technicianGroupIds, setTechnicianGroupIds] = useState<string[]>(settings.technician_group_ids || ['default-tech-group']);
+  const [cashRegisterMode, setCashRegisterMode] = useState<'SHARED' | 'PER_OPERATOR'>(settings.cash_register_mode || 'SHARED');
+  const [cashRegisterPolicy, setCashRegisterPolicy] = useState<'AUTO_OPEN' | 'REQUIRE_OPEN' | 'OPTIONAL'>(settings.cash_register_policy || 'AUTO_OPEN');
+  const [defaultCashRegisterFloat, setDefaultCashRegisterFloat] = useState<string>(String(settings.default_cash_register_float ?? 0));
   const [policySaveSuccess, setPolicySaveSuccess] = useState(false);
 
   // Dedicated Thermal Printing State (Tab 5)
@@ -329,6 +338,9 @@ function CompanySettingsContent() {
     setSkuDigits(String(sets.sku_digits || 4));
     setItemDescriptionDisplayMode(sets.item_description_display_mode || 'BASIC');
     setTechnicianGroupIds(sets.technician_group_ids || ['default-tech-group']);
+    setCashRegisterMode(sets.cash_register_mode || 'SHARED');
+    setCashRegisterPolicy(sets.cash_register_policy || 'AUTO_OPEN');
+    setDefaultCashRegisterFloat(String(sets.default_cash_register_float ?? 0));
 
     // Printing Settings
     setPrinterPaperWidth(sets.printer_paper_width || '80mm');
@@ -436,7 +448,10 @@ function CompanySettingsContent() {
       sku_start_number: parseInt(skuStartNumber, 10) || 1,
       sku_digits: parseInt(skuDigits, 10) || 4,
       item_description_display_mode: itemDescriptionDisplayMode,
-      technician_group_ids: technicianGroupIds
+      technician_group_ids: technicianGroupIds,
+      cash_register_mode: cashRegisterMode,
+      cash_register_policy: cashRegisterPolicy,
+      default_cash_register_float: Math.max(0, parseFloat(defaultCashRegisterFloat) || 0)
     }, currentUser?.full_name || 'Administrador');
     setSettings(updated);
     setPolicySaveSuccess(true);
@@ -1950,6 +1965,104 @@ function CompanySettingsContent() {
               </div>
             </div>
 
+            {/* Caixa Universal & Controle Financeiro por Operador */}
+            <div className="p-4 bg-slate-50 dark:bg-slate-900/60 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                    <Banknote className="w-4 h-4 text-emerald-600" />
+                    <span>Caixa Universal & Controle por Operador</span>
+                  </h4>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Adapte o Frente de Caixa para lojas pequenas com 1 gaveta compartilhada entre vários atendentes ou para equipes com um caixa individual por operador.
+                  </p>
+                </div>
+                <Badge className="bg-emerald-600 text-white text-[10px] w-fit">
+                  {cashRegisterMode === 'SHARED' ? 'Caixa Único Compartilhado' : 'Caixa Por Operador'}
+                </Badge>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${
+                  cashRegisterMode === 'SHARED'
+                    ? 'bg-emerald-50/50 dark:bg-emerald-950/30 border-emerald-500 ring-2 ring-emerald-500/20'
+                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300'
+                }`}>
+                  <input
+                    type="radio"
+                    name="cash_register_mode"
+                    value="SHARED"
+                    checked={cashRegisterMode === 'SHARED'}
+                    onChange={() => setCashRegisterMode('SHARED')}
+                    className="mt-1 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <div className="space-y-1">
+                    <div className="font-bold text-xs text-slate-900 dark:text-slate-100">
+                      Caixa Único Compartilhado (Ideal Empresas Pequenas)
+                    </div>
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      Toda a equipe usa 1 único caixa/gaveta aberta ao mesmo tempo, porém cada recebimento, sangria ou suprimento fica carimbado com o usuário responsável (Prestação de Contas por Operador).
+                    </p>
+                  </div>
+                </label>
+
+                <label className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${
+                  cashRegisterMode === 'PER_OPERATOR'
+                    ? 'bg-emerald-50/50 dark:bg-emerald-950/30 border-emerald-500 ring-2 ring-emerald-500/20'
+                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300'
+                }`}>
+                  <input
+                    type="radio"
+                    name="cash_register_mode"
+                    value="PER_OPERATOR"
+                    checked={cashRegisterMode === 'PER_OPERATOR'}
+                    onChange={() => setCashRegisterMode('PER_OPERATOR')}
+                    className="mt-1 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <div className="space-y-1">
+                    <div className="font-bold text-xs text-slate-900 dark:text-slate-100">
+                      Caixa Individual por Operador (Gavetas Separadas)
+                    </div>
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      Cada atendente abre, opera e fecha seu próprio caixa simultaneamente, separando os turnos e gavetas de cada operador.
+                    </p>
+                  </div>
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-slate-200/70 dark:border-slate-800">
+                <div className="sm:col-span-2">
+                  <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                    Política quando receber pagamento em OS com caixa fechado
+                  </label>
+                  <Select
+                    value={cashRegisterPolicy}
+                    onChange={e => setCashRegisterPolicy(e.target.value as 'AUTO_OPEN' | 'REQUIRE_OPEN' | 'OPTIONAL')}
+                    className="text-xs rounded-xl"
+                  >
+                    <option value="AUTO_OPEN">Abertura Automática — Abre o caixa automaticamente para não perder nenhum lançamento (Recomendado)</option>
+                    <option value="REQUIRE_OPEN">Exigir Caixa Aberto — Bloqueia recebimentos enquanto o caixa não for aberto</option>
+                    <option value="OPTIONAL">Opcional — Registra apenas no financeiro da OS sem exigir turno de caixa</option>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                    Fundo de Troco Padrão (R$)
+                  </label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={defaultCashRegisterFloat}
+                    onChange={e => setDefaultCashRegisterFloat(e.target.value)}
+                    placeholder="0.00"
+                    className="text-xs rounded-xl font-mono font-bold"
+                  />
+                </div>
+              </div>
+            </div>
+
             <div className="flex justify-end pt-2">
               <Button type="submit" size="sm" className="bg-emerald-600 hover:bg-emerald-700 font-bold text-xs text-white gap-1.5 rounded-xl h-9 shadow-xs">
                 <Check className="w-4 h-4" />
@@ -3295,7 +3408,7 @@ function CompanySettingsContent() {
                 </div>
 
                 <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                  {(['Balcão', 'Oficina', 'Gestão'] as const).map(cat => (
+                  {(['Balcão', 'Financeiro & Caixa', 'Oficina', 'Gestão'] as const).map(cat => (
                     <div key={cat} className="space-y-1.5">
                       <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-1 pt-1">
                         {cat}
@@ -3453,7 +3566,7 @@ function CompanySettingsContent() {
               </div>
 
               <div className="space-y-2">
-                {(['Balcão', 'Oficina', 'Gestão'] as const).map(cat => (
+                {(['Balcão', 'Financeiro & Caixa', 'Oficina', 'Gestão'] as const).map(cat => (
                   <div key={cat} className="space-y-1.5">
                     <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-1 pt-1">
                       {cat}

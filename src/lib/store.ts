@@ -1138,7 +1138,11 @@ export const DEFAULT_PERMISSION_GROUPS: PermissionGroup[] = [
       manage_services: true,
       view_financial_reports: true,
       view_audit_logs: true,
-      manage_company: true
+      manage_company: true,
+      cash_register_operate: true,
+      cash_register_sangria: true,
+      cash_register_close: true,
+      cash_register_view_expected: true
     }
   },
   {
@@ -1171,7 +1175,11 @@ export const DEFAULT_PERMISSION_GROUPS: PermissionGroup[] = [
       manage_services: false,
       view_financial_reports: false,
       view_audit_logs: false,
-      manage_company: false
+      manage_company: false,
+      cash_register_operate: true,
+      cash_register_sangria: true,
+      cash_register_close: true,
+      cash_register_view_expected: false
     }
   },
   {
@@ -1204,7 +1212,11 @@ export const DEFAULT_PERMISSION_GROUPS: PermissionGroup[] = [
       manage_services: false,
       view_financial_reports: false,
       view_audit_logs: false,
-      manage_company: false
+      manage_company: false,
+      cash_register_operate: false,
+      cash_register_sangria: false,
+      cash_register_close: false,
+      cash_register_view_expected: false
     }
   }
 ];
@@ -1462,7 +1474,10 @@ export const MOCK_COMPANY_SETTINGS: CompanySettings = {
   item_description_display_mode: 'BASIC',
   technician_group_ids: ['default-tech-group'],
   receipt_copy_1_config: buildFullReceiptCopyConfig(),
-  receipt_copy_2_config: buildFullReceiptCopyConfig()
+  receipt_copy_2_config: buildFullReceiptCopyConfig(),
+  cash_register_mode: 'SHARED',
+  cash_register_policy: 'AUTO_OPEN',
+  default_cash_register_float: 0
 };
 
 export const DEFAULT_PLATFORM_SETTINGS: PlatformSaasSettings = {
@@ -4066,6 +4081,10 @@ export class AppStore {
     const data = this.getStoreData();
     if (!Array.isArray(data.serviceOrders)) data.serviceOrders = [];
 
+    if (orderData.initial_payment && orderData.initial_payment.amount > 0) {
+      this.assertCashRegisterAllowsPayment(orderData.tenant_id, orderData.opened_by);
+    }
+
     const { orderNumber, sequence, year } = this.generateNextOrderNumber(orderData.tenant_id);
     const orderId = generateUUID();
     const trackingToken = generateTrackingToken();
@@ -4197,18 +4216,21 @@ export class AppStore {
         created_at: new Date().toISOString()
       };
       data.payments.push(newPayment);
+    }
+
+    this.saveStoreData(data);
+
+    if (newPayment) {
       this.recordOrderPaymentToCashRegister(
         orderData.tenant_id,
         orderId,
         orderNumber,
-        orderData.initial_payment.amount,
-        orderData.initial_payment.payment_method,
+        newPayment.amount,
+        newPayment.payment_method,
         orderData.opened_by,
         orderData.opened_by_name || performedByName || 'Atendente'
       );
     }
-
-    this.saveStoreData(data);
 
     // Persist to Supabase Database with offline resilience
     this.enqueueOrExecuteMutation({
@@ -4743,46 +4765,46 @@ export class AppStore {
       apply_discount?: number;
       is_zero_value?: boolean;
     },
-    performedByName?: string
+    performedByName?: string,
+    performedById?: string
   ): ServiceOrder {
     const data = this.getStoreData();
     const orderIdx = (data.serviceOrders || []).findIndex((o: ServiceOrder) => o.id === orderId);
     if (orderIdx === -1) throw new Error('Ordem de Serviço não encontrada.');
 
     const order = data.serviceOrders[orderIdx];
+    const operatorId = performedById || order.opened_by;
+    const operatorName = performedByName || 'Atendente';
     const deliveredAt = new Date().toISOString();
+
+    const positivePayments = (!deliveryData.is_zero_value && Array.isArray(deliveryData.payments))
+      ? deliveryData.payments.filter(p => p.amount > 0)
+      : [];
+
+    if (positivePayments.length > 0) {
+      this.assertCashRegisterAllowsPayment(order.tenant_id, operatorId);
+    }
 
     // Register Payments
     let totalPaidInCheckout = 0;
     const checkoutPayments: Payment[] = [];
-    if (Array.isArray(deliveryData.payments)) {
+    if (positivePayments.length > 0) {
       if (!Array.isArray(data.payments)) data.payments = [];
-      for (const p of deliveryData.payments) {
-        if (p.amount > 0) {
-          totalPaidInCheckout += p.amount;
-          const payObj: Payment = {
-            id: generateUUID(),
-            tenant_id: order.tenant_id,
-            service_order_id: orderId,
-            amount: p.amount,
-            payment_method: p.payment_method,
-            received_by: order.opened_by,
-            received_by_name: performedByName || 'Atendente',
-            paid_at: deliveredAt,
-            created_at: deliveredAt
-          };
-          data.payments.push(payObj);
-          checkoutPayments.push(payObj);
-          this.recordOrderPaymentToCashRegister(
-            order.tenant_id,
-            order.id,
-            order.order_number,
-            p.amount,
-            p.payment_method,
-            order.opened_by,
-            performedByName || 'Atendente'
-          );
-        }
+      for (const p of positivePayments) {
+        totalPaidInCheckout += p.amount;
+        const payObj: Payment = {
+          id: generateUUID(),
+          tenant_id: order.tenant_id,
+          service_order_id: orderId,
+          amount: p.amount,
+          payment_method: p.payment_method,
+          received_by: operatorId,
+          received_by_name: operatorName,
+          paid_at: deliveredAt,
+          created_at: deliveredAt
+        };
+        data.payments.push(payObj);
+        checkoutPayments.push(payObj);
       }
     }
 
@@ -4813,8 +4835,8 @@ export class AppStore {
     // Register Delivery Object
     order.delivery_info = {
       delivered_at: deliveredAt,
-      delivered_by: order.opened_by,
-      delivered_by_name: performedByName || 'Atendente',
+      delivered_by: operatorId,
+      delivered_by_name: operatorName,
       receiver_name: deliveryData.receiver_name,
       receiver_document: deliveryData.receiver_document,
       receiver_relation: deliveryData.receiver_relation || 'Próprio Cliente',
@@ -4830,6 +4852,19 @@ export class AppStore {
     }
 
     this.saveStoreData(data);
+
+    // Registra movimentações no caixa após persistir a baixa no store para evitar overwrite em localStorage
+    for (const pay of checkoutPayments) {
+      this.recordOrderPaymentToCashRegister(
+        order.tenant_id,
+        order.id,
+        order.order_number,
+        pay.amount,
+        pay.payment_method,
+        operatorId,
+        operatorName
+      );
+    }
 
     // Persist delivery to Supabase Database
     this.enqueueOrExecuteMutation({
@@ -4983,7 +5018,13 @@ export class AppStore {
   // --------------------------------------------------------------------------
   static getSettings(tenantId: string): CompanySettings {
     const data = this.getStoreData();
-    return data.settings || MOCK_COMPANY_SETTINGS;
+    const s = data.settings || MOCK_COMPANY_SETTINGS;
+    return {
+      ...s,
+      cash_register_mode: s.cash_register_mode || 'SHARED',
+      cash_register_policy: s.cash_register_policy || 'AUTO_OPEN',
+      default_cash_register_float: s.default_cash_register_float ?? 0
+    };
   }
 
   static updateSettings(tenantId: string, updates: Partial<CompanySettings>, performedByName?: string): CompanySettings {
@@ -5083,6 +5124,9 @@ export class AppStore {
         technician_group_ids: updated.technician_group_ids,
         item_description_display_mode: updated.item_description_display_mode,
         default_inactivity_timeout_minutes: updated.default_inactivity_timeout_minutes,
+        cash_register_mode: updated.cash_register_mode || 'SHARED',
+        cash_register_policy: updated.cash_register_policy || 'AUTO_OPEN',
+        default_cash_register_float: updated.default_cash_register_float ?? 0,
         updated_at: new Date().toISOString()
       },
       onConflict: 'tenant_id',
@@ -5138,6 +5182,15 @@ export class AppStore {
     if (updates.receipt_copy_1_config !== undefined || updates.receipt_copy_2_config !== undefined) {
       diffs.push(`Configuração individual das vias (1ª e 2ª via) atualizada`);
     }
+    if (updates.cash_register_mode !== undefined && updates.cash_register_mode !== old.cash_register_mode) {
+      diffs.push(`Modo de caixa: ${updates.cash_register_mode === 'PER_OPERATOR' ? 'Individual por Operador' : 'Único Compartilhado'}`);
+    }
+    if (updates.cash_register_policy !== undefined && updates.cash_register_policy !== old.cash_register_policy) {
+      diffs.push(`Política de recebimento no caixa: ${updates.cash_register_policy}`);
+    }
+    if (updates.default_cash_register_float !== undefined && updates.default_cash_register_float !== old.default_cash_register_float) {
+      diffs.push(`Fundo de troco padrão: R$ ${Number(updates.default_cash_register_float).toFixed(2)}`);
+    }
 
     this.logAudit({
       tenant_id: tenantId,
@@ -5173,10 +5226,46 @@ export class AppStore {
   // ==========================================================================
   // CASH REGISTER & CASH FLOW (Frente de Caixa / PDV)
   // ==========================================================================
-  static getActiveCashRegister(tenantId: string): CashRegisterSession | null {
+  private static getCashRegisterConfig(tenantId: string): {
+    mode: 'SHARED' | 'PER_OPERATOR';
+    policy: 'AUTO_OPEN' | 'REQUIRE_OPEN' | 'OPTIONAL';
+    defaultFloat: number;
+  } {
+    const settings = this.getSettings(tenantId);
+    return {
+      mode: settings.cash_register_mode || 'SHARED',
+      policy: settings.cash_register_policy || 'AUTO_OPEN',
+      defaultFloat: Number(settings.default_cash_register_float || 0)
+    };
+  }
+
+  static assertCashRegisterAllowsPayment(tenantId: string, userId?: string): void {
+    const { policy, mode } = this.getCashRegisterConfig(tenantId);
+    if (policy !== 'REQUIRE_OPEN') return;
+    const active = this.getActiveCashRegister(tenantId, userId);
+    if (!active) {
+      throw new Error(
+        mode === 'PER_OPERATOR'
+          ? 'Política da empresa exige que você abra o seu caixa antes de receber pagamentos. Acesse Financeiro / Caixa para abrir.'
+          : 'Política da empresa exige Caixa Aberto antes de receber pagamentos. Acesse Financeiro / Caixa para abrir.'
+      );
+    }
+  }
+
+  static getActiveCashRegisters(tenantId: string): CashRegisterSession[] {
     const data = this.getStoreData();
     const registers: CashRegisterSession[] = data.cashRegisters || [];
-    return registers.find(r => r.tenant_id === tenantId && r.status === 'ABERTO') || null;
+    return registers.filter(r => r.tenant_id === tenantId && r.status === 'ABERTO');
+  }
+
+  static getActiveCashRegister(tenantId: string, userId?: string): CashRegisterSession | null {
+    const activeRegisters = this.getActiveCashRegisters(tenantId);
+    if (activeRegisters.length === 0) return null;
+    const { mode } = this.getCashRegisterConfig(tenantId);
+    if (mode === 'PER_OPERATOR' && userId) {
+      return activeRegisters.find(r => r.opened_by === userId) || null;
+    }
+    return activeRegisters[0] || null;
   }
 
   static getCashRegisterHistory(tenantId: string): CashRegisterSession[] {
@@ -5196,10 +5285,19 @@ export class AppStore {
   ): CashRegisterSession {
     const data = this.getStoreData();
     if (!Array.isArray(data.cashRegisters)) data.cashRegisters = [];
+    const { mode } = this.getCashRegisterConfig(tenantId);
 
-    const existingOpen = data.cashRegisters.find((r: CashRegisterSession) => r.tenant_id === tenantId && r.status === 'ABERTO');
+    const existingOpen = data.cashRegisters.find((r: CashRegisterSession) =>
+      r.tenant_id === tenantId &&
+      r.status === 'ABERTO' &&
+      (mode === 'SHARED' || r.opened_by === userId)
+    );
     if (existingOpen) {
-      throw new Error(`Já existe um caixa aberto para esta empresa desde ${new Date(existingOpen.opened_at).toLocaleTimeString()}. Feche o caixa anterior antes de abrir um novo.`);
+      throw new Error(
+        mode === 'PER_OPERATOR'
+          ? `Você já possui um caixa aberto desde ${new Date(existingOpen.opened_at).toLocaleTimeString()}. Feche-o antes de abrir outro.`
+          : `Já existe um caixa aberto para esta empresa desde ${new Date(existingOpen.opened_at).toLocaleTimeString()}. Feche o caixa anterior antes de abrir um novo.`
+      );
     }
 
     const newId = generateUUID();
@@ -5213,7 +5311,7 @@ export class AppStore {
       type: 'ABERTURA',
       amount: initialAmount,
       payment_method: 'DINHEIRO',
-      description: 'Fundo de troco inicial de abertura de caixa',
+      description: notes || 'Fundo de troco inicial de abertura de caixa',
       performed_by: userId,
       performed_by_name: userName,
       created_at: now
@@ -5244,7 +5342,7 @@ export class AppStore {
       action: 'CAIXA_ABERTURA',
       resource: 'cash_registers',
       resource_id: newId,
-      details: `Abertura de caixa com fundo inicial de R$ ${initialAmount.toFixed(2)} por ${userName}`
+      details: `Abertura de caixa com fundo inicial de R$ ${initialAmount.toFixed(2)} por ${userName} (Modo: ${mode === 'PER_OPERATOR' ? 'Por Operador' : 'Compartilhado'})`
     });
 
     return newSession;
@@ -5252,21 +5350,35 @@ export class AppStore {
 
   static addCashRegisterMovement(
     tenantId: string,
-    type: 'SANGRIA' | 'SUPRIMENTO',
+    type: 'SANGRIA' | 'SUPRIMENTO' | 'VENDA_AVULSA',
     amount: number,
     description: string,
     userId: string,
-    userName: string
+    userName: string,
+    paymentMethod: PaymentMethod = 'DINHEIRO',
+    registerId?: string
   ): CashRegisterMovement {
     const data = this.getStoreData();
-    const active = (data.cashRegisters || []).find((r: CashRegisterSession) => r.tenant_id === tenantId && r.status === 'ABERTO');
+    const { mode } = this.getCashRegisterConfig(tenantId);
+    const active = (data.cashRegisters || []).find((r: CashRegisterSession) => {
+      if (r.tenant_id !== tenantId || r.status !== 'ABERTO') return false;
+      if (registerId) return r.id === registerId;
+      if (mode === 'PER_OPERATOR' && userId) return r.opened_by === userId;
+      return true;
+    });
     if (!active) {
-      throw new Error('Não há nenhum caixa aberto no momento. Abra o caixa antes de lançar movimentações.');
+      throw new Error(
+        mode === 'PER_OPERATOR'
+          ? 'Você não possui um caixa aberto no momento. Abra o seu caixa antes de lançar movimentações.'
+          : 'Não há nenhum caixa aberto no momento. Abra o caixa antes de lançar movimentações.'
+      );
     }
 
     if (amount <= 0) {
       throw new Error('O valor da movimentação deve ser maior que zero.');
     }
+
+    const effectiveMethod: PaymentMethod = type === 'VENDA_AVULSA' ? (paymentMethod || 'DINHEIRO') : 'DINHEIRO';
 
     const movement: CashRegisterMovement = {
       id: generateUUID(),
@@ -5274,7 +5386,7 @@ export class AppStore {
       register_id: active.id,
       type,
       amount,
-      payment_method: 'DINHEIRO',
+      payment_method: effectiveMethod,
       description,
       performed_by: userId,
       performed_by_name: userName,
@@ -5285,13 +5397,24 @@ export class AppStore {
     this.saveStoreData(data);
     this.enqueueOrExecuteMutation({ table: 'cash_register_movements', action: 'INSERT', payload: movement, tenant_id: tenantId });
 
+    const actionMap = {
+      SANGRIA: 'CAIXA_SANGRIA',
+      SUPRIMENTO: 'CAIXA_SUPRIMENTO',
+      VENDA_AVULSA: 'CAIXA_VENDA_AVULSA'
+    } as const;
+    const labelMap = {
+      SANGRIA: 'Sangria (Retirada)',
+      SUPRIMENTO: 'Suprimento (Entrada)',
+      VENDA_AVULSA: `Venda Avulsa (${effectiveMethod})`
+    } as const;
+
     this.logAudit({
       tenant_id: tenantId,
       user_name: userName,
-      action: type === 'SANGRIA' ? 'CAIXA_SANGRIA' : 'CAIXA_SUPRIMENTO',
+      action: actionMap[type],
       resource: 'cash_registers',
       resource_id: active.id,
-      details: `${type === 'SANGRIA' ? 'Sangria (Retirada)' : 'Suprimento (Entrada)'} de R$ ${amount.toFixed(2)}: ${description}`
+      details: `${labelMap[type]} de R$ ${amount.toFixed(2)}: ${description}`
     });
 
     return movement;
@@ -5307,9 +5430,35 @@ export class AppStore {
     userName: string
   ) {
     try {
-      const data = this.getStoreData();
-      const active = (data.cashRegisters || []).find((r: CashRegisterSession) => r.tenant_id === tenantId && r.status === 'ABERTO');
-      if (!active) return;
+      const { mode, policy, defaultFloat } = this.getCashRegisterConfig(tenantId);
+      let data = this.getStoreData();
+      let active = (data.cashRegisters || []).find((r: CashRegisterSession) =>
+        r.tenant_id === tenantId &&
+        r.status === 'ABERTO' &&
+        (mode === 'SHARED' || r.opened_by === userId)
+      );
+
+      if (!active) {
+        if (policy === 'OPTIONAL') {
+          return;
+        }
+        if (policy === 'REQUIRE_OPEN') {
+          throw new Error('Política da empresa exige Caixa Aberto para registrar recebimentos.');
+        }
+        // AUTO_OPEN (padrão universal): garante que nenhum recebimento de OS fique fora do Financeiro
+        const opened = this.openCashRegister(
+          tenantId,
+          defaultFloat,
+          userId,
+          userName,
+          mode === 'PER_OPERATOR'
+            ? `Abertura automática ao registrar recebimento da OS #${orderNumber}`
+            : `Abertura automática ao registrar recebimento da OS #${orderNumber} por ${userName}`
+        );
+        data = this.getStoreData();
+        active = (data.cashRegisters || []).find((r: CashRegisterSession) => r.id === opened.id);
+        if (!active) return;
+      }
 
       const movement: CashRegisterMovement = {
         id: generateUUID(),
@@ -5330,6 +5479,9 @@ export class AppStore {
       this.saveStoreData(data, false);
       this.enqueueOrExecuteMutation({ table: 'cash_register_movements', action: 'INSERT', payload: movement, tenant_id: tenantId });
     } catch (e) {
+      if (e instanceof Error && e.message.includes('Caixa Aberto')) {
+        throw e;
+      }
       console.warn('Could not register cash movement for order payment:', e);
     }
   }
@@ -5339,10 +5491,17 @@ export class AppStore {
     countedCash: number,
     userId: string,
     userName: string,
-    notes?: string
+    notes?: string,
+    registerId?: string
   ): CashRegisterSession {
     const data = this.getStoreData();
-    const active = (data.cashRegisters || []).find((r: CashRegisterSession) => r.tenant_id === tenantId && r.status === 'ABERTO');
+    const { mode } = this.getCashRegisterConfig(tenantId);
+    const active = (data.cashRegisters || []).find((r: CashRegisterSession) => {
+      if (r.tenant_id !== tenantId || r.status !== 'ABERTO') return false;
+      if (registerId) return r.id === registerId;
+      if (mode === 'PER_OPERATOR' && userId) return r.opened_by === userId;
+      return true;
+    });
     if (!active) {
       throw new Error('Nenhum caixa aberto encontrado para fechamento.');
     }
@@ -5353,7 +5512,7 @@ export class AppStore {
         calculatedCash += mov.amount;
       } else if (mov.type === 'SANGRIA') {
         calculatedCash -= mov.amount;
-      } else if (mov.type === 'VENDA_ORDEM' && mov.payment_method === 'DINHEIRO') {
+      } else if ((mov.type === 'VENDA_ORDEM' || mov.type === 'VENDA_AVULSA') && mov.payment_method === 'DINHEIRO') {
         calculatedCash += mov.amount;
       }
     }
