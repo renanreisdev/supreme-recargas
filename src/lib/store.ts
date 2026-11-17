@@ -44,7 +44,8 @@ import {
   PresetImportSelection,
   PresetImportResult,
   CategoryCustomField,
-  ItemQualityReview
+  ItemQualityReview,
+  ReceiptCopyConfig
 } from '@/types';
 import { supabase } from './supabase';
 import { hashPassword, verifyPassword, isPasswordHashed, buildLgpdAnonymizedCustomer } from '@/lib/security';
@@ -1331,6 +1332,98 @@ export const INITIAL_PAYMENTS: Payment[] = [];
 
 export const INITIAL_AUDIT_LOGS: AuditLog[] = [];
 
+export function buildFullReceiptCopyConfig(overrides?: Partial<ReceiptCopyConfig>): ReceiptCopyConfig {
+  return {
+    custom_title: undefined,
+    show_header_slogan: true,
+    show_company_cnpj: true,
+    show_company_contact: true,
+    show_company_address: true,
+    show_attendant: true,
+    show_technician: true,
+    show_customer_phone: true,
+    show_customer_document: true,
+    show_items: true,
+    show_item_serial: true,
+    show_item_services: true,
+    show_reported_issue: true,
+    show_checklist: true,
+    show_accessories: true,
+    show_notes: true,
+    show_prices: true,
+    show_payment_details: true,
+    show_qr_code: true,
+    show_footer_terms: true,
+    show_customer_signature: true,
+    show_attendant_signature: false,
+    ...overrides
+  };
+}
+
+export function buildCompactReceiptCopyConfig(overrides?: Partial<ReceiptCopyConfig>): ReceiptCopyConfig {
+  return {
+    custom_title: undefined,
+    show_header_slogan: true,
+    show_company_cnpj: false,
+    show_company_contact: true,
+    show_company_address: false,
+    show_attendant: false,
+    show_technician: false,
+    show_customer_phone: false,
+    show_customer_document: false,
+    show_items: true,
+    show_item_serial: true,
+    show_item_services: false,
+    show_reported_issue: false,
+    show_checklist: false,
+    show_accessories: false,
+    show_notes: false,
+    show_prices: true,
+    show_payment_details: false,
+    show_qr_code: true,
+    show_footer_terms: true,
+    show_customer_signature: false,
+    show_attendant_signature: false,
+    ...overrides
+  };
+}
+
+export function resolveReceiptCopyConfig(settings: CompanySettings, copyNumber: 1 | 2): ReceiptCopyConfig {
+  const baseFromLegacy: ReceiptCopyConfig = {
+    custom_title: undefined,
+    show_header_slogan: true,
+    show_company_cnpj: settings.show_company_cnpj ?? true,
+    show_company_contact: settings.show_company_contact ?? true,
+    show_company_address: settings.show_company_address ?? true,
+    show_attendant: true,
+    show_technician: settings.show_technician_on_receipt ?? true,
+    show_customer_phone: true,
+    show_customer_document: true,
+    show_items: true,
+    show_item_serial: true,
+    show_item_services: true,
+    show_reported_issue: settings.show_reported_issue_on_receipt ?? true,
+    show_checklist: settings.show_checklist_on_receipt ?? true,
+    show_accessories: settings.show_accessories_on_receipt ?? true,
+    show_notes: true,
+    show_prices: settings.show_prices_on_receipt ?? true,
+    show_payment_details: true,
+    show_qr_code: settings.show_qr_code_on_receipt ?? true,
+    show_footer_terms: true,
+    show_customer_signature: settings.show_customer_signature_line ?? true,
+    show_attendant_signature: settings.show_attendant_signature_line ?? false
+  };
+
+  const saved = copyNumber === 1 ? settings.receipt_copy_1_config : settings.receipt_copy_2_config;
+  if (!saved || typeof saved !== 'object') {
+    return baseFromLegacy;
+  }
+  return {
+    ...baseFromLegacy,
+    ...saved
+  };
+}
+
 export const MOCK_COMPANY_SETTINGS: CompanySettings = {
   id: 'sett-001',
   tenant_id: MOCK_COMPANY_SUPREME.id,
@@ -1367,7 +1460,9 @@ export const MOCK_COMPANY_SETTINGS: CompanySettings = {
   sku_start_number: 1,
   sku_digits: 4,
   item_description_display_mode: 'BASIC',
-  technician_group_ids: ['default-tech-group']
+  technician_group_ids: ['default-tech-group'],
+  receipt_copy_1_config: buildFullReceiptCopyConfig(),
+  receipt_copy_2_config: buildFullReceiptCopyConfig()
 };
 
 export const DEFAULT_PLATFORM_SETTINGS: PlatformSaasSettings = {
@@ -4894,7 +4989,53 @@ export class AppStore {
   static updateSettings(tenantId: string, updates: Partial<CompanySettings>, performedByName?: string): CompanySettings {
     const data = this.getStoreData();
     const old = data.settings || MOCK_COMPANY_SETTINGS;
-    const updated = { ...old, ...updates, tenant_id: tenantId };
+    const updated: CompanySettings = { ...old, ...updates, tenant_id: tenantId };
+
+    // Keep legacy top-level flags in sync with per-copy configs when legacy keys are updated directly
+    const legacyPatch: Partial<ReceiptCopyConfig> = {};
+    if (updates.show_prices_on_receipt !== undefined && !updates.receipt_copy_1_config) {
+      legacyPatch.show_prices = updates.show_prices_on_receipt;
+    }
+    if (updates.show_qr_code_on_receipt !== undefined && !updates.receipt_copy_1_config) {
+      legacyPatch.show_qr_code = updates.show_qr_code_on_receipt;
+    }
+    if (updates.show_checklist_on_receipt !== undefined && !updates.receipt_copy_1_config) {
+      legacyPatch.show_checklist = updates.show_checklist_on_receipt;
+    }
+    if (updates.show_accessories_on_receipt !== undefined && !updates.receipt_copy_1_config) {
+      legacyPatch.show_accessories = updates.show_accessories_on_receipt;
+    }
+    if (updates.show_reported_issue_on_receipt !== undefined && !updates.receipt_copy_1_config) {
+      legacyPatch.show_reported_issue = updates.show_reported_issue_on_receipt;
+    }
+    if (updates.show_technician_on_receipt !== undefined && !updates.receipt_copy_1_config) {
+      legacyPatch.show_technician = updates.show_technician_on_receipt;
+    }
+    if (updates.show_customer_signature_line !== undefined && !updates.receipt_copy_1_config) {
+      legacyPatch.show_customer_signature = updates.show_customer_signature_line;
+    }
+    if (updates.show_attendant_signature_line !== undefined && !updates.receipt_copy_1_config) {
+      legacyPatch.show_attendant_signature = updates.show_attendant_signature_line;
+    }
+    if (updates.show_company_cnpj !== undefined && !updates.receipt_copy_1_config) {
+      legacyPatch.show_company_cnpj = updates.show_company_cnpj;
+    }
+    if (updates.show_company_contact !== undefined && !updates.receipt_copy_1_config) {
+      legacyPatch.show_company_contact = updates.show_company_contact;
+    }
+    if (updates.show_company_address !== undefined && !updates.receipt_copy_1_config) {
+      legacyPatch.show_company_address = updates.show_company_address;
+    }
+
+    if (Object.keys(legacyPatch).length > 0) {
+      if (updated.receipt_copy_1_config) {
+        updated.receipt_copy_1_config = { ...updated.receipt_copy_1_config, ...legacyPatch };
+      }
+      if (updated.receipt_copy_2_config && !updates.receipt_copy_2_config) {
+        updated.receipt_copy_2_config = { ...updated.receipt_copy_2_config, ...legacyPatch };
+      }
+    }
+
     data.settings = updated;
     this.saveStoreData(data);
 
@@ -4936,6 +5077,8 @@ export class AppStore {
         receipt_delivery_footer: updated.receipt_delivery_footer,
         receipt_header_note: updated.receipt_header_note,
         receipt_footer_note: updated.receipt_footer_note,
+        receipt_copy_1_config: updated.receipt_copy_1_config ?? null,
+        receipt_copy_2_config: updated.receipt_copy_2_config ?? null,
         active_templates: updated.active_templates,
         technician_group_ids: updated.technician_group_ids,
         item_description_display_mode: updated.item_description_display_mode,
@@ -4991,6 +5134,9 @@ export class AppStore {
     }
     if (updates.printer_font_size !== undefined && updates.printer_font_size !== old.printer_font_size) {
       diffs.push(`Tamanho da fonte de impressão: ${updates.printer_font_size}`);
+    }
+    if (updates.receipt_copy_1_config !== undefined || updates.receipt_copy_2_config !== undefined) {
+      diffs.push(`Configuração individual das vias (1ª e 2ª via) atualizada`);
     }
 
     this.logAudit({

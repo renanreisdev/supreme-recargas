@@ -44,7 +44,7 @@ import {
 import QRCode from 'qrcode';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
-import { AppStore, SYSTEM_MODULES } from '@/lib/store';
+import { AppStore, SYSTEM_MODULES, resolveReceiptCopyConfig, buildFullReceiptCopyConfig, buildCompactReceiptCopyConfig } from '@/lib/store';
 import { formatCurrency, getRoleBadgeConfig, cn, formatDateTime } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -53,7 +53,7 @@ import { Select } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { DialogModal, DialogModalProps } from '@/components/ui/dialog-modal';
 import { PresetCatalogWizard } from '@/components/presets/PresetCatalogWizard';
-import { Profile, UserRole, CompanySettings, PermissionGroup, Company, Plan } from '@/types';
+import { Profile, UserRole, CompanySettings, PermissionGroup, Company, Plan, ReceiptCopyConfig } from '@/types';
 import { toast } from '@/lib/toast';
 
 interface PermissionOption {
@@ -276,6 +276,9 @@ function CompanySettingsContent() {
   const [receiptHeader, setReceiptHeader] = useState(settings.receipt_header || '');
   const [receiptFooter, setReceiptFooter] = useState(settings.receipt_footer || '');
   const [receiptDeliveryFooter, setReceiptDeliveryFooter] = useState(settings.receipt_delivery_footer || '');
+  const [activeCopyTab, setActiveCopyTab] = useState<1 | 2>(1);
+  const [copy1Config, setCopy1Config] = useState<ReceiptCopyConfig>(() => resolveReceiptCopyConfig(settings, 1));
+  const [copy2Config, setCopy2Config] = useState<ReceiptCopyConfig>(() => resolveReceiptCopyConfig(settings, 2));
   const [printSaveSuccess, setPrintSaveSuccess] = useState(false);
   const [previewTab, setPreviewTab] = useState<'entrada' | 'entrega'>('entrada');
   const [previewQrUrl, setPreviewQrUrl] = useState<string>('');
@@ -349,6 +352,8 @@ function CompanySettingsContent() {
     setReceiptHeader(sets.receipt_header || '');
     setReceiptFooter(sets.receipt_footer || '');
     setReceiptDeliveryFooter(sets.receipt_delivery_footer || '');
+    setCopy1Config(resolveReceiptCopyConfig(sets, 1));
+    setCopy2Config(resolveReceiptCopyConfig(sets, 2));
 
     // Company Data
     setTradeName(comp.trade_name || '');
@@ -451,25 +456,66 @@ function CompanySettingsContent() {
       print_delivery_copies: printDeliveryCopies,
       auto_print_on_entry: autoPrintOnEntry,
       auto_print_on_delivery: autoPrintOnDelivery,
-      show_prices_on_receipt: showPricesOnReceipt,
-      show_qr_code_on_receipt: showQrCodeOnReceipt,
-      show_checklist_on_receipt: showChecklistOnReceipt,
-      show_accessories_on_receipt: showAccessoriesOnReceipt,
-      show_reported_issue_on_receipt: showReportedIssueOnReceipt,
-      show_technician_on_receipt: showTechnicianOnReceipt,
-      show_customer_signature_line: showCustomerSignatureLine,
-      show_attendant_signature_line: showAttendantSignatureLine,
-      show_company_cnpj: showCompanyCnpj,
-      show_company_contact: showCompanyContact,
-      show_company_address: showCompanyAddress,
+      show_prices_on_receipt: copy1Config.show_prices,
+      show_qr_code_on_receipt: copy1Config.show_qr_code || copy2Config.show_qr_code,
+      show_checklist_on_receipt: copy1Config.show_checklist,
+      show_accessories_on_receipt: copy1Config.show_accessories,
+      show_reported_issue_on_receipt: copy1Config.show_reported_issue,
+      show_technician_on_receipt: copy1Config.show_technician,
+      show_customer_signature_line: copy1Config.show_customer_signature,
+      show_attendant_signature_line: copy1Config.show_attendant_signature,
+      show_company_cnpj: copy1Config.show_company_cnpj,
+      show_company_contact: copy1Config.show_company_contact,
+      show_company_address: copy1Config.show_company_address,
+      receipt_copy_1_config: copy1Config,
+      receipt_copy_2_config: copy2Config,
       receipt_header: receiptHeader.trim(),
       receipt_footer: receiptFooter.trim(),
       receipt_delivery_footer: receiptDeliveryFooter.trim()
     }, currentUser?.full_name || 'Administrador');
     setSettings(updated);
+    setShowPricesOnReceipt(copy1Config.show_prices);
+    setShowQrCodeOnReceipt(copy1Config.show_qr_code || copy2Config.show_qr_code);
     setPrintSaveSuccess(true);
     toast.success('Configurações de impressão salvas com sucesso!');
     setTimeout(() => setPrintSaveSuccess(false), 3500);
+  };
+
+  const activeCopyConfig = activeCopyTab === 1 ? copy1Config : copy2Config;
+
+  const updateActiveCopyConfig = (patch: Partial<ReceiptCopyConfig>) => {
+    if (activeCopyTab === 1) {
+      setCopy1Config(prev => ({ ...prev, ...patch }));
+    } else {
+      setCopy2Config(prev => ({ ...prev, ...patch }));
+    }
+  };
+
+  const countActiveCopyFields = (cfg: ReceiptCopyConfig): number => {
+    const keys: Array<keyof ReceiptCopyConfig> = [
+      'show_header_slogan',
+      'show_company_cnpj',
+      'show_company_contact',
+      'show_company_address',
+      'show_attendant',
+      'show_technician',
+      'show_customer_phone',
+      'show_customer_document',
+      'show_items',
+      'show_item_serial',
+      'show_item_services',
+      'show_reported_issue',
+      'show_checklist',
+      'show_accessories',
+      'show_notes',
+      'show_prices',
+      'show_payment_details',
+      'show_qr_code',
+      'show_footer_terms',
+      'show_customer_signature',
+      'show_attendant_signature'
+    ];
+    return keys.filter(k => Boolean(cfg[k])).length;
   };
 
   const toggleTechnicianGroup = (groupId: string) => {
@@ -2138,68 +2184,188 @@ function CompanySettingsContent() {
                   </div>
                 </div>
 
-                {/* 3. Elementos & Seções Visíveis no Cupom */}
-                <div className="p-4 bg-slate-50 dark:bg-slate-900/60 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3">
-                  <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
-                    <CheckSquare className="w-4 h-4 text-emerald-600" />
-                    <span>3. Elementos & Seções Visíveis no Cupom Térmico</span>
-                  </h4>
+                {/* 3. Configuração Individual de Cada Via (1ª Via e 2ª Via) */}
+                <div className="p-4 bg-slate-50 dark:bg-slate-900/60 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                        <CheckSquare className="w-4 h-4 text-emerald-600" />
+                        <span>3. Configurar Campos de Cada Via Individualmente (1ª e 2ª Via)</span>
+                      </h4>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Personalize livremente o que será impresso na 1ª Via e na 2ª Via (itens, valores, QR Code, cabeçalho, rodapé e assinaturas).
+                      </p>
+                    </div>
+                  </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                    <label className="flex items-center gap-2 p-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer">
-                      <input type="checkbox" checked={showPricesOnReceipt} onChange={e => setShowPricesOnReceipt(e.target.checked)} className="rounded text-emerald-600" />
-                      <span>Exibir Discriminação de Valores & Preços</span>
-                    </label>
+                  {/* Tabs: 1ª Via vs 2ª Via */}
+                  <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-slate-200/70 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => setActiveCopyTab(1)}
+                      className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-between gap-2 ${
+                        activeCopyTab === 1
+                          ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                      }`}
+                    >
+                      <span className="truncate">1ª Via (Loja / Única)</span>
+                      <Badge className="bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 text-[9px] shrink-0">
+                        {countActiveCopyFields(copy1Config)}/21
+                      </Badge>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveCopyTab(2)}
+                      className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-between gap-2 ${
+                        activeCopyTab === 2
+                          ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                      }`}
+                    >
+                      <span className="truncate">2ª Via (Cliente)</span>
+                      <Badge className="bg-purple-100 dark:bg-purple-950/70 text-purple-700 dark:text-purple-300 text-[9px] shrink-0">
+                        {countActiveCopyFields(copy2Config)}/21
+                      </Badge>
+                    </button>
+                  </div>
 
-                    <label className="flex items-center gap-2 p-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer">
-                      <input type="checkbox" checked={showQrCodeOnReceipt} onChange={e => setShowQrCodeOnReceipt(e.target.checked)} className="rounded text-emerald-600" />
-                      <span>Exibir QR Code de Rastreio Online</span>
-                    </label>
+                  {/* Quick Actions for Active Copy */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-[11px]">
+                    <span className="font-bold text-slate-700 dark:text-slate-300">
+                      Editando: <span className="text-emerald-600 dark:text-emerald-400">{activeCopyTab === 1 ? '1ª Via' : '2ª Via'}</span>
+                    </span>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (activeCopyTab === 1) {
+                            setCopy1Config({ ...copy2Config, custom_title: copy1Config.custom_title });
+                            toast.info('Campos da 2ª Via copiados para a 1ª Via.');
+                          } else {
+                            setCopy2Config({ ...copy1Config, custom_title: copy2Config.custom_title });
+                            toast.info('Campos da 1ª Via copiados para a 2ª Via.');
+                          }
+                        }}
+                        className="px-2 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 font-bold hover:bg-emerald-100 transition-colors flex items-center gap-1"
+                      >
+                        <Copy className="w-3 h-3" />
+                        <span>{activeCopyTab === 1 ? 'Copiar da 2ª Via' : 'Igualar à 1ª Via'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateActiveCopyConfig(buildFullReceiptCopyConfig({ custom_title: activeCopyConfig.custom_title }))}
+                        className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-semibold hover:bg-slate-100 transition-colors"
+                      >
+                        Marcar Completa
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateActiveCopyConfig(buildCompactReceiptCopyConfig({ custom_title: activeCopyConfig.custom_title }))}
+                        className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold hover:bg-slate-100 transition-colors"
+                      >
+                        Modo Resumido
+                      </button>
+                    </div>
+                  </div>
 
-                    <label className="flex items-center gap-2 p-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer">
-                      <input type="checkbox" checked={showChecklistOnReceipt} onChange={e => setShowChecklistOnReceipt(e.target.checked)} className="rounded text-emerald-600" />
-                      <span>Exibir Checklist de Conferência do Item</span>
+                  {/* Custom Title Optional for Selected Copy */}
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                      Título Personalizado do Topo da {activeCopyTab === 1 ? '1ª Via' : '2ª Via'} (opcional)
                     </label>
+                    <Input
+                      value={activeCopyConfig.custom_title || ''}
+                      onChange={e => updateActiveCopyConfig({ custom_title: e.target.value })}
+                      placeholder={
+                        activeCopyTab === 1
+                          ? 'Padrão automático (ex: 1ª VIA - ESTABELECIMENTO / OFICINA)'
+                          : 'Padrão automático (ex: 2ª VIA - CLIENTE / COMPROVANTE)'
+                      }
+                      className="text-xs rounded-xl bg-white dark:bg-slate-900"
+                    />
+                  </div>
 
-                    <label className="flex items-center gap-2 p-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer">
-                      <input type="checkbox" checked={showAccessoriesOnReceipt} onChange={e => setShowAccessoriesOnReceipt(e.target.checked)} className="rounded text-emerald-600" />
-                      <span>Exibir Acessórios Informados na Entrada</span>
-                    </label>
-
-                    <label className="flex items-center gap-2 p-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer">
-                      <input type="checkbox" checked={showReportedIssueOnReceipt} onChange={e => setShowReportedIssueOnReceipt(e.target.checked)} className="rounded text-emerald-600" />
-                      <span>Exibir Defeito / Relato do Cliente</span>
-                    </label>
-
-                    <label className="flex items-center gap-2 p-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer">
-                      <input type="checkbox" checked={showTechnicianOnReceipt} onChange={e => setShowTechnicianOnReceipt(e.target.checked)} className="rounded text-emerald-600" />
-                      <span>Exibir Técnico Responsável</span>
-                    </label>
-
-                    <label className="flex items-center gap-2 p-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer">
-                      <input type="checkbox" checked={showCustomerSignatureLine} onChange={e => setShowCustomerSignatureLine(e.target.checked)} className="rounded text-emerald-600" />
-                      <span>Exibir Linha para Assinatura do Cliente</span>
-                    </label>
-
-                    <label className="flex items-center gap-2 p-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer">
-                      <input type="checkbox" checked={showAttendantSignatureLine} onChange={e => setShowAttendantSignatureLine(e.target.checked)} className="rounded text-emerald-600" />
-                      <span>Exibir Linha para Assinatura do Atendente</span>
-                    </label>
-
-                    <label className="flex items-center gap-2 p-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer">
-                      <input type="checkbox" checked={showCompanyCnpj} onChange={e => setShowCompanyCnpj(e.target.checked)} className="rounded text-emerald-600" />
-                      <span>Exibir CNPJ no Cabeçalho</span>
-                    </label>
-
-                    <label className="flex items-center gap-2 p-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer">
-                      <input type="checkbox" checked={showCompanyContact} onChange={e => setShowCompanyContact(e.target.checked)} className="rounded text-emerald-600" />
-                      <span>Exibir Telefone & WhatsApp no Cabeçalho</span>
-                    </label>
-
-                    <label className="flex items-center gap-2 p-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer sm:col-span-2">
-                      <input type="checkbox" checked={showCompanyAddress} onChange={e => setShowCompanyAddress(e.target.checked)} className="rounded text-emerald-600" />
-                      <span>Exibir Endereço Completo no Cabeçalho</span>
-                    </label>
+                  {/* Grouped Field Checkboxes */}
+                  <div className="space-y-3">
+                    {([
+                      {
+                        group: 'Cabeçalho da Empresa',
+                        items: [
+                          { key: 'show_header_slogan', label: 'Slogan / Mensagem de Cabeçalho' },
+                          { key: 'show_company_cnpj', label: 'CNPJ da Empresa' },
+                          { key: 'show_company_contact', label: 'Telefone & WhatsApp da Loja' },
+                          { key: 'show_company_address', label: 'Endereço Completo da Loja' }
+                        ]
+                      },
+                      {
+                        group: 'Identificação da OS, Cliente & Equipe',
+                        items: [
+                          { key: 'show_attendant', label: 'Atendente / Operador' },
+                          { key: 'show_technician', label: 'Técnico Responsável' },
+                          { key: 'show_customer_phone', label: 'Telefone do Cliente' },
+                          { key: 'show_customer_document', label: 'CPF / CNPJ do Cliente' }
+                        ]
+                      },
+                      {
+                        group: 'Itens, Serviços & Dados Técnicos',
+                        items: [
+                          { key: 'show_items', label: 'Lista de Itens / Aparelhos' },
+                          { key: 'show_item_serial', label: 'Nº de Série / Identificador do Item' },
+                          { key: 'show_item_services', label: 'Serviços Executados por Item' },
+                          { key: 'show_reported_issue', label: 'Defeito / Relato do Cliente' },
+                          { key: 'show_checklist', label: 'Checklist de Conferência' },
+                          { key: 'show_accessories', label: 'Acessórios Recebidos' },
+                          { key: 'show_notes', label: 'Observações Gerais da OS / Entrega' }
+                        ]
+                      },
+                      {
+                        group: 'Financeiro, QR Code, Termos & Assinaturas',
+                        items: [
+                          { key: 'show_prices', label: 'Discriminação de Preços & Totais' },
+                          { key: 'show_payment_details', label: 'Detalhes de Pagamento / Sinal / Saldo' },
+                          { key: 'show_qr_code', label: 'QR Code & Token de Rastreio Online' },
+                          { key: 'show_footer_terms', label: 'Termos de Garantia / Rodapé Legal' },
+                          { key: 'show_customer_signature', label: 'Linha para Assinatura do Cliente' },
+                          { key: 'show_attendant_signature', label: 'Linha para Assinatura do Atendente' }
+                        ]
+                      }
+                    ] as Array<{ group: string; items: Array<{ key: keyof ReceiptCopyConfig; label: string }> }>).map(section => (
+                      <div key={section.group} className="space-y-1.5">
+                        <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 px-1">
+                          {section.group}
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs">
+                          {section.items.map(opt => {
+                            const checked = Boolean(activeCopyConfig[opt.key]);
+                            const isDisabledChild =
+                              !activeCopyConfig.show_items &&
+                              ['show_item_serial', 'show_item_services', 'show_reported_issue', 'show_checklist', 'show_accessories'].includes(opt.key);
+                            return (
+                              <label
+                                key={opt.key}
+                                className={`flex items-center gap-2 p-2 rounded-xl border transition-colors ${
+                                  isDisabledChild
+                                    ? 'bg-slate-100/70 dark:bg-slate-900/40 border-slate-200/60 dark:border-slate-800/60 opacity-55 cursor-not-allowed'
+                                    : checked
+                                      ? 'bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/70 cursor-pointer'
+                                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 cursor-pointer'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  disabled={isDisabledChild}
+                                  onChange={e => updateActiveCopyConfig({ [opt.key]: e.target.checked })}
+                                  className="rounded text-emerald-600 focus:ring-emerald-500"
+                                />
+                                <span className="text-[11px] font-medium text-slate-800 dark:text-slate-200">{opt.label}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
@@ -2311,225 +2477,236 @@ function CompanySettingsContent() {
                       printerFontSize === 'compact' ? 'text-[9px] leading-tight' : printerFontSize === 'large' ? 'text-[12px] leading-snug' : 'text-[10px] leading-tight'
                     }`}
                   >
-                    {/* Render Function for 1 Copy */}
-                    {previewTab === 'entrada' ? (
-                      <>
-                        {/* 1ª VIA (EMPRESA / OFICINA ou ÚNICA) */}
-                        <div className={printerDensity === 'compact' ? 'space-y-1.5' : 'space-y-2.5'}>
-                          <div className="text-center font-bold text-[9px] bg-black text-white py-0.5 px-1 uppercase tracking-widest">
-                            {printEntryCopies === 2 ? '1ª VIA - ESTABELECIMENTO / OFICINA' : 'VIA ÚNICA / CLIENTE'}
-                          </div>
+                    {/* Dynamic Thermal Preview Renderer for Copy 1 and Copy 2 */}
+                    {(() => {
+                      const renderPreviewReceiptCopy = (copyNum: 1 | 2, cfg: ReceiptCopyConfig, mode: 'entrada' | 'entrega') => {
+                        const isDelivery = mode === 'entrega';
+                        const copiesCount = isDelivery ? printDeliveryCopies : printEntryCopies;
+                        const defaultTitle = isDelivery
+                          ? copiesCount === 1
+                            ? 'COMPROVANTE DE ENTREGA & QUITAÇÃO'
+                            : copyNum === 1
+                              ? '1ª VIA - RECIBO DE QUITAÇÃO (LOJA)'
+                              : '2ª VIA - CLIENTE (RECIBO DE QUITAÇÃO)'
+                          : copiesCount === 1
+                            ? 'VIA ÚNICA / CLIENTE'
+                            : copyNum === 1
+                              ? '1ª VIA - ESTABELECIMENTO / OFICINA'
+                              : '2ª VIA - CLIENTE (COMPROVANTE)';
 
-                          {/* Header */}
-                          <div className="text-center border-b border-dashed border-black pb-1.5 space-y-0.5">
-                            <h4 className="font-black text-xs uppercase">{tradeName || 'AGILIS OS'}</h4>
-                            {receiptHeader && <p className="text-[8.5px] font-bold">{receiptHeader}</p>}
-                            {showCompanyCnpj && cnpj && <p className="text-[8.5px]">CNPJ: {cnpj}</p>}
-                            {showCompanyContact && (companyPhone || companyWhatsapp) && (
-                              <p className="text-[8.5px]">
-                                {companyPhone && `Tel: ${companyPhone}`} {companyWhatsapp && `• Whats: ${companyWhatsapp}`}
-                              </p>
-                            )}
-                            {showCompanyAddress && companyAddress && (
-                              <p className="text-[8px] text-gray-700">{companyAddress} - {companyCity || 'SP'}</p>
-                            )}
-                          </div>
+                        return (
+                          <div className={printerDensity === 'compact' ? 'space-y-1.5 text-left' : 'space-y-2.5 text-left'}>
+                            <div className={`text-center font-bold text-[9px] text-white py-0.5 px-1 uppercase tracking-widest ${isDelivery ? 'bg-emerald-700' : 'bg-black'}`}>
+                              {cfg.custom_title?.trim() || defaultTitle}
+                            </div>
 
-                          {/* Order & Customer Info */}
-                          <div className="border-b border-dashed border-black pb-1.5 space-y-0.5 text-[9px]">
-                            <div className="flex justify-between font-bold">
-                              <span>ORDEM DE SERVIÇO:</span>
-                              <span>#2026-000142</span>
+                            {/* Company Header */}
+                            <div className="text-center border-b border-dashed border-black pb-1.5 space-y-0.5">
+                              <h4 className="font-black text-xs uppercase">{tradeName || 'AGIL OS'}</h4>
+                              {cfg.show_header_slogan && receiptHeader && <p className="text-[8.5px] font-bold">{receiptHeader}</p>}
+                              {cfg.show_company_cnpj && cnpj && <p className="text-[8.5px]">CNPJ: {cnpj}</p>}
+                              {cfg.show_company_contact && (companyPhone || companyWhatsapp) && (
+                                <p className="text-[8.5px]">
+                                  {companyPhone && `Tel: ${companyPhone}`} {companyWhatsapp && `• Whats: ${companyWhatsapp}`}
+                                </p>
+                              )}
+                              {cfg.show_company_address && companyAddress && (
+                                <p className="text-[8px] text-gray-700">{companyAddress} - {companyCity || 'SP'}</p>
+                              )}
                             </div>
-                            <div className="flex justify-between">
-                              <span>Data / Hora:</span>
-                              <span>{formatDateTime(new Date().toISOString())}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>Atendente:</span>
-                              <span>{currentUser.full_name || 'Balcão'}</span>
-                            </div>
-                            {showTechnicianOnReceipt && (
-                              <div className="flex justify-between">
-                                <span>Técnico Responsável:</span>
-                                <span>Técnico Roberto</span>
-                              </div>
-                            )}
-                            <div className="pt-1 font-bold">
-                              <span>CLIENTE: Advocacia Pinheiro & Ass.</span>
-                            </div>
-                            <div>
-                              <span>Telefone: (11) 98765-4321</span>
-                            </div>
-                          </div>
 
-                          {/* Items List */}
-                          <div className="border-b border-dashed border-black pb-1.5 space-y-1.5">
-                            <div className="font-bold uppercase text-[9px]">ITENS DA COMANDA (2):</div>
-                            <div className="space-y-0.5">
+                            {/* Order & Customer Info */}
+                            <div className="border-b border-dashed border-black pb-1.5 space-y-0.5 text-[9px]">
                               <div className="flex justify-between font-bold">
-                                <span>#1 HP 664 Tricolor XL</span>
-                                {showPricesOnReceipt && <span>R$ 35,00</span>}
+                                <span>ORDEM DE SERVIÇO:</span>
+                                <span>#2026-000142</span>
                               </div>
-                              <div className="flex justify-between text-[8.5px] text-gray-700">
-                                <span>Serial / S/N:</span>
-                                <span className="font-bold">HP-664-9921</span>
-                              </div>
-                              {showReportedIssueOnReceipt && (
-                                <div className="text-[8px] text-gray-600 italic">Defeito: Falhando cor magenta</div>
-                              )}
-                              {showChecklistOnReceipt && (
-                                <div className="text-[8px] text-gray-700">Checklist: [X] Circuito OK  [X] Tampa OK</div>
-                              )}
-                            </div>
-
-                            <div className="space-y-0.5 pt-1 border-t border-dotted border-gray-400">
-                              <div className="flex justify-between font-bold">
-                                <span>#2 Notebook Dell Latitude 3470</span>
-                                {showPricesOnReceipt && <span>R$ 180,00</span>}
-                              </div>
-                              <div className="flex justify-between text-[8.5px] text-gray-700">
-                                <span>Serial:</span>
-                                <span className="font-bold">DELL-8831-SP</span>
-                              </div>
-                              {showAccessoriesOnReceipt && (
-                                <div className="text-[8px] text-gray-600">Acessórios: Fonte original + Cabo</div>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Values */}
-                          {showPricesOnReceipt && (
-                            <div className="border-b border-dashed border-black pb-1.5 space-y-0.5 text-[9.5px]">
                               <div className="flex justify-between">
-                                <span>Subtotal:</span>
-                                <span>R$ 215,00</span>
+                                <span>{isDelivery ? 'Data da Retirada:' : 'Data / Hora:'}</span>
+                                <span>{formatDateTime(new Date().toISOString())}</span>
                               </div>
-                              <div className="flex justify-between text-gray-700">
-                                <span>Desconto:</span>
-                                <span>- R$ 15,00</span>
+                              {cfg.show_attendant && (
+                                <div className="flex justify-between">
+                                  <span>{isDelivery ? 'Atendente / Caixa:' : 'Atendente:'}</span>
+                                  <span>{currentUser.full_name || 'Balcão'}</span>
+                                </div>
+                              )}
+                              {cfg.show_technician && (
+                                <div className="flex justify-between">
+                                  <span>Técnico Responsável:</span>
+                                  <span>Técnico Roberto</span>
+                                </div>
+                              )}
+                              <div className="pt-1 font-bold">
+                                <span>CLIENTE: Advocacia Pinheiro &amp; Ass.</span>
                               </div>
-                              <div className="flex justify-between font-black text-[11px] pt-1 border-t border-dotted border-black">
-                                <span>TOTAL:</span>
-                                <span>R$ 200,00</span>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Signatures for Store Copy */}
-                          {showCustomerSignatureLine && (
-                            <div className="pt-2 text-center space-y-1">
-                              <div className="w-4/5 mx-auto border-b border-black"></div>
-                              <p className="text-[8px]">Assinatura do Cliente</p>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* If 2 Vias: Render Cut Line + 2ª Via Cliente */}
-                        {printEntryCopies === 2 && (
-                          <div className="my-4 pt-3 border-t-2 border-dashed border-slate-400 relative text-center">
-                            <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 text-[8px] font-bold uppercase tracking-wider mb-3">
-                              <Scissors className="w-3 h-3" />
-                              <span>DESTACAR AQUI / CORTE DA BOBINA</span>
+                              {cfg.show_customer_phone && <div><span>Telefone: (11) 98765-4321</span></div>}
+                              {cfg.show_customer_document && <div><span>Doc: 12.345.678/0001-99</span></div>}
+                              {isDelivery && (
+                                <div className="text-[8.5px] text-gray-700"><span>Recebedor: Próprio Cliente</span></div>
+                              )}
                             </div>
 
-                            {/* 2ª VIA - CLIENTE */}
-                            <div className={printerDensity === 'compact' ? 'space-y-1.5 text-left' : 'space-y-2.5 text-left'}>
-                              <div className="text-center font-bold text-[9px] bg-black text-white py-0.5 px-1 uppercase tracking-widest">
-                                2ª VIA - CLIENTE (COMPROVANTE)
-                              </div>
+                            {/* Items List */}
+                            {cfg.show_items && (
+                              <div className="border-b border-dashed border-black pb-1.5 space-y-1.5">
+                                <div className="font-bold uppercase text-[9px]">ITENS DA COMANDA (2):</div>
+                                <div className="space-y-0.5">
+                                  <div className="flex justify-between font-bold">
+                                    <span>#1 HP 664 Tricolor XL</span>
+                                    {cfg.show_prices && <span>R$ 35,00</span>}
+                                  </div>
+                                  {cfg.show_item_serial && (
+                                    <div className="flex justify-between text-[8.5px] text-gray-700">
+                                      <span>Serial / S/N:</span>
+                                      <span className="font-bold">HP-664-9921</span>
+                                    </div>
+                                  )}
+                                  {cfg.show_item_services && (
+                                    <div className="pl-2 text-[8px] text-gray-800 space-y-0.5">
+                                      <div className="flex justify-between">
+                                        <span>• Recarga de Tinta</span>
+                                        {cfg.show_prices && <span>R$ 35,00</span>}
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>• Verificação (CORTESIA)</span>
+                                        {cfg.show_prices && <span>R$ 0,00</span>}
+                                      </div>
+                                    </div>
+                                  )}
+                                  {cfg.show_reported_issue && (
+                                    <div className="text-[8px] text-gray-600 italic">Defeito: Falhando cor magenta</div>
+                                  )}
+                                  {cfg.show_checklist && (
+                                    <div className="text-[8px] text-gray-700">Checklist: [X] Circuito OK  [X] Tampa OK</div>
+                                  )}
+                                </div>
 
-                              {/* Header 2ª Via */}
-                              <div className="text-center border-b border-dashed border-black pb-1.5 space-y-0.5">
-                                <h4 className="font-black text-xs uppercase">{tradeName || 'AGILIS OS'}</h4>
-                                {receiptHeader && <p className="text-[8.5px] font-bold">{receiptHeader}</p>}
-                                {showCompanyContact && (companyPhone || companyWhatsapp) && (
-                                  <p className="text-[8.5px]">Tel: {companyPhone} • Whats: {companyWhatsapp}</p>
+                                <div className="space-y-0.5 pt-1 border-t border-dotted border-gray-400">
+                                  <div className="flex justify-between font-bold">
+                                    <span>#2 Notebook Dell Latitude 3470</span>
+                                    {cfg.show_prices && <span>R$ 180,00</span>}
+                                  </div>
+                                  {cfg.show_item_serial && (
+                                    <div className="flex justify-between text-[8.5px] text-gray-700">
+                                      <span>Serial:</span>
+                                      <span className="font-bold">DELL-8831-SP</span>
+                                    </div>
+                                  )}
+                                  {cfg.show_accessories && (
+                                    <div className="text-[8px] text-gray-600">Acessórios: Fonte original + Cabo</div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Notes */}
+                            {cfg.show_notes && (
+                              <div className="border-b border-dashed border-black pb-1.5 text-[8.5px] text-gray-700">
+                                <strong>Obs.:</strong> Cliente solicitou urgência na retirada.
+                              </div>
+                            )}
+
+                            {/* Values & Payment */}
+                            {(cfg.show_prices || cfg.show_payment_details) && (
+                              <div className="border-b border-dashed border-black pb-1.5 space-y-0.5 text-[9.5px]">
+                                {cfg.show_prices && (
+                                  <>
+                                    <div className="flex justify-between">
+                                      <span>Subtotal:</span>
+                                      <span>R$ 215,00</span>
+                                    </div>
+                                    <div className="flex justify-between text-gray-700">
+                                      <span>Desconto:</span>
+                                      <span>- R$ 15,00</span>
+                                    </div>
+                                    <div className="flex justify-between font-black text-[11px] pt-1 border-t border-dotted border-black">
+                                      <span>{isDelivery ? 'TOTAL QUITADO:' : 'TOTAL:'}</span>
+                                      <span>R$ 200,00</span>
+                                    </div>
+                                  </>
+                                )}
+                                {cfg.show_payment_details && (
+                                  <>
+                                    <div className="flex justify-between text-gray-700">
+                                      <span>{isDelivery ? 'Forma de Pagamento:' : 'Pago / Sinal:'}</span>
+                                      <span className="font-bold">{isDelivery ? 'PIX' : 'R$ 50,00'}</span>
+                                    </div>
+                                    {!isDelivery && (
+                                      <div className="flex justify-between font-bold text-[9px]">
+                                        <span>Saldo na Retirada:</span>
+                                        <span>R$ 150,00</span>
+                                      </div>
+                                    )}
+                                    {isDelivery && (
+                                      <div className="flex justify-between text-emerald-800 font-bold text-[10px] pt-0.5">
+                                        <span>STATUS:</span>
+                                        <span>PAGO &amp; ENTREGUE</span>
+                                      </div>
+                                    )}
+                                  </>
                                 )}
                               </div>
+                            )}
 
-                              {/* Order & Customer */}
-                              <div className="border-b border-dashed border-black pb-1.5 space-y-0.5 text-[9px]">
-                                <div className="flex justify-between font-bold">
-                                  <span>ORDEM DE SERVIÇO:</span>
-                                  <span>#2026-000142</span>
-                                </div>
-                                <div><span>CLIENTE: Advocacia Pinheiro</span></div>
+                            {/* QR Code */}
+                            {cfg.show_qr_code && (
+                              <div className="py-2 text-center border-b border-dashed border-black space-y-1">
+                                <p className="font-bold text-[8.5px] uppercase">CONSULTE O STATUS PELO CELULAR:</p>
+                                {previewQrUrl ? (
+                                  <img src={previewQrUrl} alt="QR Code" className="w-20 h-20 mx-auto my-1 border border-black p-0.5" />
+                                ) : (
+                                  <div className="w-20 h-20 bg-gray-200 mx-auto flex items-center justify-center text-[8px]">QR Code</div>
+                                )}
+                                <p className="text-[7.5px] font-mono">Token: TRK-DEMO-2026</p>
                               </div>
+                            )}
 
-                              {/* QR Code Online Tracking */}
-                              {showQrCodeOnReceipt && (
-                                <div className="py-2 text-center border-b border-dashed border-black space-y-1">
-                                  <p className="font-bold text-[8.5px] uppercase">CONSULTE O STATUS PELO CELULAR:</p>
-                                  {previewQrUrl ? (
-                                    <img src={previewQrUrl} alt="QR Code" className="w-20 h-20 mx-auto my-1 border border-black p-0.5" />
-                                  ) : (
-                                    <div className="w-20 h-20 bg-gray-200 mx-auto flex items-center justify-center text-[8px]">QR Code</div>
-                                  )}
-                                  <p className="text-[7.5px] font-mono">Token: TRK-DEMO-2026</p>
-                                </div>
-                              )}
-
-                              {/* Legal Footer Terms */}
+                            {/* Footer Legal Terms */}
+                            {cfg.show_footer_terms && (
                               <div className="text-center text-[7.5px] text-gray-700 leading-snug pt-1">
-                                {receiptFooter || 'Garantia legal de 90 dias conforme Art. 26 do CDC. Equipamentos não retirados em 90 dias serão considerados abandonados.'}
+                                {isDelivery
+                                  ? (receiptDeliveryFooter || 'Declaro que retirei o equipamento testado, conferido e em perfeitas condições de funcionamento.')
+                                  : (receiptFooter || 'Garantia legal de 90 dias conforme Art. 26 do CDC. Equipamentos não retirados em 90 dias serão considerados abandonados.')}
                               </div>
+                            )}
+
+                            {/* Signature Lines */}
+                            {cfg.show_customer_signature && (
+                              <div className="pt-2 text-center space-y-1">
+                                <div className="w-4/5 mx-auto border-b border-black"></div>
+                                <p className="text-[8px]">{isDelivery ? 'Assinatura do Recebedor' : 'Assinatura do Cliente'}</p>
+                              </div>
+                            )}
+                            {cfg.show_attendant_signature && (
+                              <div className="pt-2 text-center space-y-1">
+                                <div className="w-4/5 mx-auto border-b border-black"></div>
+                                <p className="text-[8px]">Assinatura do Atendente</p>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      };
+
+                      const shouldShowSecondCopy =
+                        (previewTab === 'entrada' ? printEntryCopies === 2 : printDeliveryCopies === 2) ||
+                        activeCopyTab === 2;
+
+                      return (
+                        <>
+                          {renderPreviewReceiptCopy(1, copy1Config, previewTab)}
+                          {shouldShowSecondCopy && (
+                            <div className="my-4 pt-3 border-t-2 border-dashed border-slate-400 relative text-center">
+                              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 text-[8px] font-bold uppercase tracking-wider mb-3">
+                                <Scissors className="w-3 h-3" />
+                                <span>DESTACAR AQUI / CORTE DA BOBINA</span>
+                              </div>
+                              {renderPreviewReceiptCopy(2, copy2Config, previewTab)}
                             </div>
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      /* PREVIEW DA FINALIZAÇÃO / BAIXA / ENTREGA */
-                      <div className={printerDensity === 'compact' ? 'space-y-1.5' : 'space-y-2.5'}>
-                        <div className="text-center font-bold text-[9px] bg-emerald-700 text-white py-0.5 px-1 uppercase tracking-widest">
-                          {printDeliveryCopies === 2 ? '1ª VIA - RECIBO DE QUITAÇÃO (LOJA)' : 'COMPROVANTE DE ENTREGA & QUITAÇÃO'}
-                        </div>
-
-                        <div className="text-center border-b border-dashed border-black pb-1.5 space-y-0.5">
-                          <h4 className="font-black text-xs uppercase">{tradeName || 'AGILIS OS'}</h4>
-                          <p className="text-[8.5px] font-bold">COMPROVANTE DE SAÍDA E RETIRADA</p>
-                        </div>
-
-                        <div className="border-b border-dashed border-black pb-1.5 space-y-0.5 text-[9px]">
-                          <div className="flex justify-between font-bold">
-                            <span>ORDEM DE SERVIÇO:</span>
-                            <span>#2026-000142</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Data da Retirada:</span>
-                            <span>{formatDateTime(new Date().toISOString())}</span>
-                          </div>
-                          <div><span>Cliente: Advocacia Pinheiro & Ass.</span></div>
-                        </div>
-
-                        {/* Financial Settlement */}
-                        <div className="border-b border-dashed border-black pb-1.5 space-y-0.5 text-[9.5px]">
-                          <div className="flex justify-between">
-                            <span>Valor Total Liquidado:</span>
-                            <span className="font-bold">R$ 200,00</span>
-                          </div>
-                          <div className="flex justify-between text-gray-700">
-                            <span>Forma de Pagamento:</span>
-                            <span className="font-bold">PIX / Dinheiro</span>
-                          </div>
-                          <div className="flex justify-between text-emerald-800 font-bold text-[10px] pt-1">
-                            <span>STATUS:</span>
-                            <span>PAGO & ENTREGUE</span>
-                          </div>
-                        </div>
-
-                        {/* Delivery Statement */}
-                        <div className="text-center text-[8px] text-gray-800 italic leading-snug py-1">
-                          {receiptDeliveryFooter || 'Declaro que retirei o equipamento testado, conferido e em perfeitas condições de funcionamento.'}
-                        </div>
-
-                        {/* Customer Signature */}
-                        <div className="pt-3 text-center space-y-1">
-                          <div className="w-4/5 mx-auto border-b border-black"></div>
-                          <p className="text-[8px]">Assinatura do Recebedor</p>
-                        </div>
-                      </div>
-                    )}
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
 

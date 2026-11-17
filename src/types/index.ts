@@ -692,6 +692,31 @@ export interface BusinessTemplate {
   checklist?: Partial<ChecklistTemplate>;
 }
 
+export interface ReceiptCopyConfig {
+  custom_title?: string; // Rótulo opcional do topo da via
+  show_header_slogan: boolean; // Exibir Slogan / Mensagem de Cabeçalho
+  show_company_cnpj: boolean; // Exibir CNPJ no cabeçalho
+  show_company_contact: boolean; // Exibir Telefone & WhatsApp no cabeçalho
+  show_company_address: boolean; // Exibir Endereço Completo no cabeçalho
+  show_attendant: boolean; // Exibir Atendente / Operador
+  show_technician: boolean; // Exibir Técnico Responsável
+  show_customer_phone: boolean; // Exibir Telefone do Cliente
+  show_customer_document: boolean; // Exibir CPF/CNPJ do Cliente
+  show_items: boolean; // Exibir Lista de Itens / Equipamentos
+  show_item_serial: boolean; // Exibir Nº de Série / Identificador do item
+  show_item_services: boolean; // Exibir Serviços vinculados a cada item
+  show_reported_issue: boolean; // Exibir Defeito / Reclamação relatada
+  show_checklist: boolean; // Exibir Checklist de conferência do item
+  show_accessories: boolean; // Exibir Acessórios informados na entrada
+  show_notes: boolean; // Exibir Observações Gerais da OS / Entrega
+  show_prices: boolean; // Exibir Preços dos serviços/itens e Resumo Financeiro (Subtotal, Desconto, Total)
+  show_payment_details: boolean; // Exibir Detalhes de Pagamento (Sinal, Saldo a Pagar, Recebedor)
+  show_qr_code: boolean; // Exibir QR Code e Token de Rastreio Online
+  show_footer_terms: boolean; // Exibir Termos de Garantia / Rodapé Legal
+  show_customer_signature: boolean; // Exibir Linha para Assinatura do Cliente / Recebedor
+  show_attendant_signature: boolean; // Exibir Linha para Assinatura do Atendente / Oficina
+}
+
 export interface CompanySettings {
   id: string;
   tenant_id: string;
@@ -760,6 +785,10 @@ export interface CompanySettings {
   receipt_footer?: string; // Termos de garantia, prazos e condições legais (entrada)
   receipt_footer_note?: string;
   receipt_delivery_footer?: string; // Termos de quitação e retirada do equipamento (baixa)
+
+  // Configuração Individual e Completa por Via (1ª Via e 2ª Via):
+  receipt_copy_1_config?: ReceiptCopyConfig;
+  receipt_copy_2_config?: ReceiptCopyConfig;
 }
 
 // ============================================================================

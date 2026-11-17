@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { AppStore } from '../../src/lib/store';
+import {
+  AppStore,
+  resolveReceiptCopyConfig,
+  buildFullReceiptCopyConfig,
+  buildCompactReceiptCopyConfig
+} from '../../src/lib/store';
 
 describe('Central de Configurações de Impressão & Comandas Térmicas', () => {
   const tenantId = 'comp-supreme-001';
@@ -61,5 +66,47 @@ describe('Central de Configurações de Impressão & Comandas Térmicas', () => 
 
     expect(updated.show_qr_code_on_receipt).toBe(false);
     expect(updated.show_attendant_signature_line).toBe(true);
+  });
+
+  it('5. Deve permitir configurar 1ª e 2ª via de forma totalmente independente e persistir individualmente', () => {
+    const customCopy1 = buildFullReceiptCopyConfig({
+      custom_title: 'VIA DA OFICINA - CONTROLE INTERNO',
+      show_qr_code: false,
+      show_attendant_signature: true
+    });
+    const customCopy2 = buildCompactReceiptCopyConfig({
+      custom_title: 'VIA COMPLETA DO CLIENTE',
+      show_item_services: true,
+      show_reported_issue: true,
+      show_accessories: true,
+      show_qr_code: true,
+      show_prices: false
+    });
+
+    AppStore.updateSettings(
+      tenantId,
+      {
+        print_entry_copies: 2,
+        receipt_copy_1_config: customCopy1,
+        receipt_copy_2_config: customCopy2
+      },
+      'Admin Teste'
+    );
+
+    const reloaded = AppStore.getSettings(tenantId);
+    const resolved1 = resolveReceiptCopyConfig(reloaded, 1);
+    const resolved2 = resolveReceiptCopyConfig(reloaded, 2);
+
+    expect(resolved1.custom_title).toBe('VIA DA OFICINA - CONTROLE INTERNO');
+    expect(resolved1.show_qr_code).toBe(false);
+    expect(resolved1.show_attendant_signature).toBe(true);
+    expect(resolved1.show_prices).toBe(true);
+
+    expect(resolved2.custom_title).toBe('VIA COMPLETA DO CLIENTE');
+    expect(resolved2.show_item_services).toBe(true);
+    expect(resolved2.show_reported_issue).toBe(true);
+    expect(resolved2.show_accessories).toBe(true);
+    expect(resolved2.show_qr_code).toBe(true);
+    expect(resolved2.show_prices).toBe(false);
   });
 });
