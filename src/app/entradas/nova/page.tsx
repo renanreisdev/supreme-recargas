@@ -1242,7 +1242,7 @@ export default function NovaEntradaPage() {
                       return;
                     }
                     const waNumber = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
-                    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://supremerecargas.com.br';
+                    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://agilos.supremeapps.com.br';
                     const trackingUrl = `${origin}/acompanhar/${createdOrder.tracking_token || createdOrder.id}`;
                     const itemsList = (createdOrder.items || []).map(it => `• ${it.model?.name || 'Item'} (${it.internal_identifier})`).join('\n');
                     const message = 

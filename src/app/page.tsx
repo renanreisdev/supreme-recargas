@@ -258,7 +258,7 @@ export default function LandingPage() {
                   <div className="w-3 h-3 rounded-full bg-emerald-500/80" />
                 </div>
                 <span className="text-xs font-mono font-bold text-slate-400">
-                  agilos.supremeinformatica.com.br/entradas/2026-000142
+                  agilos.supremeapps.com.br/entradas/2026-000142
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -369,7 +369,7 @@ export default function LandingPage() {
                     </div>
                     <div className="text-[11px] leading-tight space-y-0.5">
                       <span className="text-slate-400 block">Consulta pública:</span>
-                      <strong className="text-emerald-400 font-mono text-[10px]">agilos.supremeinformatica.com.br/os</strong>
+                      <strong className="text-emerald-400 font-mono text-[10px]">agilos.supremeapps.com.br/os</strong>
                       <span className="text-slate-500 block text-[9px]">Cliente acompanha sem login</span>
                     </div>
                   </div>

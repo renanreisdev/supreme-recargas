@@ -536,7 +536,7 @@ export default function TechnicianWorkbenchPage() {
     }
     const waNumber = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
     const custName = item.customer_name || order?.customer?.name || 'Cliente';
-    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://supremerecargas.com.br';
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://agilos.supremeapps.com.br';
     const trackingUrl = order ? `${origin}/acompanhar/${order.tracking_token || order.id}` : '';
     const modelName = item.model?.name || item.internal_identifier;
 

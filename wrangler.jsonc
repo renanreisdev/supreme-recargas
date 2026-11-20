@@ -11,7 +11,7 @@
   },
   "routes": [
     {
-      "pattern": "agilos.supremeinformatica.com.br",
+      "pattern": "agilos.supremeapps.com.br",
       "custom_domain": true
     }
   ]

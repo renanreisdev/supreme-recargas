@@ -300,7 +300,7 @@ function CompanySettingsContent() {
   );
 
   const handleCopyPix = () => {
-    navigator.clipboard.writeText(platformSettings.pix_key || 'pix@supremeinformatica.com.br');
+    navigator.clipboard.writeText(platformSettings.pix_key || 'pix@supremeapps.com.br');
     setPixCopied(true);
     toast.success('Chave Pix copiada com sucesso!');
     setTimeout(() => setPixCopied(false), 2500);
@@ -393,7 +393,7 @@ function CompanySettingsContent() {
   }, [currentCompany.id]);
 
   useEffect(() => {
-    QRCode.toDataURL('https://agilos.supremeinformatica.com.br/acompanhar/DEMO-2026-0001', {
+    QRCode.toDataURL('https://agilos.supremeapps.com.br/acompanhar/DEMO-2026-0001', {
       width: 140,
       margin: 1,
       color: { dark: '#000000', light: '#ffffff' }
@@ -401,7 +401,7 @@ function CompanySettingsContent() {
       .then(url => setPreviewQrUrl(url))
       .catch(() => {});
 
-    const pixKey = (platformSettings.pix_key || 'pix@supremeinformatica.com.br').trim();
+    const pixKey = (platformSettings.pix_key || 'pix@supremeapps.com.br').trim();
     const merchantName = (platformSettings.pix_beneficiary || 'AGIL OS').replace(/[^A-Za-z0-9 ]/g, '').slice(0, 25) || 'AGIL OS';
     const merchantCity = (platformSettings.pix_city || 'SAO PAULO').replace(/[^A-Za-z0-9 ]/g, '').slice(0, 15) || 'SAO PAULO';
     const tlv = (id: string, val: string) => `${id}${String(val.length).padStart(2, '0')}${val}`;
@@ -3030,7 +3030,7 @@ function CompanySettingsContent() {
                     <div className="flex items-center gap-1.5">
                       <Input
                         readOnly
-                        value={platformSettings.pix_key || 'pix@supremeinformatica.com.br'}
+                        value={platformSettings.pix_key || 'pix@supremeapps.com.br'}
                         className="text-xs font-mono bg-white dark:bg-slate-950 font-bold h-9 rounded-xl"
                       />
                       <Button

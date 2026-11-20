@@ -101,7 +101,7 @@ function EntriesListContent() {
       return;
     }
     const waNumber = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
-    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://supremerecargas.com.br';
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://agilos.supremeapps.com.br';
     const trackingUrl = `${origin}/acompanhar/${order.tracking_token || order.id}`;
     const custName = order.customer?.name || 'Cliente';
 

@@ -2078,7 +2078,7 @@ Incluso: Emissão de Comandas, Bancada Técnica Kanban, Rastreio e Impressão T�
                       required
                       value={platformSettings.pix_key}
                       onChange={e => setPlatformSettings(prev => ({ ...prev, pix_key: e.target.value }))}
-                      placeholder="contato@supremeinformatica.com.br"
+                      placeholder="pix@supremeapps.com.br"
                       className="text-xs font-mono font-bold text-emerald-700 dark:text-emerald-400"
                     />
                   </div>
@@ -2129,7 +2129,7 @@ Incluso: Emissão de Comandas, Bancada Técnica Kanban, Rastreio e Impressão T�
                       type="email"
                       value={platformSettings.support_email}
                       onChange={e => setPlatformSettings(prev => ({ ...prev, support_email: e.target.value }))}
-                      placeholder="suporte@supremeinformatica.com.br"
+                      placeholder="suporte@supremeapps.com.br"
                       className="text-xs"
                     />
                   </div>
