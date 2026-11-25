@@ -72,12 +72,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     setMobileMenuOpen(false);
   }, [pathname]);
 
-  // Initialize Supabase Cloud Sync & Realtime Channel
+  // Initialize Supabase Cloud Sync, LAN Hub & Realtime Channel + Offline PWA Service Worker
   useEffect(() => {
     if (typeof window !== 'undefined' && currentCompany?.id) {
       AppStore.initRealtime(currentCompany.id);
     }
   }, [currentCompany?.id]);
+
+  useEffect(() => {
+    if (
+      typeof window !== 'undefined' &&
+      'serviceWorker' in navigator &&
+      (window.location.protocol === 'https:' || window.location.hostname === 'localhost')
+    ) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+  }, []);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated && !isPublicPage) {

@@ -45,10 +45,13 @@ import {
   PresetImportResult,
   CategoryCustomField,
   ItemQualityReview,
-  ReceiptCopyConfig
+  ReceiptCopyConfig,
+  SyncOperationMode
 } from '@/types';
 import { supabase } from './supabase';
 import { hashPassword, verifyPassword, isPasswordHashed, buildLgpdAnonymizedCustomer } from '@/lib/security';
+import { idbSet } from './offline-db';
+import { lanHubClient, getTerminalSyncConfig, resolveEffectiveHubUrl, LanMutationEvent } from './lan-hub-client';
 
 const LOCAL_STORAGE_KEY = 'supreme_recargas_v4_clean';
 const OFFLINE_QUEUE_KEY = 'supreme_recargas_offline_queue_v1';
@@ -64,6 +67,9 @@ export interface OfflineMutation {
   tenant_id?: string;
   created_at: string;
   retry_count: number;
+  status?: 'PENDING' | 'CONFLICT';
+  last_error?: string;
+  terminal_id?: string;
 }
 
 let syncBroadcastChannel: BroadcastChannel | null = null;
@@ -1477,7 +1483,12 @@ export const MOCK_COMPANY_SETTINGS: CompanySettings = {
   receipt_copy_2_config: buildFullReceiptCopyConfig(),
   cash_register_mode: 'SHARED',
   cash_register_policy: 'AUTO_OPEN',
-  default_cash_register_float: 0
+  default_cash_register_float: 0,
+  sync_operation_mode: 'CLOUD_ONLY',
+  lan_hub_url: '',
+  lan_hub_token: '',
+  lan_hub_port: 4321,
+  lan_hub_auto_fallback: true
 };
 
 export const DEFAULT_PLATFORM_SETTINGS: PlatformSaasSettings = {
@@ -1618,7 +1629,13 @@ export class AppStore {
 
   private static saveStoreData(data: any, emitEvent = true) {
     if (typeof window !== 'undefined') {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
+      } catch (e) {
+        console.warn('localStorage quota warning ao salvar snapshot, mantendo espelho em memória/IndexedDB:', e);
+        this.memoryStore = data;
+      }
+      idbSet('store_snapshot', data).catch(() => {});
       if (emitEvent) {
         window.dispatchEvent(new CustomEvent('supreme_store_updated', { detail: data }));
         if (syncBroadcastChannel) {
@@ -1645,33 +1662,58 @@ export class AppStore {
     }
   }
 
+  static getOfflineConflicts(): OfflineMutation[] {
+    return this.getOfflineQueue().filter(m => m.status === 'CONFLICT');
+  }
+
   static saveOfflineQueue(queue: OfflineMutation[]) {
     if (typeof window === 'undefined') return;
     try {
       localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
-      this.notifySyncStatus();
     } catch (e) {
-      console.error('Error saving offline queue:', e);
+      console.error('Error saving offline queue to localStorage:', e);
     }
+    idbSet('offline_queue', queue).catch(() => {});
+    this.notifySyncStatus();
   }
 
   private static isFlushingQueue = false;
 
-  static getSyncStatus(): { isOnline: boolean; pendingCount: number; isSyncing: boolean } {
+  static getSyncStatus(): {
+    isOnline: boolean;
+    pendingCount: number;
+    conflictCount: number;
+    isSyncing: boolean;
+    mode: SyncOperationMode;
+    lanHubConnected: boolean;
+    lanHubClients: number;
+  } {
     const isOnline = typeof navigator !== 'undefined' && navigator.onLine !== undefined ? navigator.onLine : true;
-    const pendingCount = this.getOfflineQueue().length;
+    const queue = this.getOfflineQueue();
+    const pendingCount = queue.length;
+    const conflictCount = queue.filter(m => m.status === 'CONFLICT').length;
+    let mode: SyncOperationMode = 'CLOUD_ONLY';
+    try {
+      const data = this.getStoreData();
+      mode = data?.settings?.sync_operation_mode || 'CLOUD_ONLY';
+    } catch {}
+    const lanStatus = lanHubClient.getStatus();
     return {
       isOnline,
       pendingCount,
-      isSyncing: this.isFlushingQueue
+      conflictCount,
+      isSyncing: this.isFlushingQueue,
+      mode,
+      lanHubConnected: lanStatus.connected,
+      lanHubClients: lanStatus.connectedClients
     };
   }
 
   static notifySyncStatus(isSyncing?: boolean) {
     if (typeof window === 'undefined') return;
+    const base = this.getSyncStatus();
     const status = {
-      isOnline: typeof navigator !== 'undefined' && navigator.onLine !== undefined ? navigator.onLine : true,
-      pendingCount: this.getOfflineQueue().length,
+      ...base,
       isSyncing: isSyncing !== undefined ? isSyncing : this.isFlushingQueue
     };
     window.dispatchEvent(new CustomEvent('supreme_sync_status_updated', { detail: status }));
@@ -1684,13 +1726,179 @@ export class AppStore {
 
   private static mutationExecutionChain: Promise<any> = Promise.resolve();
 
+  private static isDuplicateKeyError(error: any): boolean {
+    if (!error) return false;
+    return String(error.code) === '23505' || /duplicate key|unique constraint/i.test(String(error.message || ''));
+  }
+
+  private static async executeSingleMutation(item: OfflineMutation): Promise<any> {
+    if (item.action === 'INSERT') {
+      return await supabase.from(item.table).insert(item.payload);
+    } else if (item.action === 'UPSERT') {
+      const conflict = item.onConflict || (item.table === 'company_settings' ? 'tenant_id' : undefined);
+      return await supabase.from(item.table).upsert(item.payload, conflict ? { onConflict: conflict } : undefined);
+    } else if (item.action === 'UPDATE') {
+      const field = item.matchField || 'id';
+      return await supabase.from(item.table).update(item.payload).eq(field, item.matchValue);
+    } else if (item.action === 'DELETE') {
+      const field = item.matchField || 'id';
+      return await supabase.from(item.table).delete().eq(field, item.matchValue);
+    }
+    return { error: null };
+  }
+
+  private static async resolveServiceOrderCollision(
+    item: OfflineMutation,
+    queue: OfflineMutation[]
+  ): Promise<{ resolved: boolean; error?: any }> {
+    if (item.table !== 'service_orders' || item.action !== 'INSERT' || !item.payload?.tenant_id) {
+      return { resolved: false };
+    }
+
+    const tenantId = item.payload.tenant_id;
+    const oldNumber = item.payload.order_number;
+
+    try {
+      // 1. Verificar se esta mesma OS (mesmo UUID) já subiu antes (re-tentativa idempotente)
+      const { data: existingById } = await supabase
+        .from('service_orders')
+        .select('id')
+        .eq('id', item.payload.id)
+        .maybeSingle();
+
+      if (existingById?.id) {
+        return { resolved: true };
+      }
+
+      // 2. Reservar próximo número atômico na nuvem para eliminar colisão entre PCs offline
+      let newOrderNumber = '';
+      let newSeq = 0;
+      let newYear = Number(item.payload.order_year || new Date().getFullYear());
+
+      const { data: rpcData, error: rpcErr } = await supabase.rpc('generate_next_service_order_number', {
+        p_tenant_id: tenantId
+      });
+
+      const rpcRow = Array.isArray(rpcData) ? rpcData[0] : rpcData;
+      if (!rpcErr && rpcRow?.out_order_number) {
+        newOrderNumber = rpcRow.out_order_number;
+        newSeq = Number(rpcRow.out_sequence);
+        newYear = Number(rpcRow.out_year || newYear);
+      } else {
+        // Fallback se a RPC não estiver disponível no ambiente
+        const { data: maxRows } = await supabase
+          .from('service_orders')
+          .select('order_sequence')
+          .eq('tenant_id', tenantId)
+          .eq('order_year', newYear)
+          .order('order_sequence', { ascending: false })
+          .limit(1);
+        const currentMax = Number(maxRows?.[0]?.order_sequence || 0);
+        newSeq = currentMax + 1;
+        newOrderNumber = `${newYear}-${String(newSeq).padStart(6, '0')}`;
+      }
+
+      // 3. Atualizar payload, registro local e mutações filhas na fila com o novo número
+      item.payload = {
+        ...item.payload,
+        order_number: newOrderNumber,
+        order_sequence: newSeq,
+        order_year: newYear
+      };
+
+      const data = this.getStoreData();
+      const localOrderIdx = (data.serviceOrders || []).findIndex((o: ServiceOrder) => o.id === item.payload.id);
+      if (localOrderIdx !== -1) {
+        const localOrder = data.serviceOrders[localOrderIdx];
+        const renumNote = `[Renumeração automática pós-offline: #${oldNumber} → #${newOrderNumber}]`;
+        localOrder.order_number = newOrderNumber;
+        localOrder.order_sequence = newSeq;
+        localOrder.order_year = newYear;
+        localOrder.internal_notes = localOrder.internal_notes
+          ? `${localOrder.internal_notes}\n${renumNote}`
+          : renumNote;
+        (localOrder.items || []).forEach((it: ServiceOrderItem) => {
+          it.order_number = newOrderNumber;
+        });
+        this.saveStoreData(data);
+      }
+
+      for (const pending of queue) {
+        if (pending.table === 'cash_register_movements' && pending.payload?.order_id === item.payload.id) {
+          pending.payload.order_number = newOrderNumber;
+          if (typeof pending.payload.description === 'string' && oldNumber) {
+            pending.payload.description = pending.payload.description.replace(oldNumber, newOrderNumber);
+          }
+        }
+      }
+
+      const retryRes = await this.executeSingleMutation(item);
+      if (!retryRes?.error) {
+        return { resolved: true };
+      }
+      return { resolved: false, error: retryRes.error };
+    } catch (err) {
+      return { resolved: false, error: err };
+    }
+  }
+
+  private static buildLanEntitySnapshot(mutation: Omit<OfflineMutation, 'id' | 'created_at' | 'retry_count'>) {
+    try {
+      const data = this.getStoreData();
+      const payload = mutation.payload || {};
+      if (mutation.table === 'service_orders' && (payload.id || mutation.matchValue)) {
+        const id = payload.id || mutation.matchValue;
+        const serviceOrder = (data.serviceOrders || []).find((o: ServiceOrder) => o.id === id);
+        if (serviceOrder) return { serviceOrder };
+      }
+      if (mutation.table === 'service_order_items' && (payload.service_order_id || mutation.matchValue)) {
+        const itemId = payload.id || mutation.matchValue;
+        const serviceOrder = (data.serviceOrders || []).find((o: ServiceOrder) =>
+          o.id === payload.service_order_id || (o.items || []).some((it: ServiceOrderItem) => it.id === itemId)
+        );
+        if (serviceOrder) return { serviceOrder };
+      }
+      if (mutation.table === 'customers' && (payload.id || mutation.matchValue)) {
+        const id = payload.id || mutation.matchValue;
+        const customer = (data.customers || []).find((c: Customer) => c.id === id);
+        if (customer) return { customer };
+      }
+      if (mutation.table === 'payments' && payload.id) {
+        const payment = (data.payments || []).find((p: Payment) => p.id === payload.id);
+        if (payment) return { payment };
+      }
+      if ((mutation.table === 'cash_registers' || mutation.table === 'cash_register_movements') && (payload.register_id || payload.id || mutation.matchValue)) {
+        const regId = payload.register_id || payload.id || mutation.matchValue;
+        const cashRegister = (data.cashRegisters || []).find((r: CashRegisterSession) => r.id === regId);
+        if (cashRegister) return { cashRegister };
+      }
+    } catch {}
+    return undefined;
+  }
+
+  private static pushMutationToLanHubIfEnabled(fullMutation: OfflineMutation) {
+    try {
+      if (typeof window === 'undefined') return;
+      const data = this.getStoreData();
+      if (data?.settings?.sync_operation_mode !== 'HYBRID_LAN_HUB') return;
+      const hubUrl = resolveEffectiveHubUrl(data.settings?.lan_hub_url);
+      if (!hubUrl) return;
+      const snap = this.buildLanEntitySnapshot(fullMutation);
+      lanHubClient.pushMutation(fullMutation, snap).catch(() => {});
+    } catch {}
+  }
+
   static async enqueueOrExecuteMutation(mutation: Omit<OfflineMutation, 'id' | 'created_at' | 'retry_count'>) {
     const fullMutation: OfflineMutation = {
       ...mutation,
       id: generateUUID(),
       created_at: new Date().toISOString(),
-      retry_count: 0
+      retry_count: 0,
+      status: 'PENDING',
+      terminal_id: getTerminalSyncConfig().terminalId
     };
+
+    this.pushMutationToLanHubIfEnabled(fullMutation);
 
     // If browser is explicitly offline, queue immediately
     if (typeof navigator !== 'undefined' && navigator.onLine === false) {
@@ -1703,22 +1911,14 @@ export class AppStore {
     // Chain execution sequentially to prevent race conditions with foreign keys (e.g. order -> items -> services)
     this.mutationExecutionChain = this.mutationExecutionChain.then(async () => {
       try {
-        let query: any;
-        if (fullMutation.action === 'INSERT') {
-          query = supabase.from(fullMutation.table).insert(fullMutation.payload);
-        } else if (fullMutation.action === 'UPSERT') {
-          const conflict = fullMutation.onConflict || (fullMutation.table === 'company_settings' ? 'tenant_id' : undefined);
-          query = supabase.from(fullMutation.table).upsert(fullMutation.payload, conflict ? { onConflict: conflict } : undefined);
-        } else if (fullMutation.action === 'UPDATE') {
-          const field = fullMutation.matchField || 'id';
-          query = supabase.from(fullMutation.table).update(fullMutation.payload).eq(field, fullMutation.matchValue);
-        } else if (fullMutation.action === 'DELETE') {
-          const field = fullMutation.matchField || 'id';
-          query = supabase.from(fullMutation.table).delete().eq(field, fullMutation.matchValue);
-        }
-
-        const res = await query;
+        const res = await this.executeSingleMutation(fullMutation);
         if (res?.error) {
+          if (this.isDuplicateKeyError(res.error) && fullMutation.table === 'service_orders' && fullMutation.action === 'INSERT') {
+            const resolved = await this.resolveServiceOrderCollision(fullMutation, this.getOfflineQueue());
+            if (resolved.resolved) {
+              return;
+            }
+          }
           console.warn(`Mutation to ${fullMutation.table} failed, enqueueing offline:`, res.error);
           const queue = this.getOfflineQueue();
           queue.push(fullMutation);
@@ -1755,38 +1955,52 @@ export class AppStore {
     let processed = 0;
     let failed = 0;
 
-    for (const item of queue) {
+    for (let idx = 0; idx < queue.length; idx++) {
+      const item = queue[idx];
+
+      // Mutações marcadas como CONFLICT ficam preservadas na fila até ação manual do usuário
+      if (item.status === 'CONFLICT') {
+        remaining.push(item);
+        continue;
+      }
+
       try {
-        let res: any;
-        if (item.action === 'INSERT') {
-          res = await supabase.from(item.table).insert(item.payload);
-        } else if (item.action === 'UPSERT') {
-          const conflict = item.onConflict || (item.table === 'company_settings' ? 'tenant_id' : undefined);
-          res = await supabase.from(item.table).upsert(item.payload, conflict ? { onConflict: conflict } : undefined);
-        } else if (item.action === 'UPDATE') {
-          const field = item.matchField || 'id';
-          res = await supabase.from(item.table).update(item.payload).eq(field, item.matchValue);
-        } else if (item.action === 'DELETE') {
-          const field = item.matchField || 'id';
-          res = await supabase.from(item.table).delete().eq(field, item.matchValue);
+        let res = await this.executeSingleMutation(item);
+
+        if (res?.error && this.isDuplicateKeyError(res.error) && item.table === 'service_orders' && item.action === 'INSERT') {
+          const collision = await this.resolveServiceOrderCollision(item, queue.slice(idx + 1));
+          if (collision.resolved) {
+            res = { error: null };
+          } else if (collision.error) {
+            res = { error: collision.error };
+          }
         }
 
         if (res?.error) {
-          item.retry_count += 1;
-          if (item.retry_count < 10) {
-            remaining.push(item);
+          item.retry_count = (item.retry_count || 0) + 1;
+          item.last_error = res.error?.message || String(res.error);
+          if (item.retry_count >= 10) {
+            item.status = 'CONFLICT';
+            console.warn('Mutation moved to CONFLICT queue after 10 attempts (preserved safely):', item, res.error);
           } else {
-            console.error('Dropping failed mutation after 10 retries:', item, res.error);
+            item.status = 'PENDING';
           }
+          remaining.push(item);
           failed++;
         } else {
           processed++;
         }
-      } catch (err) {
-        item.retry_count += 1;
+      } catch (err: any) {
+        item.retry_count = (item.retry_count || 0) + 1;
+        item.last_error = err?.message || 'Erro de rede';
+        item.status = 'PENDING';
         remaining.push(item);
+        // Preservar ordem estrita do restante da fila quando a rede ainda estiver indisponível
+        for (let j = idx + 1; j < queue.length; j++) {
+          remaining.push(queue[j]);
+        }
         failed++;
-        break; // Network still disconnected
+        break;
       }
     }
 
@@ -1795,6 +2009,22 @@ export class AppStore {
     this.notifySyncStatus(false);
 
     return { processed, failed };
+  }
+
+  static async retryConflictMutation(mutationId: string): Promise<{ processed: number; failed: number }> {
+    const queue = this.getOfflineQueue();
+    const target = queue.find(m => m.id === mutationId);
+    if (!target) return { processed: 0, failed: 0 };
+    target.retry_count = 0;
+    target.status = 'PENDING';
+    target.last_error = undefined;
+    this.saveOfflineQueue(queue);
+    return this.flushOfflineQueue();
+  }
+
+  static discardOfflineMutation(mutationId: string): void {
+    const queue = this.getOfflineQueue().filter(m => m.id !== mutationId);
+    this.saveOfflineQueue(queue);
   }
 
 
@@ -5023,7 +5253,12 @@ export class AppStore {
       ...s,
       cash_register_mode: s.cash_register_mode || 'SHARED',
       cash_register_policy: s.cash_register_policy || 'AUTO_OPEN',
-      default_cash_register_float: s.default_cash_register_float ?? 0
+      default_cash_register_float: s.default_cash_register_float ?? 0,
+      sync_operation_mode: s.sync_operation_mode || 'CLOUD_ONLY',
+      lan_hub_url: s.lan_hub_url || '',
+      lan_hub_token: s.lan_hub_token || '',
+      lan_hub_port: s.lan_hub_port ?? 4321,
+      lan_hub_auto_fallback: s.lan_hub_auto_fallback ?? true
     };
   }
 
@@ -5127,6 +5362,11 @@ export class AppStore {
         cash_register_mode: updated.cash_register_mode || 'SHARED',
         cash_register_policy: updated.cash_register_policy || 'AUTO_OPEN',
         default_cash_register_float: updated.default_cash_register_float ?? 0,
+        sync_operation_mode: updated.sync_operation_mode || 'CLOUD_ONLY',
+        lan_hub_url: updated.lan_hub_url ?? null,
+        lan_hub_token: updated.lan_hub_token ?? null,
+        lan_hub_port: updated.lan_hub_port ?? 4321,
+        lan_hub_auto_fallback: updated.lan_hub_auto_fallback ?? true,
         updated_at: new Date().toISOString()
       },
       onConflict: 'tenant_id',
@@ -5190,6 +5430,20 @@ export class AppStore {
     }
     if (updates.default_cash_register_float !== undefined && updates.default_cash_register_float !== old.default_cash_register_float) {
       diffs.push(`Fundo de troco padrão: R$ ${Number(updates.default_cash_register_float).toFixed(2)}`);
+    }
+    if (updates.sync_operation_mode !== undefined && updates.sync_operation_mode !== old.sync_operation_mode) {
+      diffs.push(`Modo de sincronização: ${updates.sync_operation_mode === 'HYBRID_LAN_HUB' ? 'Nível 2 (Híbrido Hub LAN + Nuvem)' : 'Nível 1 (Nuvem + Offline Local)'}`);
+      if (typeof window !== 'undefined') {
+        this.syncLanHubConnection(tenantId);
+      }
+    } else if (
+      updates.lan_hub_url !== undefined ||
+      updates.lan_hub_token !== undefined
+    ) {
+      diffs.push('Configurações do Hub Local LAN atualizadas');
+      if (typeof window !== 'undefined') {
+        this.syncLanHubConnection(tenantId);
+      }
     }
 
     this.logAudit({
@@ -5888,9 +6142,169 @@ export class AppStore {
   }
 
   private static realtimeChannel: any = null;
+  private static realtimeDebounceTimer: any = null;
+
+  private static scheduleRealtimeSync(tenantId: string) {
+    if (typeof window === 'undefined') return;
+    if (this.realtimeDebounceTimer) {
+      clearTimeout(this.realtimeDebounceTimer);
+    }
+    this.realtimeDebounceTimer = setTimeout(() => {
+      this.realtimeDebounceTimer = null;
+      this.syncFromSupabase(tenantId);
+    }, 400);
+  }
+
+  private static upsertById<T extends { id: string }>(list: T[], item: T): T[] {
+    const idx = list.findIndex(x => x.id === item.id);
+    if (idx === -1) return [item, ...list];
+    const copy = list.slice();
+    copy[idx] = { ...copy[idx], ...item };
+    return copy;
+  }
+
+  static applyLanMutationEvent(tenantId: string, event: LanMutationEvent) {
+    try {
+      const { mutation, entitySnapshot } = event || {};
+      if (!mutation) return;
+      const data = this.getStoreData();
+      let changed = false;
+
+      if (entitySnapshot?.serviceOrder && entitySnapshot.serviceOrder.tenant_id === tenantId) {
+        data.serviceOrders = this.upsertById(data.serviceOrders || [], entitySnapshot.serviceOrder);
+        changed = true;
+      } else if (mutation.table === 'service_orders' && mutation.action === 'UPDATE' && mutation.matchValue) {
+        const idx = (data.serviceOrders || []).findIndex((o: ServiceOrder) => o.id === mutation.matchValue);
+        if (idx !== -1) {
+          data.serviceOrders[idx] = { ...data.serviceOrders[idx], ...(mutation.payload || {}) };
+          changed = true;
+        }
+      } else if (mutation.table === 'service_order_items' && mutation.action === 'UPDATE' && mutation.matchValue) {
+        for (const order of (data.serviceOrders || [])) {
+          const itemIdx = (order.items || []).findIndex((it: ServiceOrderItem) => it.id === mutation.matchValue);
+          if (itemIdx !== -1) {
+            order.items[itemIdx] = { ...order.items[itemIdx], ...(mutation.payload || {}) };
+            changed = true;
+            break;
+          }
+        }
+      }
+
+      if (entitySnapshot?.customer && entitySnapshot.customer.tenant_id === tenantId) {
+        data.customers = this.upsertById(data.customers || [], entitySnapshot.customer);
+        changed = true;
+      }
+      if (entitySnapshot?.payment && entitySnapshot.payment.tenant_id === tenantId) {
+        data.payments = this.upsertById(data.payments || [], entitySnapshot.payment);
+        changed = true;
+      }
+      if (entitySnapshot?.cashRegister && entitySnapshot.cashRegister.tenant_id === tenantId) {
+        data.cashRegisters = this.upsertById(data.cashRegisters || [], entitySnapshot.cashRegister);
+        changed = true;
+      }
+
+      if (changed) {
+        this.saveStoreData(data, true);
+      }
+    } catch (e) {
+      console.warn('Error applying LAN mutation event:', e);
+    }
+  }
+
+  static applyLanSnapshot(tenantId: string, statePayload: any) {
+    try {
+      const snap = statePayload?.snapshot;
+      if (!snap) return;
+      const data = this.getStoreData();
+      let changed = false;
+
+      if (Array.isArray(snap.serviceOrders) && snap.serviceOrders.length > 0) {
+        let orders: ServiceOrder[] = data.serviceOrders || [];
+        for (const remoteOrder of snap.serviceOrders) {
+          if (remoteOrder.tenant_id === tenantId) {
+            const existing = orders.find(o => o.id === remoteOrder.id);
+            if (!existing || new Date(remoteOrder.updated_at || 0).getTime() >= new Date(existing.updated_at || 0).getTime()) {
+              orders = this.upsertById(orders, remoteOrder);
+              changed = true;
+            }
+          }
+        }
+        data.serviceOrders = orders;
+      }
+
+      if (Array.isArray(snap.customers) && snap.customers.length > 0) {
+        let customers: Customer[] = data.customers || [];
+        for (const c of snap.customers) {
+          if (c.tenant_id === tenantId && !customers.some(x => x.id === c.id)) {
+            customers = [c, ...customers];
+            changed = true;
+          }
+        }
+        data.customers = customers;
+      }
+
+      if (Array.isArray(snap.payments) && snap.payments.length > 0) {
+        let payments: Payment[] = data.payments || [];
+        for (const p of snap.payments) {
+          if (p.tenant_id === tenantId && !payments.some(x => x.id === p.id)) {
+            payments = [...payments, p];
+            changed = true;
+          }
+        }
+        data.payments = payments;
+      }
+
+      if (Array.isArray(snap.cashRegisters) && snap.cashRegisters.length > 0) {
+        let regs: CashRegisterSession[] = data.cashRegisters || [];
+        for (const r of snap.cashRegisters) {
+          if (r.tenant_id === tenantId) {
+            regs = this.upsertById(regs, r);
+            changed = true;
+          }
+        }
+        data.cashRegisters = regs;
+      }
+
+      if (changed) {
+        this.saveStoreData(data, true);
+      }
+    } catch (e) {
+      console.warn('Error applying LAN snapshot:', e);
+    }
+  }
+
+  static syncLanHubConnection(tenantId: string) {
+    if (typeof window === 'undefined') return;
+    const settings = this.getSettings(tenantId);
+    if (settings.sync_operation_mode !== 'HYBRID_LAN_HUB') {
+      lanHubClient.disconnect();
+      this.notifySyncStatus();
+      return;
+    }
+
+    const effectiveUrl = resolveEffectiveHubUrl(settings.lan_hub_url);
+    if (!effectiveUrl) {
+      lanHubClient.disconnect();
+      this.notifySyncStatus();
+      return;
+    }
+
+    lanHubClient.connect(
+      effectiveUrl,
+      settings.lan_hub_token || '',
+      tenantId,
+      (ev) => this.applyLanMutationEvent(tenantId, ev),
+      (snap) => this.applyLanSnapshot(tenantId, snap),
+      () => this.notifySyncStatus()
+    );
+  }
 
   static async syncFromSupabase(tenantId?: string) {
     try {
+      // 0. Flush pending offline mutations FIRST so remote SELECTs reflect this terminal's changes
+      // and any order-number collisions are resolved before merging cloud state
+      await this.flushOfflineQueue();
+
       // 1. Fetch Companies
       const { data: companiesData } = await supabase.from('companies').select('*');
 
@@ -6035,10 +6449,18 @@ export class AppStore {
         };
       });
 
-      // Flush pending offline mutations first
-      await this.flushOfflineQueue();
+      // Update store preserving pending local offline/conflict entries cleanly
+      const pendingQueue = this.getOfflineQueue();
+      const pendingOrderIds = new Set(
+        pendingQueue
+          .filter(q => q.table === 'service_orders' || q.table === 'service_order_items')
+          .map(q => q.payload?.id || q.matchValue || q.payload?.service_order_id)
+          .filter(Boolean)
+      );
+      const pendingCustomerIds = new Set(
+        pendingQueue.filter(q => q.table === 'customers').map(q => q.payload?.id || q.matchValue).filter(Boolean)
+      );
 
-      // Update store
       const current = this.getStoreData();
       if (companiesData && companiesData.length > 0) current.companies = companiesData;
       if (profilesData && profilesData.length > 0) current.profiles = profilesData;
@@ -6048,10 +6470,14 @@ export class AppStore {
       if (settingsData && settingsData.length > 0) current.settings = settingsData[0];
       if (permGroupsData && permGroupsData.length > 0) current.permissionGroups = permGroupsData;
 
-      // Merge customers preserving locally created offline ones
+      // Merge customers preserving locally created offline ones & pending local updates
+      const localCustomerMap = new Map<string, Customer>((current.customers || []).map((c: Customer) => [c.id, c]));
       const remoteCustIds = new Set((customersData || []).map(c => c.id));
       const localOnlyCustomers = (current.customers || []).filter((c: Customer) => !remoteCustIds.has(c.id));
-      current.customers = [...localOnlyCustomers, ...(customersData || [])];
+      const mergedRemoteCustomers = (customersData || []).map(c =>
+        pendingCustomerIds.has(c.id) && localCustomerMap.has(c.id) ? localCustomerMap.get(c.id)! : c
+      );
+      current.customers = [...localOnlyCustomers, ...mergedRemoteCustomers];
 
       if (Array.isArray(categoriesData)) current.categories = categoriesData;
       if (Array.isArray(brandsData)) current.brands = brandsData;
@@ -6062,21 +6488,51 @@ export class AppStore {
         current.workflowStates = [...otherStates, ...workflowStatesData];
       }
 
-      // Merge orders preserving locally created offline ones
+      // Merge orders preserving locally created offline ones & pending local edits
+      const localOrderMap = new Map<string, ServiceOrder>((current.serviceOrders || []).map((o: ServiceOrder) => [o.id, o]));
       const remoteOrderIds = new Set(assembledOrders.map(o => o.id));
       const localOnlyOrders = (current.serviceOrders || []).filter((o: ServiceOrder) => !remoteOrderIds.has(o.id));
-      current.serviceOrders = [...localOnlyOrders, ...assembledOrders];
+      const mergedRemoteOrders = assembledOrders.map(o =>
+        pendingOrderIds.has(o.id) && localOrderMap.has(o.id) ? localOrderMap.get(o.id)! : o
+      );
+      current.serviceOrders = [...localOnlyOrders, ...mergedRemoteOrders];
 
-      current.payments = paymentsData || [];
+      // Merge payments preserving locally created pending payments
+      const remotePayIds = new Set((paymentsData || []).map(p => p.id));
+      const localOnlyPayments = (current.payments || []).filter((p: Payment) => !remotePayIds.has(p.id));
+      current.payments = [...localOnlyPayments, ...(paymentsData || [])];
+
       current.auditLogs = auditLogsData || [];
 
       if (assembledCashRegisters.length > 0) {
+        const localRegMap = new Map<string, CashRegisterSession>(
+          (current.cashRegisters || []).map((r: CashRegisterSession) => [r.id, r])
+        );
         const remoteRegIds = new Set(assembledCashRegisters.map(r => r.id));
         const localOnlyRegs = (current.cashRegisters || []).filter((r: CashRegisterSession) => !remoteRegIds.has(r.id));
-        current.cashRegisters = [...localOnlyRegs, ...assembledCashRegisters];
+        const mergedRemoteRegs = assembledCashRegisters.map(remoteReg => {
+          const localReg = localRegMap.get(remoteReg.id);
+          if (!localReg) return remoteReg;
+          const remoteMovIds = new Set((remoteReg.movements || []).map(m => m.id));
+          const localOnlyMovs = (localReg.movements || []).filter(m => !remoteMovIds.has(m.id));
+          return {
+            ...remoteReg,
+            movements: [...(remoteReg.movements || []), ...localOnlyMovs]
+          };
+        });
+        current.cashRegisters = [...localOnlyRegs, ...mergedRemoteRegs];
       }
 
       this.saveStoreData(current, true);
+      if (current.settings?.sync_operation_mode === 'HYBRID_LAN_HUB') {
+        this.syncLanHubConnection(targetTenant);
+        lanHubClient.pushSnapshot({
+          serviceOrders: current.serviceOrders.filter((o: ServiceOrder) => o.tenant_id === targetTenant),
+          customers: current.customers.filter((c: Customer) => c.tenant_id === targetTenant),
+          payments: current.payments.filter((p: Payment) => p.tenant_id === targetTenant),
+          cashRegisters: (current.cashRegisters || []).filter((r: CashRegisterSession) => r.tenant_id === targetTenant)
+        }).catch(() => {});
+      }
       this.notifySyncStatus();
       return current;
     } catch (err) {
@@ -6155,16 +6611,28 @@ export class AppStore {
       this.realtimeChannel = supabase
         .channel(`realtime:${tenantId}`)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'service_orders', filter: `tenant_id=eq.${tenantId}` }, () => {
-          this.syncFromSupabase(tenantId);
+          this.scheduleRealtimeSync(tenantId);
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'service_order_items', filter: `tenant_id=eq.${tenantId}` }, () => {
-          this.syncFromSupabase(tenantId);
+          this.scheduleRealtimeSync(tenantId);
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'service_order_item_services', filter: `tenant_id=eq.${tenantId}` }, () => {
+          this.scheduleRealtimeSync(tenantId);
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'customers', filter: `tenant_id=eq.${tenantId}` }, () => {
-          this.syncFromSupabase(tenantId);
+          this.scheduleRealtimeSync(tenantId);
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'payments', filter: `tenant_id=eq.${tenantId}` }, () => {
+          this.scheduleRealtimeSync(tenantId);
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'cash_registers', filter: `tenant_id=eq.${tenantId}` }, () => {
+          this.scheduleRealtimeSync(tenantId);
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'cash_register_movements', filter: `tenant_id=eq.${tenantId}` }, () => {
+          this.scheduleRealtimeSync(tenantId);
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'company_settings', filter: `tenant_id=eq.${tenantId}` }, () => {
-          this.syncFromSupabase(tenantId);
+          this.scheduleRealtimeSync(tenantId);
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, (payload: any) => {
           if (payload.new && payload.new.id) {
@@ -6175,9 +6643,11 @@ export class AppStore {
               this.saveStoreData(data, true);
             }
           }
-          this.syncFromSupabase(tenantId);
+          this.scheduleRealtimeSync(tenantId);
         })
         .subscribe();
+
+      this.syncLanHubConnection(tenantId);
     } catch (e) {
       console.warn('Realtime subscription not supported in current environment:', e);
     }

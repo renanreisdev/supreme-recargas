@@ -41,7 +41,8 @@ import {
   ShieldCheck,
   Database,
   Banknote,
-  Wallet
+  Wallet,
+  Wifi
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import Link from 'next/link';
@@ -55,6 +56,7 @@ import { Select } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { DialogModal, DialogModalProps } from '@/components/ui/dialog-modal';
 import { PresetCatalogWizard } from '@/components/presets/PresetCatalogWizard';
+import { SyncSettingsTab } from '@/components/empresa/SyncSettingsTab';
 import { Profile, UserRole, CompanySettings, PermissionGroup, Company, Plan, ReceiptCopyConfig } from '@/types';
 import { toast } from '@/lib/toast';
 
@@ -101,10 +103,17 @@ function CompanySettingsContent() {
 
   const { currentCompany, currentUser, hasPermission, refreshUser } = useAuth();
   
-  // Navigation Tabs (Separated: regras vs impressao vs assinatura vs precadastros)
-  const [activeTab, setActiveTab] = useState<'equipe' | 'grupos' | 'empresa' | 'regras' | 'impressao' | 'assinatura' | 'precadastros'>(
-    ['equipe', 'grupos', 'empresa', 'regras', 'impressao', 'assinatura', 'precadastros'].includes(initialTab) ? initialTab : 'equipe'
+  // Navigation Tabs (Separated: regras vs impressao vs sincronizacao vs assinatura vs precadastros)
+  const [activeTab, setActiveTab] = useState<'equipe' | 'grupos' | 'empresa' | 'regras' | 'impressao' | 'sincronizacao' | 'assinatura' | 'precadastros'>(
+    ['equipe', 'grupos', 'empresa', 'regras', 'impressao', 'sincronizacao', 'assinatura', 'precadastros'].includes(initialTab) ? initialTab : 'equipe'
   );
+
+  useEffect(() => {
+    const paramTab = searchParams.get('tab');
+    if (paramTab && ['equipe', 'grupos', 'empresa', 'regras', 'impressao', 'sincronizacao', 'assinatura', 'precadastros'].includes(paramTab)) {
+      setActiveTab(paramTab as any);
+    }
+  }, [searchParams]);
 
   const [users, setUsers] = useState<Profile[]>([]);
   const [permissionGroups, setPermissionGroups] = useState<PermissionGroup[]>([]);
@@ -997,6 +1006,19 @@ function CompanySettingsContent() {
             >
               <Printer className="w-4 h-4" />
               <span>Impressão & Comandas</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('sincronizacao')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shrink-0 ${
+                activeTab === 'sincronizacao'
+                  ? 'bg-purple-600 text-white shadow-md shadow-purple-600/20'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              <Wifi className="w-4 h-4" />
+              <span>Sincronização & Rede Local</span>
             </button>
 
             <button
@@ -3233,6 +3255,17 @@ function CompanySettingsContent() {
             onComplete={() => refreshUser()}
           />
         </div>
+      )}
+
+      {/* TAB 8: SINCRONIZAÇÃO OFFLINE (NÍVEL 1) & HUB LOCAL LAN (NÍVEL 2) */}
+      {activeTab === 'sincronizacao' && hasPermission('manage_company') && (
+        <SyncSettingsTab
+          tenantId={currentCompany.id}
+          companyName={currentCompany.trade_name || 'Agil OS'}
+          settings={settings}
+          performedByName={currentUser?.full_name || 'Administrador'}
+          onSettingsUpdated={(updated) => setSettings(updated)}
+        />
       )}
 
       {/* MODAL: ADICIONAR NOVO USUÁRIO */}

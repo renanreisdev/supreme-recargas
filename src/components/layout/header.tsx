@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Search, PlusCircle, ExternalLink, QrCode, LogOut, Menu, Zap, Cloud, Sparkles, Sun, Moon, CloudOff, RefreshCw } from 'lucide-react';
+import { Search, PlusCircle, ExternalLink, QrCode, LogOut, Menu, Zap, Cloud, Sparkles, Sun, Moon, CloudOff, RefreshCw, Server, AlertTriangle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
@@ -122,31 +122,59 @@ export function Header({ onToggleMobileMenu }: HeaderProps) {
           )}
         </button>
 
-        {/* Cloud Sync Status Indicator */}
+        {/* Cloud & LAN Hub Sync Status Indicator */}
         <button
           type="button"
-          onClick={handleManualSync}
+          onClick={() => {
+            if (syncState.conflictCount > 0) {
+              router.push('/empresa?tab=sincronizacao');
+              return;
+            }
+            handleManualSync();
+          }}
           disabled={isSyncing}
           className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all shadow-xs ${
-            !syncState.isOnline
+            syncState.conflictCount > 0
+              ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/40 hover:bg-rose-500/25'
+              : !syncState.isOnline && syncState.lanHubConnected
+              ? 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/40 hover:bg-purple-500/25'
+              : !syncState.isOnline
               ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/20'
               : (syncState.isSyncing || isSyncing)
               ? 'bg-sky-500/10 text-sky-700 dark:text-sky-300 border border-sky-500/30'
               : syncState.pendingCount > 0
               ? 'bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800/60 hover:bg-amber-100'
+              : syncState.mode === 'HYBRID_LAN_HUB' && syncState.lanHubConnected
+              ? 'bg-purple-50 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60 hover:bg-purple-100'
               : 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/60 hover:bg-emerald-100'
           }`}
           title={
-            !syncState.isOnline
+            syncState.conflictCount > 0
+              ? `${syncState.conflictCount} conflito(s) aguardando revisão. Clique para abrir Sincronização.`
+              : !syncState.isOnline && syncState.lanHubConnected
+              ? `Sem internet externa, mas conectado ao Hub Local LAN (${syncState.lanHubClients} terminal(is)). ${syncState.pendingCount} pendente(s) para a nuvem.`
+              : !syncState.isOnline
               ? `Sem internet externa. ${syncState.pendingCount} mutações salvas localmente. Clique para tentar reconectar.`
               : (syncState.isSyncing || isSyncing)
               ? 'Transmitindo alterações para a nuvem...'
               : syncState.pendingCount > 0
               ? `${syncState.pendingCount} operações pendentes para subir. Clique para sincronizar agora.`
+              : syncState.mode === 'HYBRID_LAN_HUB' && syncState.lanHubConnected
+              ? `Nível 2 ativo: Nuvem + Hub Local LAN sincronizando (${syncState.lanHubClients} PCs).`
               : 'Nuvem conectada e sincronizada. Clique para forçar atualização imediata.'
           }
         >
-          {!syncState.isOnline ? (
+          {syncState.conflictCount > 0 ? (
+            <>
+              <AlertTriangle className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+              <span>Conflito ({syncState.conflictCount})</span>
+            </>
+          ) : !syncState.isOnline && syncState.lanHubConnected ? (
+            <>
+              <Server className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+              <span>Hub LAN Ativo ({syncState.pendingCount})</span>
+            </>
+          ) : !syncState.isOnline ? (
             <>
               <CloudOff className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
               <span>Offline ({syncState.pendingCount})</span>
@@ -160,6 +188,11 @@ export function Header({ onToggleMobileMenu }: HeaderProps) {
             <>
               <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shadow-sm" />
               <span>{syncState.pendingCount} Pendente{syncState.pendingCount > 1 ? 's' : ''}</span>
+            </>
+          ) : syncState.mode === 'HYBRID_LAN_HUB' && syncState.lanHubConnected ? (
+            <>
+              <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse shadow-sm shadow-purple-500/50" />
+              <span>Hub LAN + Nuvem</span>
             </>
           ) : (
             <>

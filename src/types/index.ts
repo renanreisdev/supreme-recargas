@@ -794,6 +794,43 @@ export interface CompanySettings {
   cash_register_mode?: 'SHARED' | 'PER_OPERATOR';
   cash_register_policy?: 'AUTO_OPEN' | 'REQUIRE_OPEN' | 'OPTIONAL';
   default_cash_register_float?: number;
+
+  // Modo de Sincronização & Resiliência Offline (Nível 1 vs Nível 2 Hub Local LAN):
+  sync_operation_mode?: SyncOperationMode;
+  lan_hub_url?: string;
+  lan_hub_token?: string;
+  lan_hub_port?: number;
+  lan_hub_auto_fallback?: boolean;
+}
+
+export type SyncOperationMode = 'CLOUD_ONLY' | 'HYBRID_LAN_HUB';
+
+export interface TerminalSyncConfig {
+  terminalId: string;
+  terminalLabel: string;
+  localHubUrlOverride?: string;
+}
+
+export interface LanHubHealthStatus {
+  ok: boolean;
+  app?: string;
+  version?: string;
+  tenantId?: string;
+  companyName?: string;
+  port?: number;
+  httpsPort?: number;
+  httpsEnabled?: boolean;
+  lanIps?: string[];
+  connectedClients?: Array<{ terminalId: string; terminalLabel: string; connectedAt: string }>;
+  revision?: number;
+  mutationsCount?: number;
+  lastOrderSequence?: number;
+  tokenValid?: boolean;
+  uptimeSeconds?: number;
+  latencyMs?: number;
+  needsCertTrust?: boolean;
+  mixedContentBlocked?: boolean;
+  error?: string;
 }
 
 // ============================================================================

@@ -10,6 +10,7 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "Agil OS - Sistema Operacional de Balcão e Bancada Técnica",
   description: "Plataforma SaaS Multi-tenant para recepção ágil, ordens de serviço, bancada técnica de precisão, diagnóstico e rastreamento em tempo real.",
+  manifest: "/manifest.json",
 };
 
 import { ToastContainer } from "@/components/ui/toast-container";

@@ -1,0 +1,17 @@
+{
+  "name": "Agil OS - Sistema de Assistência Técnica e Recargas",
+  "short_name": "Agil OS",
+  "description": "Sistema Operacional de Balcão, Bancada Técnica e Controle de Caixa com suporte offline.",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#0b0f19",
+  "theme_color": "#10b981",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
