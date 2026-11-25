@@ -23,6 +23,21 @@ function withSecurityHeaders(response) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+
+    if (url.pathname === "/downloads/AgilOS-Hub-Setup.exe") {
+      return Response.redirect(
+        "https://github.com/renanreisdev/supreme-recargas/releases/latest/download/AgilOS-Hub-Setup.exe",
+        302
+      );
+    }
+
+    if (url.pathname === "/downloads/AgilOS-Hub.exe") {
+      return Response.redirect(
+        "https://github.com/renanreisdev/supreme-recargas/releases/latest/download/AgilOS-Hub.exe",
+        302
+      );
+    }
+
     const match = url.pathname.match(/^\/acompanhar\/([^/]+)(\/.*)?$/);
 
     if (match) {

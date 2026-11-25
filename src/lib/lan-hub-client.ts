@@ -125,6 +125,56 @@ export async function testLanHubConnection(hubUrl: string, token?: string): Prom
   }
 }
 
+export interface LanHubPairResponse {
+  ok: boolean;
+  paired?: boolean;
+  tenantId?: string;
+  companyName?: string;
+  port?: number;
+  httpsPort?: number;
+  httpsEnabled?: boolean;
+  lanIps?: string[];
+  recommendedLanUrl?: string;
+  error?: string;
+}
+
+export async function pairLocalLanHub(
+  hubUrl: string,
+  params: { tenantId: string; companyName: string; token: string; force?: boolean }
+): Promise<LanHubPairResponse> {
+  const cleanUrl = normalizeHubUrl(hubUrl);
+  if (!cleanUrl) {
+    return { ok: false, error: 'Informe o endereço local do Hub (ex.: http://localhost:4321).' };
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 4500);
+
+  try {
+    const res = await fetch(`${cleanUrl}/api/pair`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+    const data = await res.json();
+    return {
+      ...data,
+      ok: Boolean(res.ok && data?.ok)
+    };
+  } catch (err: any) {
+    clearTimeout(timeout);
+    return {
+      ok: false,
+      error:
+        err?.name === 'AbortError'
+          ? 'Tempo limite esgotado. Verifique se o AgilOS Hub já foi instalado e está em execução neste computador.'
+          : (err?.message || 'Não foi possível alcançar o Hub Local em http://localhost:4321.')
+    };
+  }
+}
+
 export interface LanMutationEvent {
   revision: number;
   mutation: any;

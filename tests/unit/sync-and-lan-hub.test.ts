@@ -14,6 +14,7 @@ import {
   generateUnixHubInstaller,
   generateWindowsHubInstaller
 } from '@/lib/lan-hub-generator';
+import { pairLocalLanHub } from '@/lib/lan-hub-client';
 
 function getFreePort(): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -458,4 +459,37 @@ describe('Nível 1 & Nível 2: Resiliência Offline, Resolução de Colisões & 
       } catch {}
     }
   }, 15000);
+
+  it('pareia com Hub Local nativo via pairLocalLanHub enviando tenant, empresa e token', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          paired: true,
+          tenantId: 't-pair-1',
+          companyName: 'Assistência Teste',
+          port: 4321,
+          httpsPort: 4322,
+          httpsEnabled: true,
+          lanIps: ['192.168.1.50'],
+          recommendedLanUrl: 'https://192.168.1.50:4322'
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    );
+
+    const res = await pairLocalLanHub('http://localhost:4321/', {
+      tenantId: 't-pair-1',
+      companyName: 'Assistência Teste',
+      token: 'agilos_hub_tok123',
+      force: true
+    });
+
+    expect(res.ok).toBe(true);
+    expect(res.recommendedLanUrl).toBe('https://192.168.1.50:4322');
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'http://localhost:4321/api/pair',
+      expect.objectContaining({ method: 'POST' })
+    );
+  });
 });

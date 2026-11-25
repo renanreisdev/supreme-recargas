@@ -815,6 +815,8 @@ export interface LanHubHealthStatus {
   ok: boolean;
   app?: string;
   version?: string;
+  engine?: string;
+  paired?: boolean;
   tenantId?: string;
   companyName?: string;
   port?: number;

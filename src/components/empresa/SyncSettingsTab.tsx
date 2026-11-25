@@ -16,20 +16,21 @@ import {
   ShieldCheck,
   Trash2,
   ExternalLink,
-  Check
+  Check,
+  Link2
 } from 'lucide-react';
 import { AppStore, OfflineMutation } from '@/lib/store';
 import { CompanySettings, LanHubHealthStatus, SyncOperationMode } from '@/types';
 import {
   generateLanHubScript,
   generateLanHubToken,
-  generateUnixHubInstaller,
-  generateWindowsHubInstaller
+  generateUnixHubInstaller
 } from '@/lib/lan-hub-generator';
 import {
   getTerminalSyncConfig,
   saveTerminalSyncConfig,
   testLanHubConnection,
+  pairLocalLanHub,
   resolveEffectiveHubUrl
 } from '@/lib/lan-hub-client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -78,6 +79,7 @@ export function SyncSettingsTab({
   const [syncStatus, setSyncStatus] = useState(() => AppStore.getSyncStatus());
   const [queueItems, setQueueItems] = useState<OfflineMutation[]>(() => AppStore.getOfflineQueue());
   const [isTestingHub, setIsTestingHub] = useState(false);
+  const [isPairingHub, setIsPairingHub] = useState(false);
   const [hubHealth, setHubHealth] = useState<LanHubHealthStatus | null>(null);
   const [isSyncingNow, setIsSyncingNow] = useState(false);
   const [copiedToken, setCopiedToken] = useState(false);
@@ -166,7 +168,19 @@ export function SyncSettingsTab({
     toast.info('Novo token gerado! Lembre-se de salvar e reinstalar/atualizar o Hub se já estiver rodando.');
   };
 
-  const handleDownloadInstaller = (kind: 'win' | 'unix' | 'mjs') => {
+  const handleDownloadExeInstaller = (kind: 'setup' | 'portable') => {
+    persistCurrentConfig('HYBRID_LAN_HUB');
+    setMode('HYBRID_LAN_HUB');
+    const url = kind === 'setup' ? '/downloads/AgilOS-Hub-Setup.exe' : '/downloads/AgilOS-Hub.exe';
+    window.open(url, '_blank');
+    toast.success(
+      kind === 'setup'
+        ? 'Download do AgilOS-Hub-Setup.exe iniciado! Execute no PC servidor e depois clique em Parear Hub Local.'
+        : 'Download do executável portátil AgilOS-Hub.exe iniciado!'
+    );
+  };
+
+  const handleDownloadInstaller = (kind: 'unix' | 'mjs') => {
     // Garante que o token atual fique persistido na empresa antes de gerar o pacote
     const saved = persistCurrentConfig('HYBRID_LAN_HUB');
     setMode('HYBRID_LAN_HUB');
@@ -178,15 +192,68 @@ export function SyncSettingsTab({
       httpsPort
     };
 
-    if (kind === 'win') {
-      downloadTextFile('Instalar-Hub-AgilOS.bat', generateWindowsHubInstaller(cfg));
-      toast.success('Instalador Windows baixado! Execute no computador que ficará como Hub da loja.');
-    } else if (kind === 'unix') {
+    if (kind === 'unix') {
       downloadTextFile('instalar-hub-agilos.sh', generateUnixHubInstaller(cfg));
       toast.success('Instalador Linux/macOS baixado!');
     } else {
       downloadTextFile('agilos-lan-hub.mjs', generateLanHubScript(cfg), 'application/javascript;charset=utf-8');
       toast.success('Script agilos-lan-hub.mjs baixado!');
+    }
+  };
+
+  const handlePairHub = async () => {
+    setIsPairingHub(true);
+    try {
+      const tokenToUse = lanHubToken.trim() || generateLanHubToken();
+      if (!lanHubToken.trim()) setLanHubToken(tokenToUse);
+
+      const pairUrl = `http://localhost:${numericPort}`;
+      const res = await pairLocalLanHub(pairUrl, {
+        tenantId,
+        companyName,
+        token: tokenToUse,
+        force: true
+      });
+
+      if (!res.ok) {
+        toast.error(res.error || 'Não foi possível parear com http://localhost:4321.');
+        return;
+      }
+
+      const nextLanUrl = res.recommendedLanUrl || lanHubUrl.trim();
+      setLanHubUrl(nextLanUrl);
+      setLocalOverrideUrl(pairUrl);
+      setMode('HYBRID_LAN_HUB');
+
+      saveTerminalSyncConfig({
+        terminalLabel: terminalLabel.trim() || 'Servidor Principal',
+        localHubUrlOverride: pairUrl
+      });
+
+      const updated = AppStore.updateSettings(
+        tenantId,
+        {
+          sync_operation_mode: 'HYBRID_LAN_HUB',
+          lan_hub_url: nextLanUrl,
+          lan_hub_token: tokenToUse,
+          lan_hub_port: res.port || numericPort,
+          lan_hub_auto_fallback: autoFallback
+        },
+        performedByName || 'Administrador'
+      );
+      onSettingsUpdated(updated);
+      refreshQueueAndStatus();
+
+      const health = await testLanHubConnection(pairUrl, tokenToUse);
+      setHubHealth(health);
+
+      toast.success(
+        nextLanUrl
+          ? `Hub Local pareado! Endereço da loja na rede: ${nextLanUrl}`
+          : 'Hub Local pareado e conectado com sucesso!'
+      );
+    } finally {
+      setIsPairingHub(false);
     }
   };
 
@@ -353,21 +420,21 @@ export function SyncSettingsTab({
 
               <ol className="grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px] text-slate-700 dark:text-slate-300">
                 <li className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-purple-200/70 dark:border-purple-900/50 space-y-1">
-                  <span className="font-black text-purple-600 block">1. Baixar e Executar no PC Servidor</span>
+                  <span className="font-black text-purple-600 block">1. Instalar o AgilOS-Hub-Setup.exe</span>
                   <span className="block text-slate-500 dark:text-slate-400">
-                    Baixe o instalador abaixo no PC principal e dê duplo clique. <strong>Não precisa instalar nada antes:</strong> ele já baixa o motor portátil automaticamente, ativa HTTPS local (portas {numericPort}/{httpsPort}) e inicia junto com o Windows.
+                    Baixe e execute o instalador oficial Windows no PC servidor. Ele já traz tudo embutido (zero dependências externas), configura Firewall e inicialização automática.
                   </span>
                 </li>
                 <li className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-purple-200/70 dark:border-purple-900/50 space-y-1">
-                  <span className="font-black text-purple-600 block">2. Copiar o Endereço LAN da Janela</span>
+                  <span className="font-black text-purple-600 block">2. Parear em 1 Clique</span>
                   <span className="block text-slate-500 dark:text-slate-400">
-                    Ao abrir, o Hub mostra o IP da rede (ex.: <code className="font-mono text-purple-700 dark:text-purple-300">https://192.168.0.10:{httpsPort}</code>). Cole abaixo como Endereço Padrão da Empresa.
+                    Com o Hub rodando neste PC, clique em <strong>Parear Hub Local</strong> abaixo: o sistema vincula sua empresa e preenche o endereço HTTPS da rede automaticamente.
                   </span>
                 </li>
                 <li className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-purple-200/70 dark:border-purple-900/50 space-y-1">
-                  <span className="font-black text-purple-600 block">3. Testar & Conectar nos 3 PCs</span>
+                  <span className="font-black text-purple-600 block">3. Conectar Balcões & Bancada</span>
                   <span className="block text-slate-500 dark:text-slate-400">
-                    Salve, clique em <strong>Testar Conexão</strong> em cada PC da assistência (se usar HTTPS local na 1ª vez, aceite o certificado local) e pronto!
+                    Nos outros PCs da loja, abra esta tela e clique em <strong>Testar Conexão</strong> (na 1ª vez aceite o certificado HTTPS local) e pronto!
                   </span>
                 </li>
               </ol>
@@ -375,11 +442,29 @@ export function SyncSettingsTab({
               <div className="flex flex-wrap items-center gap-2.5 pt-1">
                 <Button
                   type="button"
-                  onClick={() => handleDownloadInstaller('win')}
+                  onClick={() => handleDownloadExeInstaller('setup')}
                   className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs gap-1.5 h-9 rounded-xl shadow-xs"
                 >
                   <Download className="w-3.5 h-3.5" />
-                  <span>Baixar Instalador Windows (.bat)</span>
+                  <span>Baixar Instalador Windows (.exe)</span>
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handlePairHub}
+                  disabled={isPairingHub}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5 h-9 rounded-xl shadow-xs"
+                >
+                  <Link2 className={`w-3.5 h-3.5 ${isPairingHub ? 'animate-spin' : ''}`} />
+                  <span>{isPairingHub ? 'Pareando...' : 'Parear Hub Local (1 Clique)'}</span>
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => handleDownloadExeInstaller('portable')}
+                  className="text-xs font-bold gap-1.5 h-9 rounded-xl"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Portátil (.exe)</span>
                 </Button>
                 <Button
                   type="button"
@@ -388,7 +473,7 @@ export function SyncSettingsTab({
                   className="text-xs font-bold gap-1.5 h-9 rounded-xl border-purple-300 dark:border-purple-800 text-purple-700 dark:text-purple-300"
                 >
                   <Download className="w-3.5 h-3.5" />
-                  <span>Instalador Linux / Mac (.sh)</span>
+                  <span>Linux / Mac (.sh)</span>
                 </Button>
                 <Button
                   type="button"
@@ -397,9 +482,12 @@ export function SyncSettingsTab({
                   className="text-xs font-bold gap-1.5 h-9 rounded-xl"
                 >
                   <Download className="w-3.5 h-3.5" />
-                  <span>Somente Script Node (.mjs)</span>
+                  <span>Script Node (.mjs)</span>
                 </Button>
               </div>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                Nota: Caso o Windows SmartScreen exiba aviso na primeira execução do instalador, clique em <strong>Mais informações → Executar assim mesmo</strong>.
+              </p>
             </div>
 
             {/* Connection & Token Settings */}
