@@ -69,15 +69,48 @@ export function normalizeHubUrl(url?: string): string {
   return (url || '').trim().replace(/\/+$/, '');
 }
 
+export function fixHttpsHttpPortMismatch(
+  url: string,
+  httpPort = 4321
+): { url: string; corrected: boolean; expectedHttpsPort: number } {
+  const clean = normalizeHubUrl(url);
+  const expectedHttpsPort = httpPort + 1;
+  if (!clean) {
+    return { url: '', corrected: false, expectedHttpsPort };
+  }
+  try {
+    const parsed = new URL(clean);
+    if (parsed.protocol === 'https:' && Number(parsed.port) === httpPort) {
+      parsed.port = String(expectedHttpsPort);
+      return {
+        url: normalizeHubUrl(parsed.toString()),
+        corrected: true,
+        expectedHttpsPort
+      };
+    }
+  } catch {
+    // URL malformada ou parcial: mantém string normalizada
+  }
+  return { url: clean, corrected: false, expectedHttpsPort };
+}
+
 export function resolveEffectiveHubUrl(companyDefaultUrl?: string): string {
   const terminal = getTerminalSyncConfig();
   return normalizeHubUrl(terminal.localHubUrlOverride || companyDefaultUrl);
 }
 
-export async function testLanHubConnection(hubUrl: string, token?: string): Promise<LanHubHealthStatus> {
+export async function testLanHubConnection(hubUrl: string, token?: string, httpPort = 4321): Promise<LanHubHealthStatus> {
   const cleanUrl = normalizeHubUrl(hubUrl);
   if (!cleanUrl) {
     return { ok: false, error: 'Informe o endereço do Hub Local (ex.: http://localhost:4321 ou https://192.168.0.10:4322).' };
+  }
+
+  const portCheck = fixHttpsHttpPortMismatch(cleanUrl, httpPort);
+  if (portCheck.corrected) {
+    return {
+      ok: false,
+      error: `Você informou https:// na porta HTTP (${httpPort}). Para outros PCs via HTTPS, use a porta ${portCheck.expectedHttpsPort} (ex.: ${portCheck.url}).`
+    };
   }
 
   const isMixedContent =
@@ -119,7 +152,7 @@ export async function testLanHubConnection(hubUrl: string, token?: string): Prom
       ok: false,
       needsCertTrust: isHttps,
       error: isHttps
-        ? 'Não foi possível conectar via HTTPS. Se for a primeira vez neste computador, abra o endereço do Hub no navegador e aceite o certificado local.'
+        ? 'Não foi possível conectar via HTTPS. Se for a 1ª vez neste PC, abra o endereço do Hub no navegador e aceite o certificado local. Se a página nem abrir, verifique se o Firewall/Antivírus do PC servidor libera a porta HTTPS.'
         : (err?.name === 'AbortError' ? 'Tempo limite esgotado ao conectar no Hub Local.' : (err?.message || 'Hub Local inacessível.'))
     };
   }

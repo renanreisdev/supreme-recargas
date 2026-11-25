@@ -14,7 +14,7 @@ import {
   generateUnixHubInstaller,
   generateWindowsHubInstaller
 } from '@/lib/lan-hub-generator';
-import { pairLocalLanHub } from '@/lib/lan-hub-client';
+import { fixHttpsHttpPortMismatch, pairLocalLanHub, testLanHubConnection } from '@/lib/lan-hub-client';
 
 function getFreePort(): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -491,5 +491,32 @@ describe('Nível 1 & Nível 2: Resiliência Offline, Resolução de Colisões & 
       'http://localhost:4321/api/pair',
       expect.objectContaining({ method: 'POST' })
     );
+  });
+
+  it('detecta e corrige URL https:// apontando para porta HTTP do Hub Local', async () => {
+    const mismatch = fixHttpsHttpPortMismatch('https://192.168.15.130:4321', 4321);
+    expect(mismatch).toEqual({
+      url: 'https://192.168.15.130:4322',
+      corrected: true,
+      expectedHttpsPort: 4322
+    });
+
+    expect(fixHttpsHttpPortMismatch('http://localhost:4321', 4321)).toEqual({
+      url: 'http://localhost:4321',
+      corrected: false,
+      expectedHttpsPort: 4322
+    });
+
+    expect(fixHttpsHttpPortMismatch('https://192.168.15.130:4322', 4321)).toEqual({
+      url: 'https://192.168.15.130:4322',
+      corrected: false,
+      expectedHttpsPort: 4322
+    });
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const healthErr = await testLanHubConnection('https://192.168.15.130:4321', 'tok', 4321);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(healthErr.ok).toBe(false);
+    expect(healthErr.error).toContain('https://192.168.15.130:4322');
   });
 });

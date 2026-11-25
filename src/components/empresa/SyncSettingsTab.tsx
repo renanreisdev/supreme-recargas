@@ -31,7 +31,8 @@ import {
   saveTerminalSyncConfig,
   testLanHubConnection,
   pairLocalLanHub,
-  resolveEffectiveHubUrl
+  resolveEffectiveHubUrl,
+  fixHttpsHttpPortMismatch
 } from '@/lib/lan-hub-client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -125,6 +126,13 @@ export function SyncSettingsTab({
 
   const persistCurrentConfig = (overrideMode?: SyncOperationMode) => {
     const effectiveMode = overrideMode || mode;
+    const fixedUrl = fixHttpsHttpPortMismatch(lanHubUrl, numericPort);
+    const finalLanHubUrl = fixedUrl.url;
+    if (fixedUrl.corrected) {
+      setLanHubUrl(finalLanHubUrl);
+      toast.info(`Porta HTTPS ajustada automaticamente para ${fixedUrl.expectedHttpsPort} (${finalLanHubUrl}).`);
+    }
+
     saveTerminalSyncConfig({
       terminalLabel: terminalLabel.trim() || 'Computador Local',
       localHubUrlOverride: localOverrideUrl.trim()
@@ -134,7 +142,7 @@ export function SyncSettingsTab({
       tenantId,
       {
         sync_operation_mode: effectiveMode,
-        lan_hub_url: lanHubUrl.trim(),
+        lan_hub_url: finalLanHubUrl,
         lan_hub_token: lanHubToken.trim() || generateLanHubToken(),
         lan_hub_port: numericPort,
         lan_hub_auto_fallback: autoFallback
@@ -261,7 +269,7 @@ export function SyncSettingsTab({
     setIsTestingHub(true);
     setHubHealth(null);
     const targetUrl = localOverrideUrl.trim() || lanHubUrl.trim() || resolveEffectiveHubUrl(settings.lan_hub_url) || `http://localhost:${numericPort}`;
-    const result = await testLanHubConnection(targetUrl, lanHubToken.trim());
+    const result = await testLanHubConnection(targetUrl, lanHubToken.trim(), numericPort);
     setHubHealth(result);
     setIsTestingHub(false);
     if (result.ok) {
@@ -516,7 +524,7 @@ export function SyncSettingsTab({
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                   <div>
                     <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                      Porta HTTP
+                      Porta HTTP (HTTPS: {httpsPort})
                     </label>
                     <Input
                       type="number"
@@ -620,6 +628,17 @@ export function SyncSettingsTab({
                     <RefreshCw className={`w-3.5 h-3.5 ${isTestingHub ? 'animate-spin' : ''}`} />
                     <span>{isTestingHub ? 'Testando...' : 'Testar Conexão com o Hub'}</span>
                   </Button>
+                  {effectiveTestUrl.startsWith('https://') && (
+                    <a
+                      href={`${effectiveTestUrl}/api/health`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl border border-purple-300 dark:border-purple-800 text-xs font-bold text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950/40 transition-colors"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span>Abrir Certificado ({effectiveTestUrl})</span>
+                    </a>
+                  )}
                 </div>
 
                 {hubHealth && (
@@ -650,15 +669,23 @@ export function SyncSettingsTab({
                           <span>{hubHealth.error}</span>
                         </div>
                         {hubHealth.needsCertTrust && (
-                          <a
-                            href={`${effectiveTestUrl}/api/health`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 underline font-bold mt-1"
-                          >
-                            <span>Abrir {effectiveTestUrl} para aceitar o certificado local</span>
-                            <ExternalLink className="w-3 h-3" />
-                          </a>
+                          <div className="space-y-1 pt-1 text-[10px]">
+                            <div>
+                              <strong>1º passo:</strong>{' '}
+                              <a
+                                href={`${effectiveTestUrl}/api/health`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 underline font-bold"
+                              >
+                                <span>Abrir {effectiveTestUrl} e clicar em Avançado → Ir para o IP</span>
+                                <ExternalLink className="w-3 h-3" />
+                              </a>
+                            </div>
+                            <div>
+                              <strong>2º passo:</strong> Se a página nem abrir, libere a porta TCP <code>{httpsPort}</code> no Firewall/Antivírus do PC servidor.
+                            </div>
+                          </div>
                         )}
                       </>
                     )}
