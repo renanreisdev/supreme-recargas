@@ -59,7 +59,7 @@ import https from 'node:https';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { execFileSync } from 'node:child_process';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -527,43 +527,128 @@ h1{color:#34d399;margin-top:0}</style></head>
   return sendJson(req, res, 404, { ok: false, error: 'Endpoint nao encontrado' });
 }
 
-function findOpenSslBinary() {
-  const candidates = [
-    'openssl',
-    'C:\\\\Program Files\\\\Git\\\\usr\\\\bin\\\\openssl.exe',
-    'C:\\\\Program Files\\\\OpenSSL-Win64\\\\bin\\\\openssl.exe'
-  ];
-  for (const bin of candidates) {
-    try {
-      execFileSync(bin, ['version'], { stdio: 'ignore' });
-      return bin;
-    } catch {}
+function derLen(len) {
+  if (len < 128) return Buffer.from([len]);
+  const bytes = [];
+  let n = len;
+  while (n > 0) {
+    bytes.unshift(n & 0xff);
+    n >>= 8;
   }
-  return null;
+  return Buffer.from([0x80 | bytes.length, ...bytes]);
+}
+
+function derTag(tag, buf) {
+  return Buffer.concat([Buffer.from([tag]), derLen(buf.length), buf]);
+}
+
+function derSeq(...items) {
+  return derTag(0x30, Buffer.concat(items));
+}
+
+function derSet(...items) {
+  return derTag(0x31, Buffer.concat(items));
+}
+
+function derOctet(buf) {
+  return derTag(0x04, buf);
+}
+
+function derBitString(buf) {
+  return derTag(0x03, Buffer.concat([Buffer.from([0x00]), buf]));
+}
+
+function derInt(buf) {
+  const b = Buffer.isBuffer(buf) ? buf : Buffer.from([buf]);
+  if (b[0] & 0x80) {
+    return derTag(0x02, Buffer.concat([Buffer.from([0x00]), b]));
+  }
+  return derTag(0x02, b);
+}
+
+function derOid(oid) {
+  const parts = oid.split('.').map(Number);
+  const out = [parts[0] * 40 + parts[1]];
+  for (let i = 2; i < parts.length; i++) {
+    let v = parts[i];
+    const stack = [v & 0x7f];
+    v >>= 7;
+    while (v > 0) {
+      stack.unshift((v & 0x7f) | 0x80);
+      v >>= 7;
+    }
+    out.push(...stack);
+  }
+  return derTag(0x06, Buffer.from(out));
+}
+
+function derUtf8(str) {
+  return derTag(0x0c, Buffer.from(str, 'utf8'));
+}
+
+function derUtcTime(date) {
+  const p = (n) => String(n).padStart(2, '0');
+  const yy = String(date.getUTCFullYear()).slice(-2);
+  const s = yy + p(date.getUTCMonth() + 1) + p(date.getUTCDate()) + p(date.getUTCHours()) + p(date.getUTCMinutes()) + p(date.getUTCSeconds()) + 'Z';
+  return derTag(0x17, Buffer.from(s, 'ascii'));
 }
 
 function ensureSelfSignedCertificate() {
-  if (fs.existsSync(KEY_FILE) && fs.existsSync(CERT_FILE)) {
-    return { key: fs.readFileSync(KEY_FILE), cert: fs.readFileSync(CERT_FILE) };
-  }
-  const opensslBin = findOpenSslBinary();
-  if (!opensslBin) return null;
-
-  const ips = getLanIpv4Addresses();
-  const sanEntries = ['DNS:localhost', 'IP:127.0.0.1', ...ips.map((ip) => \`IP:\${ip}\`)].join(',');
-  const cnfFile = path.join(CONFIG.dataDir, 'hub-openssl.cnf');
-  fs.writeFileSync(
-    cnfFile,
-    \`[req]\\ndistinguished_name=req_dn\\nx509_extensions=v3_ext\\nprompt=no\\n[req_dn]\\nCN=Agil OS LAN Hub\\n[v3_ext]\\nsubjectAltName=\${sanEntries}\\nbasicConstraints=CA:FALSE\\nkeyUsage=digitalSignature,keyEncipherment\\nextendedKeyUsage=serverAuth\\n\`,
-    'utf8'
-  );
   try {
-    execFileSync(opensslBin, [
-      'req', '-x509', '-newkey', 'rsa:2048', '-sha256', '-days', '825', '-nodes',
-      '-keyout', KEY_FILE, '-out', CERT_FILE, '-config', cnfFile
-    ], { stdio: 'ignore' });
-    return { key: fs.readFileSync(KEY_FILE), cert: fs.readFileSync(CERT_FILE) };
-  } catch {
+    if (fs.existsSync(KEY_FILE) && fs.existsSync(CERT_FILE)) {
+      return { key: fs.readFileSync(KEY_FILE), cert: fs.readFileSync(CERT_FILE) };
+    }
+
+    const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', {
+      modulusLength: 2048,
+      publicKeyEncoding: { type: 'spki', format: 'der' },
+      privateKeyEncoding: { type: 'pkcs8', format: 'pem' }
+    });
+
+    const serialBytes = crypto.randomBytes(12);
+    serialBytes[0] = (serialBytes[0] & 0x7f) || 0x01;
+
+    const sigAlg = derSeq(derOid('1.2.840.113549.1.1.11'), Buffer.from([0x05, 0x00]));
+    const name = derSeq(derSet(derSeq(derOid('2.5.4.3'), derUtf8('Agil OS LAN Hub'))));
+
+    const notBefore = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const notAfter = new Date(Date.now() + 820 * 24 * 60 * 60 * 1000);
+    const validity = derSeq(derUtcTime(notBefore), derUtcTime(notAfter));
+
+    const allIps = Array.from(new Set(['127.0.0.1', ...getLanIpv4Addresses()]));
+    const sanItems = [
+      derTag(0x82, Buffer.from('localhost', 'ascii')),
+      ...allIps.map((ip) => derTag(0x87, Buffer.from(ip.split('.').map(Number))))
+    ];
+
+    const extBasicConstraints = derSeq(derOid('2.5.29.19'), Buffer.from([0x01, 0x01, 0xff]), derOctet(derSeq()));
+    const extKeyUsage = derSeq(derOid('2.5.29.15'), Buffer.from([0x01, 0x01, 0xff]), derOctet(Buffer.from([0x03, 0x02, 0x05, 0xa0])));
+    const extServerAuth = derSeq(derOid('2.5.29.37'), derOctet(derSeq(derOid('1.3.6.1.5.5.7.3.1'))));
+    const extSan = derSeq(derOid('2.5.29.17'), derOctet(derSeq(...sanItems)));
+
+    const extensionsWrapper = derTag(0xa3, derSeq(extBasicConstraints, extKeyUsage, extServerAuth, extSan));
+
+    const tbs = derSeq(
+      derTag(0xa0, derInt(2)),
+      derInt(serialBytes),
+      sigAlg,
+      name,
+      validity,
+      name,
+      publicKey,
+      extensionsWrapper
+    );
+
+    const signature = crypto.sign('sha256', tbs, privateKey);
+    const certDer = derSeq(tbs, sigAlg, derBitString(signature));
+    const b64Lines = certDer.toString('base64').match(/.{1,64}/g)?.join('\\n') || '';
+    const certPem = \`-----BEGIN CERTIFICATE-----\\n\${b64Lines}\\n-----END CERTIFICATE-----\\n\`;
+
+    fs.writeFileSync(KEY_FILE, privateKey, 'utf8');
+    fs.writeFileSync(CERT_FILE, certPem, 'utf8');
+    return { key: Buffer.from(privateKey, 'utf8'), cert: Buffer.from(certPem, 'utf8') };
+  } catch (err) {
+    console.warn('[Hub] Nao foi possivel gerar certificado HTTPS local:', err?.message);
     return null;
   }
 }
@@ -614,68 +699,213 @@ process.on('SIGTERM', shutdown);
 `;
 }
 
+export function buildWindowsSetupPowerShell(): string {
+  return `param(
+  [Parameter(Mandatory = $true)][string]$HubDir,
+  [int]$HttpPort = 4321,
+  [int]$HttpsPort = 4322
+)
+
+$ErrorActionPreference = 'Stop'
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+$RuntimeDir = Join-Path $HubDir 'runtime'
+$LocalNode = Join-Path $RuntimeDir 'node.exe'
+$NodeBin = $null
+
+function Test-NodeMajor($ExePath) {
+  try {
+    if (-not $ExePath) { return 0 }
+    $ver = & $ExePath -v 2>$null
+    if ($ver -match '^v(\\d+)\\.') { return [int]$Matches[1] }
+  } catch {}
+  return 0
+}
+
+if ((Test-Path $LocalNode) -and (Test-NodeMajor $LocalNode) -ge 18) {
+  $NodeBin = $LocalNode
+  Write-Host '[OK] Runtime portatil do Hub ja presente.' -ForegroundColor Green
+} else {
+  $sysCmd = Get-Command node -ErrorAction SilentlyContinue
+  $pfNode = Join-Path $env:ProgramFiles 'nodejs\\node.exe'
+  if ($sysCmd -and (Test-NodeMajor $sysCmd.Source) -ge 18) {
+    $NodeBin = $sysCmd.Source
+    Write-Host "[OK] Node.js do sistema detectado ($NodeBin)." -ForegroundColor Green
+  } elseif ((Test-Path $pfNode) -and (Test-NodeMajor $pfNode) -ge 18) {
+    $NodeBin = $pfNode
+    Write-Host "[OK] Node.js detectado em Arquivos de Programas." -ForegroundColor Green
+  }
+}
+
+if (-not $NodeBin) {
+  Write-Host '[1/3] Baixando runtime portatil oficial Node.js v22 LTS (nao altera o Windows)...' -ForegroundColor Cyan
+  $arch = 'win-x64'
+  if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') {
+    $arch = 'win-arm64'
+  } elseif (-not [Environment]::Is64BitOperatingSystem) {
+    $arch = 'win-x86'
+  }
+
+  $sumsUrl = 'https://nodejs.org/dist/latest-v22.x/SHASUMS256.txt'
+  $sumsText = (Invoke-WebRequest -Uri $sumsUrl -UseBasicParsing).Content
+  $targetLine = ($sumsText -split "\`n") | Where-Object { $_ -match ("^([0-9a-fA-F]{64})\\s+(node-v22\\.[0-9.]+-" + $arch + "\\.zip)\\s*$") } | Select-Object -First 1
+
+  if (-not $targetLine) {
+    throw "Nao foi possivel localizar o pacote Node.js oficial para $arch em latest-v22.x/SHASUMS256.txt"
+  }
+
+  $null = $targetLine -match "^([0-9a-fA-F]{64})\\s+(node-v22\\.[0-9.]+-$arch\\.zip)"
+  $expectedHash = $Matches[1].ToLower()
+  $zipName = $Matches[2]
+  $zipUrl = "https://nodejs.org/dist/latest-v22.x/$zipName"
+  $zipPath = Join-Path $env:TEMP $zipName
+  $extractTemp = Join-Path $env:TEMP ('agilos_node_' + [guid]::NewGuid().ToString('N'))
+
+  Write-Host "      Pacote: $zipName" -ForegroundColor Gray
+  Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing
+
+  $actualHash = (Get-FileHash -Path $zipPath -Algorithm SHA256).Hash.ToLower()
+  if ($actualHash -ne $expectedHash) {
+    Remove-Item -Force $zipPath -ErrorAction SilentlyContinue
+    throw "Falha na verificacao de integridade SHA-256 do Node.js ($actualHash != $expectedHash)."
+  }
+
+  Write-Host '[2/3] Extraindo runtime portatil...' -ForegroundColor Cyan
+  if (Test-Path $RuntimeDir) { Remove-Item -Recurse -Force $RuntimeDir }
+  New-Item -ItemType Directory -Path $RuntimeDir -Force | Out-Null
+  Expand-Archive -Path $zipPath -DestinationPath $extractTemp -Force
+  $innerDir = Get-ChildItem -Path $extractTemp -Directory | Select-Object -First 1
+  Copy-Item -Path (Join-Path $innerDir.FullName '*') -Destination $RuntimeDir -Recurse -Force
+
+  Remove-Item -Force $zipPath -ErrorAction SilentlyContinue
+  Remove-Item -Recurse -Force $extractTemp -ErrorAction SilentlyContinue
+
+  if (-not (Test-Path $LocalNode)) {
+    throw 'Extracao concluida, mas node.exe nao foi encontrado.'
+  }
+  $NodeBin = $LocalNode
+  Write-Host '[OK] Runtime portatil pronto!' -ForegroundColor Green
+}
+
+# Encerrar eventual instancia anterior do Hub antes de reiniciar com a nova configuracao
+try {
+  Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+    Where-Object { $_.CommandLine -like '*agilos-lan-hub.mjs*' } |
+    ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+} catch {}
+
+# Gerar scripts de execucao e autostart usando o Node resolvido
+$StartBat = Join-Path $HubDir 'Iniciar-Hub-AgilOS.bat'
+$StartBatContent = @"
+@echo off
+title Agil OS - Hub Local LAN (Porta $HttpPort / $HttpsPort)
+cd /d "%~dp0"
+if exist "%~dp0runtime\\node.exe" (
+  "%~dp0runtime\\node.exe" "%~dp0agilos-lan-hub.mjs"
+) else (
+  "$NodeBin" "%~dp0agilos-lan-hub.mjs"
+)
+"@
+[System.IO.File]::WriteAllText($StartBat, $StartBatContent, [System.Text.Encoding]::ASCII)
+
+$StartupDir = [Environment]::GetFolderPath('Startup')
+$StartupBat = Join-Path $StartupDir 'AgilOS-LAN-Hub.bat'
+$StartupBatContent = @"
+@echo off
+start "" /min cmd /c "$StartBat"
+"@
+[System.IO.File]::WriteAllText($StartupBat, $StartupBatContent, [System.Text.Encoding]::ASCII)
+
+# Liberar firewall se possivel (silencioso sem exigir UAC)
+try {
+  netsh advfirewall firewall delete rule name="Agil OS LAN Hub HTTP" *> $null
+  netsh advfirewall firewall delete rule name="Agil OS LAN Hub HTTPS" *> $null
+  netsh advfirewall firewall add rule name="Agil OS LAN Hub HTTP" dir=in action=allow protocol=TCP localport=$HttpPort *> $null
+  netsh advfirewall firewall add rule name="Agil OS LAN Hub HTTPS" dir=in action=allow protocol=TCP localport=$HttpsPort *> $null
+} catch {}
+
+Write-Host '[3/3] Iniciando Hub Local LAN do Agil OS...' -ForegroundColor Cyan
+Start-Process -FilePath 'cmd.exe' -ArgumentList '/k', "\`"$StartBat\`""
+
+$health = $null
+for ($i = 0; $i -lt 25; $i++) {
+  Start-Sleep -Milliseconds 400
+  try {
+    $health = Invoke-RestMethod -Uri "http://127.0.0.1:$HttpPort/api/health" -TimeoutSec 2 -ErrorAction Stop
+    if ($health.ok) { break }
+  } catch {}
+}
+
+Write-Host ''
+if ($health -and $health.ok) {
+  Write-Host '====================================================================' -ForegroundColor Green
+  Write-Host ' HUB LOCAL AGIL OS INSTALADO E RODANDO!' -ForegroundColor Green
+  Write-Host " - Neste PC:       http://localhost:$HttpPort" -ForegroundColor White
+  foreach ($ip in $health.lanIps) {
+    if ($health.httpsEnabled) {
+      Write-Host " - Outros PCs:     https://$($ip):$HttpsPort" -ForegroundColor Yellow
+    } else {
+      Write-Host " - Outros PCs:     http://$($ip):$HttpPort" -ForegroundColor Yellow
+    }
+  }
+  Write-Host '====================================================================' -ForegroundColor Green
+  Start-Process "http://localhost:$HttpPort"
+} else {
+  Write-Host '[AVISO] O Hub foi iniciado na janela separada. Confira os enderecos exibidos nela.' -ForegroundColor Yellow
+}
+`;
+}
+
 export function generateWindowsHubInstaller(config: LanHubGeneratorConfig): string {
   const port = Number(config.port) || 4321;
   const httpsPort = Number(config.httpsPort) || port + 1;
   const script = generateLanHubScript(config);
-  const b64 = encodeUtf8ToBase64(script);
-  const chunks = b64.match(/.{1,120}/g) || [];
-  const psLines = chunks.map((c) => `>> "%HUB_DIR%\\hub.b64" echo ${c}`).join('\r\n');
+  const setupPs1 = buildWindowsSetupPowerShell();
+
+  const hubB64 = encodeUtf8ToBase64(script);
+  const setupB64 = encodeUtf8ToBase64(setupPs1);
+
+  const hubChunks = (hubB64.match(/.{1,120}/g) || []).map((c) => `>> "%HUB_DIR%\\hub.b64" echo ${c}`).join('\r\n');
+  const setupChunks = (setupB64.match(/.{1,120}/g) || []).map((c) => `>> "%HUB_DIR%\\setup.b64" echo ${c}`).join('\r\n');
 
   return `@echo off
 setlocal enableextensions
 title Instalador Hub Local LAN - Agil OS
 
 echo ============================================================================
-echo   AGIL OS - INSTALADOR DO HUB LOCAL LAN (NIVEL 2 HIBRIDO)
-echo   Empresa: ${config.companyName.replace(/["&|<>^]/g, '')}
+echo   AGIL OS - INSTALADOR AUTOMATICO DO HUB LOCAL LAN (NIVEL 2)
+echo   Empresa: ${config.companyName.replace(/["&|<>^%]/g, '')}
+echo   Nao precisa ter nada instalado: runtime + HTTPS local incluidos!
 echo ============================================================================
 echo.
-
-where node >nul 2>nul
-if %errorlevel% neq 0 (
-  echo [AVISO] Node.js nao encontrado neste computador.
-  where winget >nul 2>nul
-  if %errorlevel% equ 0 (
-    echo Tentando instalar Node.js LTS automaticamente via winget...
-    winget install OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements
-  ) else (
-    echo Instale o Node.js LTS em https://nodejs.org e execute este instalador novamente.
-    pause
-    exit /b 1
-  )
-)
 
 set "HUB_DIR=%LOCALAPPDATA%\\AgilOS-Hub"
 if not exist "%HUB_DIR%" mkdir "%HUB_DIR%"
 
 if exist "%HUB_DIR%\\hub.b64" del /q "%HUB_DIR%\\hub.b64"
-${psLines}
+${hubChunks}
 
-powershell -NoProfile -Command "[System.IO.File]::WriteAllBytes('%HUB_DIR%\\agilos-lan-hub.mjs', [System.Convert]::FromBase64String((Get-Content -Raw '%HUB_DIR%\\hub.b64')))"
+if exist "%HUB_DIR%\\setup.b64" del /q "%HUB_DIR%\\setup.b64"
+${setupChunks}
+
+powershell -NoProfile -ExecutionPolicy Bypass -Command "[System.IO.File]::WriteAllBytes('%HUB_DIR%\\agilos-lan-hub.mjs', [System.Convert]::FromBase64String((Get-Content -Raw '%HUB_DIR%\\hub.b64'))); [System.IO.File]::WriteAllBytes('%HUB_DIR%\\setup-hub.ps1', [System.Convert]::FromBase64String((Get-Content -Raw '%HUB_DIR%\\setup.b64')))"
+if %errorlevel% neq 0 (
+  echo [ERRO] Nao foi possivel extrair os arquivos do instalador.
+  pause
+  exit /b 1
+)
+
 del /q "%HUB_DIR%\\hub.b64"
+del /q "%HUB_DIR%\\setup.b64"
 
-> "%HUB_DIR%\\Iniciar-Hub-AgilOS.bat" echo @echo off
->> "%HUB_DIR%\\Iniciar-Hub-AgilOS.bat" echo title Agil OS - Hub Local LAN (Porta ${port} / ${httpsPort})
->> "%HUB_DIR%\\Iniciar-Hub-AgilOS.bat" echo cd /d "%HUB_DIR%"
->> "%HUB_DIR%\\Iniciar-Hub-AgilOS.bat" echo node "%HUB_DIR%\\agilos-lan-hub.mjs"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%HUB_DIR%\\setup-hub.ps1" -HubDir "%HUB_DIR%" -HttpPort ${port} -HttpsPort ${httpsPort}
+if %errorlevel% neq 0 (
+  echo.
+  echo [ERRO] Ocorreu um problema durante a configuracao automatica.
+  pause
+  exit /b 1
+)
 
-set "STARTUP_DIR=%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup"
-> "%STARTUP_DIR%\\AgilOS-LAN-Hub.bat" echo @echo off
->> "%STARTUP_DIR%\\AgilOS-LAN-Hub.bat" echo start "" /min cmd /c "%HUB_DIR%\\Iniciar-Hub-AgilOS.bat"
-
-netsh advfirewall firewall add rule name="Agil OS LAN Hub HTTP" dir=in action=allow protocol=TCP localport=${port} >nul 2>nul
-netsh advfirewall firewall add rule name="Agil OS LAN Hub HTTPS" dir=in action=allow protocol=TCP localport=${httpsPort} >nul 2>nul
-
-echo.
-echo [OK] Hub Local instalado em: %HUB_DIR%
-echo [OK] Inicializacao automatica adicionada ao Windows Startup.
-echo [OK] Iniciando o Hub Local agora...
-start "Agil OS LAN Hub" cmd /k "%HUB_DIR%\\Iniciar-Hub-AgilOS.bat"
-echo.
-echo Agora no Agil OS (Empresa ^> Sincronizacao):
-echo  - Neste PC servidor: http://localhost:${port}
-echo  - Nos outros PCs da rede: veja o endereco https://IP_DESTE_PC:${httpsPort} na janela do Hub!
 echo.
 pause
 `;
@@ -691,16 +921,54 @@ export function generateUnixHubInstaller(config: LanHubGeneratorConfig): string 
 set -euo pipefail
 
 echo "============================================================================"
-echo "  AGIL OS - INSTALADOR DO HUB LOCAL LAN (LINUX / MACOS)"
+echo "  AGIL OS - INSTALADOR AUTOMATICO DO HUB LOCAL LAN (LINUX / MACOS)"
 echo "============================================================================"
 
-if ! command -v node >/dev/null 2>&1; then
-  echo "[ERRO] Node.js 18+ nao encontrado. Instale o Node.js em https://nodejs.org e execute novamente."
-  exit 1
+HUB_DIR="\${HOME}/.agilos-hub"
+RUNTIME_DIR="\${HUB_DIR}/runtime"
+mkdir -p "\${HUB_DIR}"
+
+NODE_BIN=""
+if [ -x "\${RUNTIME_DIR}/bin/node" ]; then
+  NODE_BIN="\${RUNTIME_DIR}/bin/node"
+elif command -v node >/dev/null 2>&1; then
+  MAJOR_VER=\$(node -v | sed -E 's/^v([0-9]+).*/\\1/')
+  if [ "\${MAJOR_VER:-0}" -ge 18 ]; then
+    NODE_BIN=\$(command -v node)
+  fi
 fi
 
-HUB_DIR="\${HOME}/.agilos-hub"
-mkdir -p "\${HUB_DIR}"
+if [ -z "\${NODE_BIN}" ]; then
+  echo "[1/3] Baixando runtime portatil oficial Node.js v22 LTS..."
+  UNAME_S=\$(uname -s | tr '[:upper:]' '[:lower:]')
+  UNAME_M=\$(uname -m)
+  case "\${UNAME_S}-\${UNAME_M}" in
+    linux-x86_64) PLAT="linux-x64" ;;
+    linux-aarch64|linux-arm64) PLAT="linux-arm64" ;;
+    darwin-arm64) PLAT="darwin-arm64" ;;
+    darwin-x86_64) PLAT="darwin-x64" ;;
+    *) echo "[ERRO] Arquitetura nao suportada automaticamente: \${UNAME_S}-\${UNAME_M}"; exit 1 ;;
+  esac
+
+  SHASUMS=\$(curl -fsSL "https://nodejs.org/dist/latest-v22.x/SHASUMS256.txt")
+  MATCH_LINE=\$(echo "\${SHASUMS}" | grep -E "node-v22\\.[0-9.]+-\${PLAT}\\.tar\\.gz$" | head -n1)
+  EXPECTED_SHA=\$(echo "\${MATCH_LINE}" | awk '{print \$1}')
+  TAR_NAME=\$(echo "\${MATCH_LINE}" | awk '{print \$2}')
+
+  TMP_TAR="/tmp/\${TAR_NAME}"
+  curl -fsSL "https://nodejs.org/dist/latest-v22.x/\${TAR_NAME}" -o "\${TMP_TAR}"
+  if command -v sha256sum >/dev/null 2>&1; then
+    ACTUAL_SHA=\$(sha256sum "\${TMP_TAR}" | awk '{print \$1}')
+  else
+    ACTUAL_SHA=\$(shasum -a 256 "\${TMP_TAR}" | awk '{print \$1}')
+  fi
+  [ "\${ACTUAL_SHA}" = "\${EXPECTED_SHA}" ] || { echo "[ERRO] Falha SHA-256"; rm -f "\${TMP_TAR}"; exit 1; }
+
+  rm -rf "\${RUNTIME_DIR}" && mkdir -p "\${RUNTIME_DIR}"
+  tar -xzf "\${TMP_TAR}" --strip-components=1 -C "\${RUNTIME_DIR}"
+  rm -f "\${TMP_TAR}"
+  NODE_BIN="\${RUNTIME_DIR}/bin/node"
+fi
 
 cat << 'EOF_B64' | base64 -d > "\${HUB_DIR}/agilos-lan-hub.mjs"
 ${b64}
@@ -708,9 +976,10 @@ EOF_B64
 
 chmod +x "\${HUB_DIR}/agilos-lan-hub.mjs"
 
+pkill -f "agilos-lan-hub.mjs" >/dev/null 2>&1 || true
 echo "[OK] Hub instalado em: \${HUB_DIR}/agilos-lan-hub.mjs"
 echo "[OK] Iniciando em segundo plano (portas ${port} HTTP / ${httpsPort} HTTPS)..."
-nohup node "\${HUB_DIR}/agilos-lan-hub.mjs" > "\${HUB_DIR}/hub.log" 2>&1 &
+nohup "\${NODE_BIN}" "\${HUB_DIR}/agilos-lan-hub.mjs" > "\${HUB_DIR}/hub.log" 2>&1 &
 echo "PID: $!"
 echo "Logs em: \${HUB_DIR}/hub.log"
 `;

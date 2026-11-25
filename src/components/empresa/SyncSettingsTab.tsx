@@ -355,7 +355,7 @@ export function SyncSettingsTab({
                 <li className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-purple-200/70 dark:border-purple-900/50 space-y-1">
                   <span className="font-black text-purple-600 block">1. Baixar e Executar no PC Servidor</span>
                   <span className="block text-slate-500 dark:text-slate-400">
-                    Baixe o instalador abaixo no PC principal e dê duplo clique. Ele configura Node.js, porta {numericPort}/{httpsPort} e inicialização automática com o sistema.
+                    Baixe o instalador abaixo no PC principal e dê duplo clique. <strong>Não precisa instalar nada antes:</strong> ele já baixa o motor portátil automaticamente, ativa HTTPS local (portas {numericPort}/{httpsPort}) e inicia junto com o Windows.
                   </span>
                 </li>
                 <li className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-purple-200/70 dark:border-purple-900/50 space-y-1">

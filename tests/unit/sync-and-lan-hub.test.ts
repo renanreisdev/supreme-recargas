@@ -4,6 +4,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
+import https from 'node:https';
+import crypto from 'node:crypto';
 import { AppStore } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
 import {
@@ -316,18 +318,21 @@ describe('Nível 1 & Nível 2: Resiliência Offline, Resolução de Colisões & 
     };
 
     const winBat = generateWindowsHubInstaller(cfg);
-    expect(winBat).toContain('Instalador Hub Local LAN');
+    expect(winBat).toContain('INSTALADOR AUTOMATICO DO HUB LOCAL LAN');
     expect(winBat).toContain('agilos-lan-hub.mjs');
+    expect(winBat).toContain('setup-hub.ps1');
 
     const unixSh = generateUnixHubInstaller(cfg);
     expect(unixSh).toContain('#!/usr/bin/env bash');
     expect(unixSh).toContain('agilos-lan-hub.mjs');
+    expect(unixSh).toContain('latest-v22.x/SHASUMS256.txt');
 
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agilos-hub-test-'));
     const hubScriptPath = path.join(tempDir, 'agilos-lan-hub.mjs');
     fs.writeFileSync(hubScriptPath, generateLanHubScript(cfg), 'utf8');
 
     const port = await getFreePort();
+    const httpsPort = await getFreePort();
     let child: ChildProcess | null = null;
 
     try {
@@ -335,8 +340,8 @@ describe('Nível 1 & Nível 2: Resiliência Offline, Resolução de Colisões & 
         env: {
           ...process.env,
           AGILOS_HUB_PORT: String(port),
-          AGILOS_HUB_DATA_DIR: tempDir,
-          AGILOS_DISABLE_HTTPS: '1'
+          AGILOS_HUB_HTTPS_PORT: String(httpsPort),
+          AGILOS_HUB_DATA_DIR: tempDir
         },
         stdio: 'ignore'
       });
@@ -346,6 +351,36 @@ describe('Nível 1 & Nível 2: Resiliência Offline, Resolução de Colisões & 
       const healthNoToken = await healthRes.json();
       expect(healthNoToken.ok).toBe(true);
       expect(healthNoToken.tokenValid).toBe(false);
+      expect(healthNoToken.httpsEnabled).toBe(true);
+
+      // Valida o certificado X.509 v3 gerado nativamente sem OpenSSL e a resposta HTTPS
+      const certPem = fs.readFileSync(path.join(tempDir, 'hub-cert.pem'), 'utf8');
+      const x509 = new crypto.X509Certificate(certPem);
+      expect(x509.subject).toContain('CN=Agil OS LAN Hub');
+      expect(x509.subjectAltName).toContain('DNS:localhost');
+      expect(x509.subjectAltName).toContain('IP Address:127.0.0.1');
+      expect(x509.verify(x509.publicKey)).toBe(true);
+
+      const httpsHealth = await new Promise<any>((resolve, reject) => {
+        const req = https.get(
+          `https://127.0.0.1:${httpsPort}/api/health`,
+          { rejectUnauthorized: false, headers: { 'X-AgilOS-Token': cfg.token } },
+          (res) => {
+            let body = '';
+            res.on('data', (c) => (body += c));
+            res.on('end', () => {
+              try {
+                resolve(JSON.parse(body));
+              } catch (e) {
+                reject(e);
+              }
+            });
+          }
+        );
+        req.on('error', reject);
+      });
+      expect(httpsHealth.ok).toBe(true);
+      expect(httpsHealth.tokenValid).toBe(true);
 
       const unauthState = await fetch(`${baseUrl}/api/sync/state`);
       expect(unauthState.status).toBe(401);
